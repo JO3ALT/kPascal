@@ -1,0 +1,102 @@
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT    = _{ "{" ~ (!"}" ~ ANY)* ~ "}" | "(*" ~ (!"*)" ~ ANY)* ~ "*)" }
+
+ident      = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+program    =  { SOI ~ "program" ~ ident ~ ";" ~ block ~ "." ~ EOI }
+block      =  { const_section? ~ type_section? ~ var_section? ~ routine_decl* ~ compound_stmt }
+
+const_section = { "const" ~ const_decl+ }
+const_decl    = { ident ~ "=" ~ const_expr ~ ";" }
+
+type_section  = { "type" ~ type_decl+ }
+type_decl     = { ident ~ "=" ~ type_spec ~ ";" }
+
+type_spec     = _{ basic_type | record_type | array_type | type_ref }
+basic_type    = { "integer" | "boolean" | "char" }
+type_ref      = { ident }
+
+record_type   = { "record" ~ field_decl+ ~ "end" }
+array_type    = { "array" ~ "[" ~ const_expr ~ ("," ~ const_expr){0,2} ~ "]" ~ "of" ~ type_ref_or_basic }
+field_decl    = { ident ~ ":" ~ type_ref_or_basic ~ ";" }
+type_ref_or_basic = _{ basic_type | type_ref }
+
+var_section   = { "var" ~ var_decl+ }
+var_decl      = { ident ~ ":" ~ type_ref_or_basic ~ ";" }
+routine_decl  = _{ procedure_decl | function_decl }
+procedure_decl = { "procedure" ~ ident ~ formal_params? ~ ";" ~ block ~ ";" }
+function_decl  = { "function" ~ ident ~ formal_params? ~ ":" ~ type_ref_or_basic ~ ";" ~ block ~ ";" }
+formal_params  = { "(" ~ formal_param_group ~ (";" ~ formal_param_group)* ~ ")" }
+formal_param_group = { "var"? ~ ident ~ ("," ~ ident)* ~ ":" ~ type_ref_or_basic }
+
+compound_stmt = { "begin" ~ stmt_list? ~ "end" }
+stmt_list     = { stmt ~ (";" ~ stmt)* ~ ";"? }
+
+stmt          = _{ compound_stmt
+                 | assign_stmt
+                 | read_stmt
+                 | readln_stmt
+                 | for_stmt
+                 | write_stmt
+                 | writeln_stmt
+                 | case_stmt
+                 | proc_call_stmt
+                 | if_stmt
+                 | while_stmt
+                 | repeat_stmt
+                 | empty_stmt
+                 }
+
+empty_stmt    = { "" }
+
+assign_stmt   = { lvalue ~ ":=" ~ expr }
+read_stmt     = { "Read" ~ "(" ~ lvalue_list ~ ")" }
+readln_stmt   = { "ReadLn" ~ ( "(" ~ ")" )? }
+for_stmt      = { "for" ~ ident ~ ":=" ~ expr ~ for_dir ~ expr ~ "do" ~ stmt }
+for_dir       = { "to" | "downto" }
+case_stmt     = { "case" ~ expr ~ "of" ~ case_arm+ ~ ("else" ~ stmt)? ~ "end" }
+case_arm      = { const_expr ~ ":" ~ stmt ~ ";"? }
+proc_call_stmt = { ident ~ "(" ~ expr_list? ~ ")" }
+lvalue        = { ident ~ selector* }
+selector      = _{ field_access | index_access }
+field_access  = { "." ~ ident }
+index_access  = { "[" ~ expr ~ ("," ~ expr){0,2} ~ "]" }
+lvalue_list   = { lvalue ~ ("," ~ lvalue)* }
+
+if_stmt       = { "if" ~ expr ~ "then" ~ stmt ~ ("else" ~ stmt)? }
+while_stmt    = { "while" ~ expr ~ "do" ~ stmt }
+repeat_stmt   = { "repeat" ~ stmt_list? ~ "until" ~ expr }
+
+write_stmt    = { "Write" ~ "(" ~ expr_list? ~ ")" }
+writeln_stmt  = { "WriteLn" ~ ( "(" ~ expr_list? ~ ")" )? }
+expr_list     = { expr ~ ("," ~ expr)* }
+
+expr          = _{ rel }
+rel           = { add ~ (rel_op ~ add)? }
+rel_op        = { "<=" | ">=" | "<>" | "=" | "<" | ">" }
+
+add           = { mul ~ (add_op ~ mul)* }
+add_op        = { "+" | "-" }
+
+mul           = { unary ~ (mul_op ~ unary)* }
+mul_op        = { "*" }
+
+unary         = { (unary_op ~ unary) | primary }
+unary_op      = { "-" | "not" }
+
+primary       = { number | string_lit | char_code | func_call | lvalue | "(" ~ expr ~ ")" }
+func_call     = { ident ~ "(" ~ expr_list? ~ ")" }
+
+number        = @{ ("0x" ~ ASCII_HEX_DIGIT+) | ("$" ~ ASCII_HEX_DIGIT+) | ASCII_DIGIT+ }
+
+string_lit    = @{ "'" ~ ( "''" | !("'" ) ~ ANY )* ~ "'" }
+char_code     = { "#" ~ number }                     // #123 形式（UTF-32 code point）
+
+const_expr    = _{ const_rel }
+const_rel     = { const_add ~ (rel_op ~ const_add)? }
+const_add     = { const_mul ~ (add_op ~ const_mul)* }
+const_mul     = { const_unary ~ (mul_op ~ const_unary)* }
+const_unary   = { (unary_op ~ const_unary) | const_primary }
+const_primary = { number | string_lit | char_code | const_func_call | ident | "(" ~ const_expr ~ ")" }
+const_func_call = { ident ~ "(" ~ const_expr_list? ~ ")" }
+const_expr_list = { const_expr ~ ("," ~ const_expr)* }
