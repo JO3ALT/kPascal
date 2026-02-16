@@ -105,6 +105,24 @@ end.
 }
 
 #[test]
+fn supports_true_false_literals_in_expr() {
+    let src = r#"
+program p;
+var
+  b: boolean;
+begin
+  b := true;
+  WriteLn(b);
+  WriteLn(false)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("1 b PVAR!"));
+    assert!(forth.contains("0 PWRITE-BOOL"));
+}
+
+#[test]
 fn generates_typed_read_wrappers_for_vars() {
     let src = r#"
 program p;
@@ -182,6 +200,22 @@ end.
 }
 
 #[test]
+fn supports_div_and_mod_operators() {
+    let src = r#"
+program p;
+var
+  i: integer;
+begin
+  i := 7 div 3 mod 2;
+  WriteLn(i)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("7 3 / 2 MOD i PVAR!"));
+}
+
+#[test]
 fn generates_simple_assignment_without_stack_underflow_pattern() {
     let src = r#"
 program p;
@@ -218,7 +252,9 @@ end.
     assert!(forth.contains("REPEAT"));
     assert!(forth.contains("i PVAR@ 1 + i PVAR!"));
     assert!(forth.contains("i PVAR@ 1 - i PVAR!"));
-    assert!(forth.contains("S\" ABC\" PWRITE-STR"));
+    assert!(forth.contains("65 PWRITE-CHAR"));
+    assert!(forth.contains("66 PWRITE-CHAR"));
+    assert!(forth.contains("67 PWRITE-CHAR"));
 }
 
 #[test]
@@ -252,7 +288,7 @@ end.
 "#;
     let forth = run_compiler(src);
     assert!(forth.matches(": R_").count() >= 2);
-    assert!(forth.contains("\n  x\n  R_"));
+    assert!(forth.contains(" x R_"));
     assert!(forth.contains("R@ 3 = IF"));
     assert!(forth.contains("R_"));
     assert!(forth.contains("PWRITE-I32"));

@@ -231,6 +231,7 @@ pub fn type_of_expr_scoped(
 ) -> Result<TypeInfo, String> {
     match e {
         Expr::Int(_) => Ok(TypeInfo::Basic(BasicType::Integer)),
+        Expr::Bool(_) => Ok(TypeInfo::Basic(BasicType::Boolean)),
         Expr::Char(_) => Ok(TypeInfo::Basic(BasicType::Char)),
         Expr::Str(_) => Err("string literal is only allowed in Write/WriteLn".into()),
         Expr::Var(n) => {
@@ -301,7 +302,7 @@ pub fn type_of_expr_scoped(
             let ta = type_of_expr_scoped(env, vars, visible_routines, a)?;
             let tb = type_of_expr_scoped(env, vars, visible_routines, b)?;
             match op {
-                BinOp::Add | BinOp::Sub | BinOp::Mul => {
+                BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => {
                     expect_basic(&ta, BasicType::Integer, "arithmetic lhs")?;
                     expect_basic(&tb, BasicType::Integer, "arithmetic rhs")?;
                     Ok(TypeInfo::Basic(BasicType::Integer))
@@ -373,6 +374,7 @@ fn sizeof_type(t: &TypeInfo) -> Result<u32, String> {
 pub fn eval_const(env: &Env, e: &ConstExpr) -> Result<ConstVal, String> {
     match e {
         ConstExpr::Int(i) => Ok(ConstVal::I32(*i)),
+        ConstExpr::Bool(b) => Ok(ConstVal::Bool(*b)),
         ConstExpr::Char(u) => Ok(ConstVal::U32(*u)),
         ConstExpr::Const(n) => env
             .consts
@@ -419,13 +421,18 @@ pub fn eval_const(env: &Env, e: &ConstExpr) -> Result<ConstVal, String> {
             let bv = eval_const(env, b)?;
             use BinOp::*;
             match op {
-                Add | Sub | Mul => {
+                Add | Sub | Mul | Div | Mod => {
                     let ai = to_i32(av)?;
                     let bi = to_i32(bv)?;
+                    if matches!(op, Div | Mod) && bi == 0 {
+                        return Err("division by zero in const expr".into());
+                    }
                     Ok(ConstVal::I32(match op {
                         Add => ai + bi,
                         Sub => ai - bi,
                         Mul => ai * bi,
+                        Div => ai / bi,
+                        Mod => ai % bi,
                         _ => unreachable!(),
                     }))
                 }

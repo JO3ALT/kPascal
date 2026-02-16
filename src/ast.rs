@@ -135,6 +135,7 @@ pub enum Selector {
 #[derive(Debug, Clone)]
 pub enum Expr {
     Int(i32),
+    Bool(bool),
     Char(u32), // UTF-32
     Str(String),
     Var(String),
@@ -148,6 +149,7 @@ pub enum Expr {
 #[derive(Debug, Clone)]
 pub enum ConstExpr {
     Int(i32),
+    Bool(bool),
     Char(u32),
     Const(String),
     Call(String, Vec<ConstExpr>),
@@ -166,6 +168,8 @@ pub enum BinOp {
     Add,
     Sub,
     Mul,
+    Div,
+    Mod,
     Eq,
     Ne,
     Lt,

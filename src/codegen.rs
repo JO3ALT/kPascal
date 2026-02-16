@@ -29,6 +29,7 @@ pub struct ForthGen<'a> {
     env: &'a Env,
     out: String,
     indent: usize,
+    routine_frames: HashMap<String, Vec<String>>,
 }
 
 impl<'a> ForthGen<'a> {
@@ -37,6 +38,7 @@ impl<'a> ForthGen<'a> {
             env,
             out: String::new(),
             indent: 0,
+            routine_frames: HashMap::new(),
         }
     }
 
@@ -53,6 +55,7 @@ impl<'a> ForthGen<'a> {
     }
 
     pub fn gen_program(mut self, prog: &Program) -> Result<String, String> {
+        self.collect_routine_frames(&prog.block.routines, "program");
         self.emit_debug_name_map(&prog.block.routines, "program");
         self.wln("");
 
@@ -79,6 +82,7 @@ impl<'a> ForthGen<'a> {
         self.wln("CREATE __CP_DST 0 ,");
         self.wln("CREATE __CP_N 0 ,");
         self.wln("CREATE __CP_I 0 ,");
+        self.wln("CREATE __CALL_RET 0 ,");
 
         self.emit_slots_recursive(&prog.block.routines, "program")?;
 
@@ -339,9 +343,7 @@ impl<'a> ForthGen<'a> {
                     self.wln(&format!("{} PWRITE-HEX", self.gen_expr_inline_ctx(&args[0], ctx)?));
                     return Ok(());
                 }
-                let (word, _) = self.resolve_call_target(ctx, name)?;
-                self.gen_call_args(name, args, ctx)?;
-                self.wln(&word);
+                self.wln(&self.gen_call_inline_ctx(name, args, ctx)?);
                 Ok(())
             }
             Stmt::If(cond, then_s, else_s) => {
@@ -414,6 +416,7 @@ impl<'a> ForthGen<'a> {
     fn gen_expr_inline_ctx(&self, e: &Expr, ctx: &Ctx) -> Result<String, String> {
         match e {
             Expr::Int(i) => Ok(i.to_string()),
+            Expr::Bool(b) => Ok(if *b { "1".to_string() } else { "0".to_string() }),
             Expr::Char(u) => Ok(u.to_string()),
             Expr::Str(_) => Err("string literal is only allowed in Write/WriteLn".into()),
             Expr::Var(n) => {
@@ -442,14 +445,7 @@ impl<'a> ForthGen<'a> {
                 if let Some(b) = self.gen_builtin_expr_call(name, args, ctx)? {
                     return Ok(b);
                 }
-                let (word, _) = self.resolve_call_target(ctx, name)?;
-                let mut parts = vec![];
-                let argc = self.gen_call_args_inline(name, args, ctx)?;
-                if !argc.is_empty() {
-                    parts.push(argc);
-                }
-                parts.push(word);
-                Ok(parts.join(" "))
+                self.gen_call_inline_ctx(name, args, ctx)
             }
             Expr::Field(_, _) => {
                 let lv = expr_to_lvalue(e).ok_or("field base must be variable")?;
@@ -476,6 +472,8 @@ impl<'a> ForthGen<'a> {
                     Add => "+",
                     Sub => "-",
                     Mul => "*",
+                    Div => "/",
+                    Mod => "MOD",
                     Eq => "=",
                     Ne => "<>",
                     Lt => "<",
@@ -560,21 +558,6 @@ impl<'a> ForthGen<'a> {
         Ok((self.routine_word(key), sig))
     }
 
-    fn gen_call_args(&mut self, name: &str, args: &[Expr], ctx: &Ctx) -> Result<(), String> {
-        let (_, sig) = self.resolve_call_target(ctx, name)?;
-        for (arg, p) in args.iter().zip(&sig.params) {
-            if p.by_ref {
-                let lv = expr_to_lvalue(arg)
-                    .ok_or_else(|| format!("by-ref argument must be lvalue in call to {name}"))?;
-                let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
-                self.wln(&self.emit_addr_inline(&a));
-            } else {
-                self.wln(&self.gen_expr_inline_ctx(arg, ctx)?);
-            }
-        }
-        Ok(())
-    }
-
     fn gen_call_args_inline(&self, name: &str, args: &[Expr], ctx: &Ctx) -> Result<String, String> {
         let (_, sig) = self.resolve_call_target(ctx, name)?;
         let mut out = vec![];
@@ -589,6 +572,34 @@ impl<'a> ForthGen<'a> {
             }
         }
         Ok(out.join(" "))
+    }
+
+    fn gen_call_inline_ctx(&self, name: &str, args: &[Expr], ctx: &Ctx) -> Result<String, String> {
+        let key = ctx
+            .routines
+            .get(name)
+            .ok_or_else(|| format!("unknown routine in scope: {name}"))?;
+        let (word, sig) = self.resolve_call_target(ctx, name)?;
+        let mut parts = vec![];
+        let frame_slots = self.routine_frames.get(key).cloned().unwrap_or_default();
+        for slot in &frame_slots {
+            parts.push(format!("{slot} PVAR@ >R"));
+        }
+        let argc = self.gen_call_args_inline(name, args, ctx)?;
+        if !argc.is_empty() {
+            parts.push(argc);
+        }
+        parts.push(word);
+        if sig.ret.is_some() {
+            parts.push("__CALL_RET PVAR!".into());
+        }
+        for slot in frame_slots.iter().rev() {
+            parts.push(format!("R> {slot} PVAR!"));
+        }
+        if sig.ret.is_some() {
+            parts.push("__CALL_RET PVAR@".into());
+        }
+        Ok(parts.join(" "))
     }
 
     fn emit_store(&mut self, rhs: &str, dst: &AddrRef) {
@@ -688,13 +699,7 @@ impl<'a> ForthGen<'a> {
     }
 
     fn emit_string_write(&mut self, s: &str) {
-        let safe = s
-            .chars()
-            .all(|c| c != '"' && !c.is_control() && (c as u32) <= 0x7E);
-        if safe {
-            self.wln(&format!("S\" {s}\" PWRITE-STR"));
-            return;
-        }
+        // Emit chars directly to avoid implementation-specific S" parsing quirks.
         for ch in s.chars() {
             self.wln(&format!("{} PWRITE-CHAR", ch as u32));
         }
@@ -1048,6 +1053,28 @@ impl<'a> ForthGen<'a> {
             out.insert(name.clone(), format!("{scope}::{name}"));
         }
         out
+    }
+
+    fn collect_routine_frames(&mut self, routines: &[RoutineDecl], scope: &str) {
+        for r in routines {
+            let (name, block, params, ret_name) = match r {
+                RoutineDecl::Procedure(p) => (&p.name, &p.block, &p.params, None),
+                RoutineDecl::Function(f) => (&f.name, &f.block, &f.params, Some(f.name.as_str())),
+            };
+            let scoped = format!("{scope}::{name}");
+            let mut slots = Vec::new();
+            for prm in params {
+                slots.push(self.slot_name(&scoped, &prm.name));
+            }
+            for lv in &block.vars {
+                slots.push(self.slot_name(&scoped, &lv.name));
+            }
+            if let Some(ret) = ret_name {
+                slots.push(self.slot_name(&scoped, ret));
+            }
+            self.routine_frames.insert(scoped.clone(), slots);
+            self.collect_routine_frames(&block.routines, &scoped);
+        }
     }
 
     fn ty_of_typeref(&self, tr: &TypeRef) -> Result<TypeInfo, String> {

@@ -184,6 +184,67 @@ fn e2e_include_directive_runs_on_kforth() {
 }
 
 #[test]
+fn e2e_div_mod_runs_on_kforth() {
+    let src = r#"
+program p;
+begin
+  WriteLn(7 div 3);
+  WriteLn(7 mod 3);
+  WriteLn(20 div 6);
+  WriteLn(20 mod 6)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec![
+        "2".to_string(),
+        "1".to_string(),
+        "3".to_string(),
+        "2".to_string(),
+    ];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_true_false_literals_run_on_kforth() {
+    let src = r#"
+program p;
+begin
+  WriteLn(true);
+  WriteLn(false)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec!["TRUE".to_string(), "FALSE".to_string()];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_branching_recursion_fib_runs_on_kforth() {
+    let src = r#"
+program p;
+function Fib(n: integer): integer;
+begin
+  if n <= 1 then
+    Fib := n
+  else
+    Fib := Fib(n - 1) + Fib(n - 2)
+end;
+begin
+  WriteLn(Fib(6))
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec!["8".to_string()];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
 fn e2e_all_features_runs_on_kforth() {
     let src = include_str!("fixtures/all_features.pas");
     let forth = compile_pascal(src);

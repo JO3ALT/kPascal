@@ -531,9 +531,15 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
         Rule::mul => {
             let mut it = p.into_inner();
             let mut e = build_expr(it.next().unwrap())?;
-            while let Some(_op) = it.next() {
+            while let Some(op) = it.next() {
                 let rhs = build_expr(it.next().unwrap())?;
-                e = Expr::Binary(Box::new(e), BinOp::Mul, Box::new(rhs));
+                let bop = match op.as_str() {
+                    "*" => BinOp::Mul,
+                    "div" => BinOp::Div,
+                    "mod" => BinOp::Mod,
+                    _ => return Err("unknown mul op".into()),
+                };
+                e = Expr::Binary(Box::new(e), bop, Box::new(rhs));
             }
             Ok(e)
         }
@@ -553,6 +559,7 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
             }
         }
         Rule::primary => build_expr(p.into_inner().next().unwrap()),
+        Rule::bool_lit => Ok(Expr::Bool(p.as_str() == "true")),
         Rule::number => Ok(Expr::Int(parse_int_literal(p.as_str())?)),
         Rule::string_lit => {
             let s = decode_pascal_string(p.as_str())?;
@@ -649,9 +656,15 @@ fn build_const_expr(p: pest::iterators::Pair<Rule>) -> Result<ConstExpr, String>
         Rule::const_mul => {
             let mut it = p.into_inner();
             let mut e = build_const_expr(it.next().unwrap())?;
-            while let Some(_op) = it.next() {
+            while let Some(op) = it.next() {
                 let rhs = build_const_expr(it.next().unwrap())?;
-                e = ConstExpr::Binary(Box::new(e), BinOp::Mul, Box::new(rhs));
+                let bop = match op.as_str() {
+                    "*" => BinOp::Mul,
+                    "div" => BinOp::Div,
+                    "mod" => BinOp::Mod,
+                    _ => return Err("unknown const mul op".into()),
+                };
+                e = ConstExpr::Binary(Box::new(e), bop, Box::new(rhs));
             }
             Ok(e)
         }
@@ -671,6 +684,7 @@ fn build_const_expr(p: pest::iterators::Pair<Rule>) -> Result<ConstExpr, String>
             }
         }
         Rule::const_primary => build_const_expr(p.into_inner().next().unwrap()),
+        Rule::bool_lit => Ok(ConstExpr::Bool(p.as_str() == "true")),
         Rule::number => Ok(ConstExpr::Int(parse_int_literal(p.as_str())?)),
         Rule::string_lit => {
             let s = decode_pascal_string(p.as_str())?;

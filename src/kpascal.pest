@@ -79,13 +79,14 @@ add           = { mul ~ (add_op ~ mul)* }
 add_op        = { "+" | "-" }
 
 mul           = { unary ~ (mul_op ~ unary)* }
-mul_op        = { "*" }
+mul_op        = { "*" | "div" | "mod" }
 
 unary         = { (unary_op ~ unary) | primary }
 unary_op      = { "-" | "not" }
 
-primary       = { number | string_lit | char_code | func_call | lvalue | "(" ~ expr ~ ")" }
+primary       = { bool_lit | number | string_lit | char_code | func_call | lvalue | "(" ~ expr ~ ")" }
 func_call     = { ident ~ "(" ~ expr_list? ~ ")" }
+bool_lit      = { "false" | "true" }
 
 number        = @{ ("0x" ~ ASCII_HEX_DIGIT+) | ("$" ~ ASCII_HEX_DIGIT+) | ASCII_DIGIT+ }
 
@@ -97,6 +98,6 @@ const_rel     = { const_add ~ (rel_op ~ const_add)? }
 const_add     = { const_mul ~ (add_op ~ const_mul)* }
 const_mul     = { const_unary ~ (mul_op ~ const_unary)* }
 const_unary   = { (unary_op ~ const_unary) | const_primary }
-const_primary = { number | string_lit | char_code | const_func_call | ident | "(" ~ const_expr ~ ")" }
+const_primary = { bool_lit | number | string_lit | char_code | const_func_call | ident | "(" ~ const_expr ~ ")" }
 const_func_call = { ident ~ "(" ~ const_expr_list? ~ ")" }
 const_expr_list = { const_expr ~ ("," ~ const_expr)* }
