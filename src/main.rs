@@ -4,12 +4,12 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 mod ast;
-mod sema;
 mod codegen;
+mod sema;
 
 use ast::*;
-use sema::*;
 use codegen::ForthGen;
+use sema::*;
 
 #[derive(Parser)]
 #[grammar = "kpascal.pest"]
@@ -65,15 +65,54 @@ fn parse_program(src: &str) -> Result<Program, String> {
 }
 
 fn with_source_hint(src: &str, err: &str) -> String {
-    if err.contains("line ") && err.contains("column ") {
+    if err.contains('\n') {
         return err.to_string();
+    }
+    if let Some((line, col)) = extract_line_col(err) {
+        return format_with_source_hint(src, line, col, err);
     }
     if let Some(sym) = extract_symbol_from_error(err) {
         if let Some((line, col)) = find_symbol(src, &sym) {
-            return format!("{err} at line {line}, column {col}");
+            return format_with_source_hint(
+                src,
+                line,
+                col,
+                &format!("{err} at line {line}, column {col}"),
+            );
         }
     }
     err.to_string()
+}
+
+fn extract_line_col(err: &str) -> Option<(usize, usize)> {
+    let line_key = "line ";
+    let col_key = ", column ";
+    let line_pos = err.find(line_key)?;
+    let after_line = &err[line_pos + line_key.len()..];
+    let col_sep = after_line.find(col_key)?;
+    let line = after_line[..col_sep].trim().parse().ok()?;
+    let after_col = &after_line[col_sep + col_key.len()..];
+    let col_digits: String = after_col
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    if col_digits.is_empty() {
+        return None;
+    }
+    let col = col_digits.parse().ok()?;
+    Some((line, col))
+}
+
+fn format_with_source_hint(src: &str, line: usize, col: usize, msg: &str) -> String {
+    let Some(line_text) = src.lines().nth(line.saturating_sub(1)) else {
+        return msg.to_string();
+    };
+    let mut caret_pad = String::new();
+    let width = col.saturating_sub(1);
+    for ch in line_text.chars().take(width) {
+        caret_pad.push(if ch == '\t' { '\t' } else { ' ' });
+    }
+    format!("{msg}\n{line_text}\n{caret_pad}^")
 }
 
 fn extract_symbol_from_error(err: &str) -> Option<String> {
@@ -90,6 +129,12 @@ fn extract_symbol_from_error(err: &str) -> Option<String> {
             return Some(rest.trim().to_string());
         }
     }
+    if let Some(rest) = err.strip_prefix("const type mismatch for ") {
+        let name = rest.split(':').next().unwrap_or("").trim();
+        if !name.is_empty() {
+            return Some(name.to_string());
+        }
+    }
     if let Some(pos) = err.find("call to ") {
         let tail = &err[pos + "call to ".len()..];
         let name = tail
@@ -99,6 +144,14 @@ fn extract_symbol_from_error(err: &str) -> Option<String> {
             .trim();
         if !name.is_empty() {
             return Some(name.to_string());
+        }
+    }
+    if let Some(rest) = err.strip_prefix("type mismatch in ") {
+        if let Some(arg_pos) = rest.find(" argument") {
+            let name = rest[..arg_pos].trim();
+            if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                return Some(name.to_string());
+            }
         }
     }
     None
@@ -134,8 +187,11 @@ fn build_block(p: pest::iterators::Pair<Rule>) -> Result<Block, String> {
         match item.as_rule() {
             Rule::const_section => b.consts = build_consts(item)?,
             Rule::type_section => b.types = build_types(item)?,
-            Rule::var_section => b.vars = build_vars(item)?,
-            Rule::procedure_decl | Rule::function_decl => b.routines.push(build_routine_decl(item)?),
+            Rule::var_section => b.vars.extend(build_vars(item, false)?),
+            Rule::imut_section => b.vars.extend(build_vars(item, true)?),
+            Rule::procedure_decl | Rule::function_decl => {
+                b.routines.push(build_routine_decl(item)?)
+            }
             Rule::compound_stmt => b.body = build_compound(item)?,
             _ => {}
         }
@@ -198,7 +254,10 @@ fn build_formal_params(p: pest::iterators::Pair<Rule>) -> Result<Vec<ParamDecl>,
         }
         let group_text = g.as_str().trim_start();
         let mut names = vec![];
-        let by_ref = group_text.starts_with("var");
+        let by_ref = group_text
+            .get(..3)
+            .map(|s| s.eq_ignore_ascii_case("var"))
+            .unwrap_or(false);
         let mut ty: Option<TypeRef> = None;
         for x in g.into_inner() {
             match x.as_rule() {
@@ -229,8 +288,21 @@ fn build_consts(p: pest::iterators::Pair<Rule>) -> Result<Vec<ConstDecl>, String
         }
         let mut it = cd.into_inner();
         let name = it.next().unwrap().as_str().to_string();
-        let expr = build_const_expr(it.next().unwrap())?;
-        v.push(ConstDecl { name, expr });
+        let mut ty = None;
+        let mut expr = None;
+        for x in it {
+            match x.as_rule() {
+                Rule::type_ref_or_basic | Rule::type_ref | Rule::basic_type => {
+                    ty = Some(build_typeref(x)?)
+                }
+                _ => expr = Some(build_const_expr(x)?),
+            }
+        }
+        v.push(ConstDecl {
+            name,
+            ty,
+            expr: expr.ok_or("missing const expression")?,
+        });
     }
     Ok(v)
 }
@@ -249,7 +321,7 @@ fn build_types(p: pest::iterators::Pair<Rule>) -> Result<Vec<TypeDecl>, String> 
     Ok(v)
 }
 
-fn build_vars(p: pest::iterators::Pair<Rule>) -> Result<Vec<VarDecl>, String> {
+fn build_vars(p: pest::iterators::Pair<Rule>, immutable: bool) -> Result<Vec<VarDecl>, String> {
     let mut v = vec![];
     for vd in p.into_inner() {
         if vd.as_rule() != Rule::var_decl {
@@ -258,7 +330,11 @@ fn build_vars(p: pest::iterators::Pair<Rule>) -> Result<Vec<VarDecl>, String> {
         let mut it = vd.into_inner();
         let name = it.next().unwrap().as_str().to_string();
         let ty = build_typeref(it.next().unwrap())?;
-        v.push(VarDecl { name, ty });
+        v.push(VarDecl {
+            name,
+            ty,
+            immutable,
+        });
     }
     Ok(v)
 }
@@ -267,6 +343,21 @@ fn build_type_spec(p: pest::iterators::Pair<Rule>) -> Result<TypeSpec, String> {
     match p.as_rule() {
         Rule::type_spec => build_type_spec(p.into_inner().next().unwrap()),
         Rule::basic_type => Ok(TypeSpec::Basic(parse_basic(p.as_str())?)),
+        Rule::option_type | Rule::result_type | Rule::pointer_type => {
+            Ok(TypeSpec::Alias(build_typeref(p)?))
+        }
+        Rule::enum_type => {
+            let mut names = vec![];
+            for x in p.into_inner() {
+                if x.as_rule() == Rule::ident {
+                    names.push(x.as_str().to_string());
+                }
+            }
+            if names.is_empty() {
+                return Err("enum type must have at least one label".into());
+            }
+            Ok(TypeSpec::Enum(names))
+        }
         Rule::type_ref => Ok(TypeSpec::Alias(TypeRef::Named(p.as_str().to_string()))),
         Rule::record_type => {
             let mut fields = vec![];
@@ -281,22 +372,47 @@ fn build_type_spec(p: pest::iterators::Pair<Rule>) -> Result<TypeSpec, String> {
             }
             Ok(TypeSpec::Record(fields))
         }
+        Rule::sum_record_type => {
+            let mut arms = vec![];
+            for ad in p.into_inner() {
+                if ad.as_rule() != Rule::sum_arm_decl {
+                    continue;
+                }
+                let mut it = ad.into_inner();
+                let name = it.next().unwrap().as_str().to_string();
+                let mut fields = vec![];
+                if let Some(fs) = it.next() {
+                    for fd in fs.into_inner() {
+                        let mut fit = fd.into_inner();
+                        let fname = fit.next().unwrap().as_str().to_string();
+                        let fty = build_typeref(fit.next().unwrap())?;
+                        fields.push(FieldDecl {
+                            name: fname,
+                            ty: fty,
+                        });
+                    }
+                }
+                arms.push(SumArmDecl { name, fields });
+            }
+            Ok(TypeSpec::SumRecord(arms))
+        }
         Rule::array_type => {
-            let mut lens = vec![];
+            let mut dims = vec![];
             let mut elem: Option<TypeRef> = None;
             for x in p.into_inner() {
                 match x.as_rule() {
                     Rule::type_ref_or_basic | Rule::type_ref | Rule::basic_type => {
                         elem = Some(build_typeref(x)?)
                     }
-                    _ => lens.push(build_const_expr(x)?),
+                    Rule::array_dim => dims.push(build_array_dim(x)?),
+                    _ => {}
                 }
             }
-            if lens.is_empty() || lens.len() > 3 {
+            if dims.is_empty() || dims.len() > 3 {
                 return Err("array dimensions must be 1..3".into());
             }
             Ok(TypeSpec::Array {
-                lens,
+                dims,
                 elem: elem.ok_or("array elem type missing")?,
             })
         }
@@ -309,15 +425,80 @@ fn build_typeref(p: pest::iterators::Pair<Rule>) -> Result<TypeRef, String> {
         Rule::type_ref_or_basic => build_typeref(p.into_inner().next().unwrap()),
         Rule::basic_type => Ok(TypeRef::Basic(parse_basic(p.as_str())?)),
         Rule::type_ref => Ok(TypeRef::Named(p.as_str().to_string())),
+        Rule::pointer_type => {
+            let inner = p
+                .into_inner()
+                .next()
+                .ok_or("pointer type missing target type")?;
+            Ok(TypeRef::PointerNamed(inner.as_str().to_string()))
+        }
+        Rule::option_type => {
+            let inner = p
+                .into_inner()
+                .next()
+                .ok_or("option type missing inner type")?;
+            Ok(TypeRef::Option(Box::new(build_typeref(inner)?)))
+        }
+        Rule::result_type => {
+            let mut it = p.into_inner();
+            let ok_ty = build_typeref(it.next().ok_or("result type missing ok type")?)?;
+            let err_ty = build_typeref(it.next().ok_or("result type missing err type")?)?;
+            Ok(TypeRef::Result(Box::new(ok_ty), Box::new(err_ty)))
+        }
+        Rule::array_type => {
+            let mut dims = vec![];
+            let mut elem: Option<TypeRef> = None;
+            for x in p.into_inner() {
+                match x.as_rule() {
+                    Rule::type_ref_or_basic
+                    | Rule::type_ref
+                    | Rule::basic_type
+                    | Rule::array_type
+                    | Rule::pointer_type => elem = Some(build_typeref(x)?),
+                    Rule::array_dim => dims.push(build_array_dim(x)?),
+                    _ => {}
+                }
+            }
+            if dims.is_empty() || dims.len() > 3 {
+                return Err("array dimensions must be 1..3".into());
+            }
+            Ok(TypeRef::Array {
+                dims,
+                elem: Box::new(elem.ok_or("array elem type missing")?),
+            })
+        }
         _ => Err(format!("unexpected typeref: {:?}", p.as_rule())),
     }
 }
 
+fn build_array_dim(p: pest::iterators::Pair<Rule>) -> Result<ArrayDim, String> {
+    let mut it = p.into_inner();
+    let first = build_const_expr(it.next().ok_or("array dim missing lower/len")?)?;
+    if let Some(second) = it.next() {
+        Ok(ArrayDim {
+            low: first,
+            high: build_const_expr(second)?,
+        })
+    } else {
+        // Backward-compatible shorthand: array[N] means array[0..N-1]
+        let n_minus_1 = ConstExpr::Binary(
+            Box::new(first.clone()),
+            BinOp::Sub,
+            Box::new(ConstExpr::Int(1)),
+        );
+        Ok(ArrayDim {
+            low: ConstExpr::Int(0),
+            high: n_minus_1,
+        })
+    }
+}
+
 fn parse_basic(s: &str) -> Result<BasicType, String> {
-    match s {
+    match s.to_ascii_lowercase().as_str() {
         "integer" => Ok(BasicType::Integer),
         "boolean" => Ok(BasicType::Boolean),
         "char" => Ok(BasicType::Char),
+        "float" => Ok(BasicType::Float),
         _ => Err(format!("unknown basic type: {s}")),
     }
 }
@@ -366,7 +547,7 @@ fn build_stmt(p: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
                 var,
                 init,
                 limit,
-                downto: dir == "downto",
+                downto: dir.eq_ignore_ascii_case("downto"),
                 body: Box::new(body),
             })
         }
@@ -387,6 +568,48 @@ fn build_stmt(p: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
                 }
             }
             Ok(Stmt::Case {
+                expr,
+                arms,
+                else_stmt,
+            })
+        }
+        Rule::sum_case_stmt => {
+            let mut it = p.into_inner();
+            let expr = build_expr(it.next().unwrap())?;
+            let mut arms = vec![];
+            let mut else_stmt = None;
+            for x in it {
+                match x.as_rule() {
+                    Rule::sum_case_arm => {
+                        let mut jt = x.into_inner();
+                        let ctor = jt.next().unwrap().as_str().to_string();
+                        let mut binds = vec![];
+                        let mut body: Option<Stmt> = None;
+                        for y in jt {
+                            match y.as_rule() {
+                                Rule::bind_list => {
+                                    for b in y.into_inner() {
+                                        binds.push(b.as_str().to_string());
+                                    }
+                                }
+                                _ => body = Some(build_stmt(y)?),
+                            }
+                        }
+                        arms.push(SumCaseArm {
+                            ctor,
+                            binds,
+                            body: body.ok_or("sum case arm missing body")?,
+                        });
+                    }
+                    Rule::sum_case_else => {
+                        let mut jt = x.into_inner();
+                        let s = build_stmt(jt.next().unwrap())?;
+                        else_stmt = Some(Box::new(s));
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Stmt::SumCase {
                 expr,
                 arms,
                 else_stmt,
@@ -476,6 +699,7 @@ fn build_lvalue(p: pest::iterators::Pair<Rule>) -> Result<LValue, String> {
     let mut sels = vec![];
     for s in it {
         match s.as_rule() {
+            Rule::deref_access => sels.push(Selector::Deref),
             Rule::field_access => {
                 let mut jt = s.into_inner();
                 let name = jt.next().unwrap().as_str().to_string();
@@ -533,8 +757,10 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
             let mut e = build_expr(it.next().unwrap())?;
             while let Some(op) = it.next() {
                 let rhs = build_expr(it.next().unwrap())?;
-                let bop = match op.as_str() {
+                let op_s = op.as_str().to_ascii_lowercase();
+                let bop = match op_s.as_str() {
                     "*" => BinOp::Mul,
+                    "/" => BinOp::Div,
                     "div" => BinOp::Div,
                     "mod" => BinOp::Mod,
                     _ => return Err("unknown mul op".into()),
@@ -547,7 +773,8 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
             let mut it = p.clone().into_inner();
             let first = it.next().unwrap();
             if first.as_rule() == Rule::unary_op {
-                let op = match first.as_str() {
+                let op_s = first.as_str().to_ascii_lowercase();
+                let op = match op_s.as_str() {
                     "-" => UnOp::Neg,
                     "not" => UnOp::Not,
                     _ => return Err("unknown unary op".into()),
@@ -559,8 +786,60 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
             }
         }
         Rule::primary => build_expr(p.into_inner().next().unwrap()),
-        Rule::bool_lit => Ok(Expr::Bool(p.as_str() == "true")),
+        Rule::cond_expr => build_cond_expr(p),
+        Rule::bool_lit => Ok(Expr::Bool(p.as_str().eq_ignore_ascii_case("true"))),
+        Rule::nil_expr => Ok(Expr::Nil),
+        Rule::none_expr => Ok(Expr::OptionNone),
+        Rule::some_expr => {
+            let mut it = p.into_inner();
+            let inner = build_expr(it.next().unwrap())?;
+            Ok(Expr::OptionSome(Box::new(inner)))
+        }
+        Rule::cast_expr => {
+            let mut it = p.into_inner();
+            let ty = build_typeref(it.next().ok_or("cast missing target type")?)?;
+            let inner = build_expr(it.next().ok_or("cast missing expression")?)?;
+            Ok(Expr::Cast(ty, Box::new(inner)))
+        }
+        Rule::array_lit => {
+            let mut it = p.into_inner();
+            let elems = if let Some(list) = it.next() {
+                build_expr_list(list)?
+            } else {
+                vec![]
+            };
+            Ok(Expr::ArrayLit(elems))
+        }
+        Rule::record_update_expr => {
+            let mut it = p.into_inner();
+            let base = Expr::Var(it.next().unwrap().as_str().to_string());
+            let mut args = vec![];
+            if let Some(list) = it.next() {
+                for a in list.into_inner() {
+                    let mut jt = a.into_inner();
+                    let fname = jt.next().unwrap().as_str().to_string();
+                    let e = build_expr(jt.next().unwrap())?;
+                    args.push((fname, e));
+                }
+            }
+            Ok(Expr::RecordUpdate(Box::new(base), args))
+        }
+        Rule::array_update_expr => {
+            let mut it = p.into_inner();
+            let base = Expr::Var(it.next().unwrap().as_str().to_string());
+            let mut ups = vec![];
+            if let Some(list) = it.next() {
+                for a in list.into_inner() {
+                    let mut jt = a.into_inner();
+                    let idx = build_expr(jt.next().unwrap())?;
+                    let val = build_expr(jt.next().unwrap())?;
+                    ups.push((idx, val));
+                }
+            }
+            Ok(Expr::ArrayUpdate(Box::new(base), ups))
+        }
         Rule::number => Ok(Expr::Int(parse_int_literal(p.as_str())?)),
+        Rule::float_lit => Ok(Expr::Float(parse_float_literal_bits(p.as_str())?)),
         Rule::string_lit => {
             let s = decode_pascal_string(p.as_str())?;
             if s.chars().count() == 1 {
@@ -571,11 +850,30 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
         }
         Rule::char_code => {
             let mut it = p.into_inner();
-            let n = it.next().unwrap().as_str().parse::<u32>().map_err(|e| e.to_string())?;
+            let n = it
+                .next()
+                .unwrap()
+                .as_str()
+                .parse::<u32>()
+                .map_err(|e| e.to_string())?;
             if n > 0x10FFFF {
                 return Err("char code > 0x10FFFF".into());
             }
             Ok(Expr::Char(n))
+        }
+        Rule::ctor_call_named => {
+            let mut it = p.into_inner();
+            let name = it.next().unwrap().as_str().to_string();
+            let mut args = vec![];
+            if let Some(list) = it.next() {
+                for a in list.into_inner() {
+                    let mut jt = a.into_inner();
+                    let fname = jt.next().unwrap().as_str().to_string();
+                    let e = build_expr(jt.next().unwrap())?;
+                    args.push((fname, e));
+                }
+            }
+            Ok(Expr::Ctor(name, args))
         }
         Rule::func_call => {
             let mut it = p.into_inner();
@@ -594,6 +892,7 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
             let mut e = Expr::Var(lv.base);
             for sel in lv.sels {
                 e = match sel {
+                    Selector::Deref => Expr::Deref(Box::new(e)),
                     Selector::Field(f) => Expr::Field(Box::new(e), f),
                     Selector::Index(ixs) => {
                         let mut acc = e;
@@ -608,6 +907,53 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
         }
         _ => Err(format!("unexpected expr node: {:?}", p.as_rule())),
     }
+}
+
+fn build_cond_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
+    let mut arms = vec![];
+    let mut else_block = None;
+    for x in p.into_inner() {
+        match x.as_rule() {
+            Rule::cond_arm => {
+                let mut it = x.into_inner();
+                let cond = build_expr(it.next().unwrap())?;
+                let block = build_cond_block(it.next().unwrap())?;
+                arms.push(CondExprArm { cond, block });
+            }
+            Rule::cond_else_arm => {
+                let mut it = x.into_inner();
+                let block = build_cond_block(it.next().unwrap())?;
+                else_block = Some(block);
+            }
+            _ => {}
+        }
+    }
+    Ok(Expr::Cond {
+        arms,
+        else_block: else_block.ok_or("cond missing else")?,
+    })
+}
+
+fn build_cond_block(p: pest::iterators::Pair<Rule>) -> Result<CondValueBlock, String> {
+    let mut stmts = vec![];
+    let mut value = None;
+    for x in p.into_inner() {
+        match x.as_rule() {
+            Rule::cond_stmt => {
+                let inner = x.into_inner().next().ok_or("empty cond stmt")?;
+                stmts.push(build_stmt(inner)?);
+            }
+            Rule::value_stmt => {
+                let mut it = x.into_inner();
+                value = Some(Box::new(build_expr(it.next().unwrap())?));
+            }
+            _ => {}
+        }
+    }
+    Ok(CondValueBlock {
+        stmts,
+        value: value.ok_or("cond block missing VALUE")?,
+    })
 }
 
 fn parse_relop(s: &str) -> Result<BinOp, String> {
@@ -658,8 +1004,10 @@ fn build_const_expr(p: pest::iterators::Pair<Rule>) -> Result<ConstExpr, String>
             let mut e = build_const_expr(it.next().unwrap())?;
             while let Some(op) = it.next() {
                 let rhs = build_const_expr(it.next().unwrap())?;
-                let bop = match op.as_str() {
+                let op_s = op.as_str().to_ascii_lowercase();
+                let bop = match op_s.as_str() {
                     "*" => BinOp::Mul,
+                    "/" => BinOp::Div,
                     "div" => BinOp::Div,
                     "mod" => BinOp::Mod,
                     _ => return Err("unknown const mul op".into()),
@@ -672,7 +1020,8 @@ fn build_const_expr(p: pest::iterators::Pair<Rule>) -> Result<ConstExpr, String>
             let mut it = p.clone().into_inner();
             let first = it.next().unwrap();
             if first.as_rule() == Rule::unary_op {
-                let op = match first.as_str() {
+                let op_s = first.as_str().to_ascii_lowercase();
+                let op = match op_s.as_str() {
                     "-" => UnOp::Neg,
                     "not" => UnOp::Not,
                     _ => return Err("unknown const unary op".into()),
@@ -684,7 +1033,8 @@ fn build_const_expr(p: pest::iterators::Pair<Rule>) -> Result<ConstExpr, String>
             }
         }
         Rule::const_primary => build_const_expr(p.into_inner().next().unwrap()),
-        Rule::bool_lit => Ok(ConstExpr::Bool(p.as_str() == "true")),
+        Rule::bool_lit => Ok(ConstExpr::Bool(p.as_str().eq_ignore_ascii_case("true"))),
+        Rule::float_lit => Ok(ConstExpr::Float(parse_float_literal_bits(p.as_str())?)),
         Rule::number => Ok(ConstExpr::Int(parse_int_literal(p.as_str())?)),
         Rule::string_lit => {
             let s = decode_pascal_string(p.as_str())?;
@@ -695,7 +1045,12 @@ fn build_const_expr(p: pest::iterators::Pair<Rule>) -> Result<ConstExpr, String>
         }
         Rule::char_code => {
             let mut it = p.into_inner();
-            let n = it.next().unwrap().as_str().parse::<u32>().map_err(|e| e.to_string())?;
+            let n = it
+                .next()
+                .unwrap()
+                .as_str()
+                .parse::<u32>()
+                .map_err(|e| e.to_string())?;
             if n > 0x10FFFF {
                 return Err("char code > 0x10FFFF".into());
             }
@@ -758,6 +1113,13 @@ fn parse_int_literal(s: &str) -> Result<i32, String> {
     s.parse::<i32>().map_err(|e| e.to_string())
 }
 
+fn parse_float_literal_bits(s: &str) -> Result<u32, String> {
+    let f = s
+        .parse::<f32>()
+        .map_err(|e| format!("invalid float literal '{s}': {e}"))?;
+    Ok(f.to_bits())
+}
+
 fn preprocess_includes(src: &str, base_dir: &Path) -> Result<String, String> {
     let mut stack = HashSet::new();
     expand_includes(src, base_dir, &mut stack)
@@ -815,7 +1177,9 @@ fn parse_include_directive(body: &str) -> Option<String> {
     if rest.is_empty() {
         return None;
     }
-    if (rest.starts_with('\'') && rest.ends_with('\'')) || (rest.starts_with('"') && rest.ends_with('"')) {
+    if (rest.starts_with('\'') && rest.ends_with('\''))
+        || (rest.starts_with('"') && rest.ends_with('"'))
+    {
         if rest.len() >= 2 {
             rest = &rest[1..rest.len() - 1];
         }

@@ -1,13 +1,13 @@
 program usemath;
-(* $I math.pas *)
+(* $I math_fixed.pas *)
 begin
-  WriteLn(sqrt(81));
-  WriteLn(sin(30));
-  WriteLn(cos(60));
-  WriteLn(tan(45));
-  WriteLn(asin(5000));
-  WriteLn(acos(5000));
-  WriteLn(atan(10000));
-  WriteLn(ln(2));
-  WriteLn(log(10))
+  WriteLn(fx_sqrt(81));
+  WriteLn(fx_sin(30));
+  WriteLn(fx_cos(60));
+  WriteLn(fx_tan(45));
+  WriteLn(fx_asin(5000));
+  WriteLn(fx_acos(5000));
+  WriteLn(fx_atan(10000));
+  WriteLn(fx_ln(2));
+  WriteLn(fx_log(10))
 end.

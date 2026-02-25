@@ -90,6 +90,32 @@ end.
 }
 
 #[test]
+fn supports_record_equality_in_conditions() {
+    let src = r#"
+program p;
+type
+  pair = record
+    x: integer;
+    y: integer;
+  end;
+var
+  a: pair;
+  b: pair;
+begin
+  if a = b then
+    WriteLn(1);
+  if a <> b then
+    WriteLn(2)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains(": PAGG-EQ"));
+    assert!(forth.contains("a b 2 PAGG-EQ IF"));
+    assert!(forth.contains("a b 2 PAGG-EQ 0= IF"));
+}
+
+#[test]
 fn generates_wrappers_for_bool_and_char_write() {
     let src = r#"
 program p;
@@ -139,6 +165,34 @@ end.
     assert!(forth.contains("PREAD-I32 i PVAR!"));
     assert!(forth.contains("PREAD-BOOL b PVAR!"));
     assert!(forth.contains("PREAD-CHAR c PVAR!"));
+}
+
+#[test]
+fn generates_float_ops_and_io_words() {
+    let src = r#"
+program p;
+var
+  x: float;
+  y: float;
+begin
+  Read(x);
+  y := Float(Trunc(-x)) + 1.5 * 2.0;
+  y := y + Float(Round(2.6));
+  WriteLn(y);
+  WriteLn(y > x)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("PREAD-F32 x PVAR!"));
+    assert!(forth.contains("FNEGATE"));
+    assert!(forth.contains("FMUL"));
+    assert!(forth.contains("FADD"));
+    assert!(forth.contains("F>S"));
+    assert!(forth.contains("S>F"));
+    assert!(forth.contains("FROUND-I32"));
+    assert!(forth.contains("SWAP F<"));
+    assert!(forth.contains("PWRITE-F32"));
 }
 
 #[test]
@@ -292,6 +346,63 @@ end.
     assert!(forth.contains("R@ 3 = IF"));
     assert!(forth.contains("R_"));
     assert!(forth.contains("PWRITE-I32"));
+}
+
+#[test]
+fn supports_user_defined_types_in_value_and_var_parameters() {
+    let src = r#"
+program p;
+type
+  pair = record
+    x: integer;
+    y: integer;
+  end;
+  iarr3 = array[3] of integer;
+var
+  a: pair;
+  b: pair;
+  v: iarr3;
+
+procedure TakePair(p: pair);
+begin
+  WriteLn(p.x);
+  WriteLn(p.y)
+end;
+
+procedure BumpPair(var p: pair);
+begin
+  p.x := p.x + 1;
+  p.y := p.y + 2
+end;
+
+procedure SumArr(arr: iarr3);
+begin
+  WriteLn(arr[0] + arr[1] + arr[2])
+end;
+
+procedure SetArr(var arr: iarr3);
+begin
+  arr[0] := 7;
+  arr[1] := 8;
+  arr[2] := 9
+end;
+
+begin
+  a.x := 10; a.y := 20;
+  TakePair(a);
+  BumpPair(a);
+  b := a;
+  SetArr(v);
+  SumArr(v)
+end.
+"#;
+    let forth = run_compiler(src);
+    assert!(forth.contains("a PVAR@"));
+    assert!(forth.contains("a 4 PFIELD@"));
+    assert!(forth.contains("v PVAR@"));
+    assert!(forth.contains("v 4 PFIELD@"));
+    assert!(forth.contains("v 8 PFIELD@"));
+    assert!(forth.contains("PFIELD!"));
 }
 
 #[test]
@@ -504,6 +615,256 @@ end.
 }
 
 #[test]
+fn supports_function_returning_user_defined_record_type() {
+    let src = r#"
+program p;
+type
+  pair = record
+    x: integer;
+    y: integer;
+  end;
+var
+  p1: pair;
+function MakePair(a: integer; b: integer): pair;
+begin
+  MakePair.x := a;
+  MakePair.y := b
+end;
+begin
+  p1 := MakePair(1, 2);
+  WriteLn(p1.x);
+  WriteLn(p1.y)
+end.
+"#;
+    let forth = run_compiler(src);
+    assert!(forth.contains("CREATE __CRS 0 ,"));
+    assert!(forth.contains("CREATE __CRA"));
+    assert!(forth.contains("__CRS PVAR!"));
+}
+
+#[test]
+fn supports_option_cond_and_sum_case() {
+    let src = r#"
+program p;
+type
+  optint = option of integer;
+var
+  x: optint;
+  y: integer;
+
+function findpositive(a: integer; b: integer): optint;
+begin
+  findpositive := cond(
+    a > 0: begin
+      value some(a)
+    end;
+    b > 0: begin
+      value some(b)
+    end;
+    else: begin
+      value none
+    end
+  )
+end;
+
+procedure useopt(o: optint);
+begin
+  case o of
+    none(): y := 0;
+    some(v): y := v
+  end
+end;
+
+begin
+  x := findpositive(1, -1);
+  useopt(x);
+  WriteLn(y)
+end.
+"#;
+    let forth = run_compiler(src);
+    assert!(forth.contains("__CRA"));
+    assert!(forth.contains("__CASE_MATCH"));
+    assert!(forth.contains("__SCB0"));
+    assert!(forth.contains(" IF"));
+    assert!(forth.contains(" ELSE"));
+}
+
+#[test]
+fn supports_named_constructor_for_sum_record() {
+    let src = r#"
+program p;
+type
+  x = record of
+    a: (p: integer; q: integer);
+    c: ();
+  end;
+var
+  v: x;
+begin
+  v := a(p := 1; q := 2)
+end.
+"#;
+    let forth = run_compiler(src);
+    assert!(forth.contains("v PVAR!"));
+    assert!(forth.contains("v 4 PFIELD!"));
+    assert!(forth.contains("v 8 PFIELD!"));
+}
+
+#[test]
+fn supports_sum_case_aggregate_bindings() {
+    let src = r#"
+program p;
+type
+  pair = record
+    x: integer;
+    y: integer;
+  end;
+  arr2 = array[2] of integer;
+  boxv = record of
+    one: (p: pair);
+    many: (xs: arr2);
+  end;
+var
+  p: pair;
+  a: arr2;
+  b: boxv;
+  q: pair;
+  t: arr2;
+begin
+  p.x := 10; p.y := 20;
+  a[0] := 7; a[1] := 8;
+  b := one(p := p);
+  case b of
+    one(r): q := r;
+    many(xs): t := xs
+  end
+end.
+"#;
+    let forth = run_compiler(src);
+    assert!(forth.contains("__SCB0 PVAR!"));
+    assert!(forth.contains("__SCB0 PVAR@"));
+}
+
+#[test]
+fn supports_case_insensitive_keywords_and_case_sensitive_variables() {
+    let src = r#"
+PrOgRaM p;
+VaR
+  A: InTeGeR;
+  a: integer;
+BeGiN
+  A := 1;
+  a := CoNd(
+    TrUe: bEgIn
+      VaLuE 2
+    EnD;
+    eLsE: BeGiN
+      VaLuE 3
+    EnD
+  );
+  WrItElN(A);
+  wRiTeLn(a)
+EnD.
+"#;
+    let forth = run_compiler(src);
+    assert!(forth.contains("CREATE A 0 ,"));
+    assert!(forth.contains("CREATE a 0 ,"));
+    assert!(forth.contains("1 A PVAR!"));
+    assert!(forth.contains("2 a PVAR!"));
+}
+
+#[test]
+fn rejects_cond_arm_value_type_mismatch() {
+    let src = r#"
+program p;
+var
+  x: integer;
+begin
+  x := cond(
+    1 < 2: begin
+      value 1
+    end;
+    else: begin
+      value true
+    end
+  )
+end.
+"#;
+    let err = run_compiler_fail(src);
+    assert!(err.contains("type mismatch in assignment"));
+}
+
+#[test]
+fn rejects_sum_case_bind_count_mismatch() {
+    let src = r#"
+program p;
+type
+  x = record of
+    a: (p: integer; q: integer);
+  end;
+var
+  v: x;
+begin
+  case v of
+    a(p): WriteLn(p)
+  end
+end.
+"#;
+    let err = run_compiler_fail(src);
+    assert!(err.contains("sum-case bind count mismatch"));
+}
+
+#[test]
+fn rejects_imut_reassignment_and_use_before_init() {
+    let src1 = r#"
+program p;
+imut
+  x: integer;
+begin
+  x := 1;
+  x := 2
+end.
+"#;
+    let err1 = run_compiler_fail(src1);
+    assert!(err1.contains("imut variable cannot be reassigned"));
+
+    let src2 = r#"
+program p;
+var
+  y: integer;
+imut
+  x: integer;
+begin
+  y := x;
+  x := 1
+end.
+"#;
+    let err2 = run_compiler_fail(src2);
+    assert!(err2.contains("imut variable used before initialization"));
+}
+
+#[test]
+fn rejects_imut_as_var_parameter_argument() {
+    let src = r#"
+program p;
+imut
+  x: integer;
+
+procedure bump(var a: integer);
+begin
+  a := a + 1
+end;
+
+begin
+  x := 1;
+  bump(x)
+end.
+"#;
+    let err = run_compiler_fail(src);
+    assert!(err.contains("imut variable cannot be passed to var parameter"));
+}
+
+#[test]
 fn supports_three_dimensional_array_indexing() {
     let src = r#"
 program p;
@@ -661,10 +1022,19 @@ fn supports_turbo_pascal_include_directive_and_paren_comment() {
 }
 
 #[test]
-fn compiles_math_pas_include() {
+fn compiles_math_fixed_pas_include() {
     let src = include_str!("fixtures/use_math.pas");
     let forth = run_compiler(src);
-    assert!(forth.contains("ROUTINE program::sqrt"));
-    assert!(forth.contains("ROUTINE program::sin"));
+    assert!(forth.contains("ROUTINE program::fx_sqrt"));
+    assert!(forth.contains("ROUTINE program::fx_sin"));
     assert!(forth.contains("PWRITE-I32"));
+}
+
+#[test]
+fn compiles_math_pas_float_include() {
+    let src = include_str!("fixtures/use_math_float.pas");
+    let forth = run_compiler(src);
+    assert!(forth.contains("ROUTINE program::abs"));
+    assert!(forth.contains("ROUTINE program::sqrt"));
+    assert!(forth.contains("PWRITE-F32"));
 }

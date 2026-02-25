@@ -17,6 +17,7 @@ pub struct Block {
 #[derive(Debug, Clone)]
 pub struct ConstDecl {
     pub name: String,
+    pub ty: Option<TypeRef>,
     pub expr: ConstExpr,
 }
 
@@ -30,6 +31,7 @@ pub struct TypeDecl {
 pub struct VarDecl {
     pub name: String,
     pub ty: TypeRef,
+    pub immutable: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -63,8 +65,10 @@ pub struct ParamDecl {
 #[derive(Debug, Clone)]
 pub enum TypeSpec {
     Basic(BasicType),
+    Enum(Vec<String>),
     Record(Vec<FieldDecl>),
-    Array { lens: Vec<ConstExpr>, elem: TypeRef },
+    SumRecord(Vec<SumArmDecl>),
+    Array { dims: Vec<ArrayDim>, elem: TypeRef },
     Alias(TypeRef),
 }
 
@@ -75,16 +79,36 @@ pub struct FieldDecl {
 }
 
 #[derive(Debug, Clone)]
+pub struct SumArmDecl {
+    pub name: String,
+    pub fields: Vec<FieldDecl>,
+}
+
+#[derive(Debug, Clone)]
 pub enum BasicType {
     Integer,
     Boolean,
     Char,
+    Float,
 }
 
 #[derive(Debug, Clone)]
 pub enum TypeRef {
     Basic(BasicType),
     Named(String),
+    PointerNamed(String),
+    Option(Box<TypeRef>),
+    Result(Box<TypeRef>, Box<TypeRef>),
+    Array {
+        dims: Vec<ArrayDim>,
+        elem: Box<TypeRef>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct ArrayDim {
+    pub low: ConstExpr,
+    pub high: ConstExpr,
 }
 
 #[derive(Debug, Clone)]
@@ -109,9 +133,21 @@ pub enum Stmt {
         arms: Vec<(ConstExpr, Stmt)>,
         else_stmt: Option<Box<Stmt>>,
     },
+    SumCase {
+        expr: Expr,
+        arms: Vec<SumCaseArm>,
+        else_stmt: Option<Box<Stmt>>,
+    },
     ProcCall(String, Vec<Expr>),
     Write(Vec<Expr>),
     WriteLn(Vec<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub struct SumCaseArm {
+    pub ctor: String,
+    pub binds: Vec<String>,
+    pub body: Stmt,
 }
 
 impl Default for Stmt {
@@ -130,20 +166,47 @@ pub struct LValue {
 pub enum Selector {
     Field(String),
     Index(Vec<Expr>),
+    Deref,
 }
 
 #[derive(Debug, Clone)]
 pub enum Expr {
     Int(i32),
     Bool(bool),
-    Char(u32), // UTF-32
+    Char(u32),  // UTF-32
+    Float(u32), // IEEE754 binary32 bits in u32 cell
     Str(String),
+    Nil,
     Var(String),
     Call(String, Vec<Expr>),
+    Ctor(String, Vec<(String, Expr)>),
+    ArrayLit(Vec<Expr>),
+    RecordUpdate(Box<Expr>, Vec<(String, Expr)>),
+    ArrayUpdate(Box<Expr>, Vec<(Expr, Expr)>),
+    OptionNone,
+    OptionSome(Box<Expr>),
+    Cond {
+        arms: Vec<CondExprArm>,
+        else_block: CondValueBlock,
+    },
+    Deref(Box<Expr>),
     Field(Box<Expr>, String), // left is address/value depending on context; codegen will special-case lvalues
     Index(Box<Expr>, Box<Expr>),
+    Cast(TypeRef, Box<Expr>),
     Unary(UnOp, Box<Expr>),
     Binary(Box<Expr>, BinOp, Box<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub struct CondExprArm {
+    pub cond: Expr,
+    pub block: CondValueBlock,
+}
+
+#[derive(Debug, Clone)]
+pub struct CondValueBlock {
+    pub stmts: Vec<Stmt>,
+    pub value: Box<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -151,6 +214,7 @@ pub enum ConstExpr {
     Int(i32),
     Bool(bool),
     Char(u32),
+    Float(u32),
     Const(String),
     Call(String, Vec<ConstExpr>),
     Unary(UnOp, Box<ConstExpr>),

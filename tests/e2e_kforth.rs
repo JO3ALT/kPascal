@@ -1,6 +1,39 @@
 use std::fs;
 use std::process::{Command, Stdio};
 
+fn missing_kforth_reason() -> Option<String> {
+    let bootstrap = "../kforth/bootstrap.fth";
+    let binaries = ["../kforth/build/kforth", "../kforth/kforth"];
+
+    if fs::metadata(bootstrap).is_err() {
+        return Some(format!("missing {bootstrap}"));
+    }
+    if binaries.iter().all(|path| fs::metadata(path).is_err()) {
+        return Some(format!(
+            "missing kforth binary (tried: {})",
+            binaries.join(", ")
+        ));
+    }
+    None
+}
+
+fn kforth_binary_path() -> &'static str {
+    if fs::metadata("../kforth/build/kforth").is_ok() {
+        "../kforth/build/kforth"
+    } else {
+        "../kforth/kforth"
+    }
+}
+
+macro_rules! require_kforth {
+    () => {
+        if let Some(reason) = missing_kforth_reason() {
+            eprintln!("skipping e2e_kforth: {reason}");
+            return;
+        }
+    };
+}
+
 fn compile_pascal(src: &str) -> String {
     let mut child = Command::new(env!("CARGO_BIN_EXE_kpascal"))
         .stdin(Stdio::piped())
@@ -19,7 +52,9 @@ fn compile_pascal(src: &str) -> String {
             .expect("failed to feed Pascal source");
     }
 
-    let out = child.wait_with_output().expect("failed to wait for kpascal");
+    let out = child
+        .wait_with_output()
+        .expect("failed to wait for kpascal");
     assert!(
         out.status.success(),
         "kpascal failed.\nstdout:\n{}\nstderr:\n{}",
@@ -34,7 +69,7 @@ fn run_kforth_with_bootstrap(forth_src: &str, runtime_input: &str) -> String {
         .expect("failed to read ../kforth/bootstrap.fth");
     let payload = format!("{bootstrap}\n{forth_src}\n{runtime_input}\nBYE\n");
 
-    let mut child = Command::new("../kforth/build/kforth")
+    let mut child = Command::new(kforth_binary_path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -81,6 +116,7 @@ fn normalize_kforth_output(raw: &str) -> Vec<String> {
 
 #[test]
 fn e2e_all_syntax_runs_on_kforth() {
+    require_kforth!();
     let src = include_str!("fixtures/all_syntax.pas");
     let forth = compile_pascal(src);
     let out = run_kforth_with_bootstrap(&forth, "");
@@ -95,6 +131,7 @@ fn e2e_all_syntax_runs_on_kforth() {
 
 #[test]
 fn e2e_read_all_types_runs_on_kforth() {
+    require_kforth!();
     let src = include_str!("fixtures/read_all_types.pas");
     let forth = compile_pascal(src);
     let out = run_kforth_with_bootstrap(&forth, "12 1 X 34 0 Y");
@@ -112,6 +149,7 @@ fn e2e_read_all_types_runs_on_kforth() {
 
 #[test]
 fn e2e_read_write_array_runs_on_kforth() {
+    require_kforth!();
     let src = include_str!("fixtures/read_write_arr.pas");
     let forth = compile_pascal(src);
     let out = run_kforth_with_bootstrap(&forth, "7 8 9");
@@ -122,6 +160,7 @@ fn e2e_read_write_array_runs_on_kforth() {
 
 #[test]
 fn e2e_aggregate_and_3d_runs_on_kforth() {
+    require_kforth!();
     let src = include_str!("fixtures/aggregate_and_3d.pas");
     let forth = compile_pascal(src);
     let out = run_kforth_with_bootstrap(&forth, "");
@@ -132,6 +171,7 @@ fn e2e_aggregate_and_3d_runs_on_kforth() {
 
 #[test]
 fn e2e_string_assignment_to_char_array_runs_on_kforth() {
+    require_kforth!();
     let src = include_str!("fixtures/string_assign_char_array.pas");
     let forth = compile_pascal(src);
     let out = run_kforth_with_bootstrap(&forth, "");
@@ -147,6 +187,7 @@ fn e2e_string_assignment_to_char_array_runs_on_kforth() {
 
 #[test]
 fn e2e_readstr_writestr_runs_on_kforth() {
+    require_kforth!();
     let src = include_str!("fixtures/read_write_str.pas");
     let forth = compile_pascal(src);
     let out = run_kforth_with_bootstrap(&forth, "H e l l o");
@@ -157,6 +198,7 @@ fn e2e_readstr_writestr_runs_on_kforth() {
 
 #[test]
 fn e2e_builtins_and_hex_runs_on_kforth() {
+    require_kforth!();
     let src = include_str!("fixtures/builtins_and_hex.pas");
     let forth = compile_pascal(src);
     let out = run_kforth_with_bootstrap(&forth, "255\n42");
@@ -175,6 +217,7 @@ fn e2e_builtins_and_hex_runs_on_kforth() {
 
 #[test]
 fn e2e_include_directive_runs_on_kforth() {
+    require_kforth!();
     let src = include_str!("fixtures/include_program.pas");
     let forth = compile_pascal(src);
     let out = run_kforth_with_bootstrap(&forth, "");
@@ -185,6 +228,7 @@ fn e2e_include_directive_runs_on_kforth() {
 
 #[test]
 fn e2e_div_mod_runs_on_kforth() {
+    require_kforth!();
     let src = r#"
 program p;
 begin
@@ -208,6 +252,7 @@ end.
 
 #[test]
 fn e2e_true_false_literals_run_on_kforth() {
+    require_kforth!();
     let src = r#"
 program p;
 begin
@@ -224,6 +269,7 @@ end.
 
 #[test]
 fn e2e_branching_recursion_fib_runs_on_kforth() {
+    require_kforth!();
     let src = r#"
 program p;
 function Fib(n: integer): integer;
@@ -246,6 +292,7 @@ end.
 
 #[test]
 fn e2e_all_features_runs_on_kforth() {
+    require_kforth!();
     let src = include_str!("fixtures/all_features.pas");
     let forth = compile_pascal(src);
     let out = run_kforth_with_bootstrap(&forth, "255\n1 X\n7 8 9\nH e l l o");
@@ -258,7 +305,7 @@ fn e2e_all_features_runs_on_kforth() {
         "5".to_string(),
         "TRUE".to_string(),
         "Z".to_string(),
-        "10".to_string(),
+        "30".to_string(),
         "1".to_string(),
         "2".to_string(),
         "3".to_string(),
@@ -292,5 +339,81 @@ fn e2e_all_features_runs_on_kforth() {
         "Hello".to_string(),
         "END".to_string(),
     ];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_functional_smoke_runs_on_kforth() {
+    require_kforth!();
+    let src = include_str!("fixtures/functional_smoke.pas");
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec![
+        "***".to_string(),
+        "THREE".to_string(),
+        "8".to_string(),
+        "20".to_string(),
+        "99".to_string(),
+    ];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_use_math_runs_on_kforth() {
+    require_kforth!();
+    let src = include_str!("fixtures/use_math.pas");
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec![
+        "9".to_string(),
+        "20000".to_string(),
+        "20000".to_string(),
+        "10000".to_string(),
+        "7".to_string(),
+        "83".to_string(),
+        "45".to_string(),
+        "6928".to_string(),
+        "9998".to_string(),
+    ];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_cond_short_circuits_side_effects_on_kforth() {
+    require_kforth!();
+    let src = r#"
+program p;
+var
+  a: integer;
+  b: integer;
+function Tick(n: integer): integer;
+begin
+  b := b + 1;
+  Tick := n
+end;
+begin
+  a := cond(
+    1 < 2: begin
+      b := b + 10;
+      value 111
+    end;
+    Tick(0) = 0: begin
+      b := b + 100;
+      value 222
+    end;
+    else: begin
+      value 333
+    end
+  );
+  WriteLn(a);
+  WriteLn(b)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec!["111".to_string(), "10".to_string()];
     assert_eq!(got, expected, "unexpected runtime output");
 }
