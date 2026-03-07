@@ -1,8 +1,10 @@
 program builtins;
 type
   a5 = array[5] of char;
+  a9 = array[9] of char;
 var
   s: a5;
+  hs: a9;
   i: integer;
   a: integer;
   b: integer;
@@ -17,7 +19,7 @@ begin
   Read(a);
   ReadLn;
   Read(b);
-  WriteHex(a);
-  WriteLn;
+  IntToHex(a, hs, 8, true);
+  WriteLn(hs);
   WriteLn(b)
 end.

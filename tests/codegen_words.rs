@@ -295,6 +295,48 @@ end.
 }
 
 #[test]
+fn supports_named_function_return_types_and_by_ref_procedures() {
+    let src = r#"
+program p;
+type
+  small = integer;
+  point = record
+    x: integer;
+    y: integer;
+  end;
+var
+  n: small;
+  pt: point;
+
+procedure Bump(var p: point);
+begin
+  p.x := p.x + 1;
+  p.y := p.y + 2
+end;
+
+function Next(v: small): small;
+begin
+  Next := v + 5
+end;
+
+begin
+  n := 7;
+  pt.x := 10;
+  pt.y := 20;
+  Bump(pt);
+  WriteLn(Next(n));
+  WriteLn(pt.x);
+  WriteLn(pt.y)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("pt R_"));
+    assert!(forth.contains("R_"));
+    assert!(forth.contains("PWRITE-I32"));
+}
+
+#[test]
 fn supports_nested_routines_and_local_decl_blocks() {
     let src = r#"
 program p;
@@ -435,37 +477,19 @@ end.
 }
 
 #[test]
-fn supports_readarr_writearr_for_integer_array() {
+fn rejects_read_on_aggregate_argument() {
     let src = r#"
 program p;
 type
   arr = array[4] of integer;
 var
-  a: arr;
+  x: arr;
 begin
-  ReadArr(a, 3);
-  WriteArr(a, 3)
-end.
-"#;
-    let forth = run_compiler(src);
-    assert!(forth.contains("0 >R"));
-    assert!(forth.contains("R@ 3 < WHILE"));
-    assert!(forth.contains("PREAD-I32"));
-    assert!(forth.contains("PWRITE-I32"));
-}
-
-#[test]
-fn rejects_readarr_non_array_argument() {
-    let src = r#"
-program p;
-var
-  x: integer;
-begin
-  ReadArr(x, 1)
+  Read(x)
 end.
 "#;
     let err = run_compiler_fail(src);
-    assert!(err.contains("ReadArr first argument must be array"));
+    assert!(err.contains("Read on aggregate type is not supported"));
 }
 
 #[test]
@@ -547,7 +571,7 @@ end.
 }
 
 #[test]
-fn supports_readstr_writestr_for_char_array() {
+fn supports_writeln_for_char_array() {
     let src = r#"
 program p;
 type
@@ -555,15 +579,76 @@ type
 var
   s: s8;
 begin
-  ReadStr(s, 5);
-  WriteStr(s);
-  WriteLn
+  s := 'Hello';
+  WriteLn(s)
+end.
+"#;
+    let forth = run_compiler(src);
+    assert!(forth.contains("__WSTR_STOP"));
+    assert!(forth.contains("PWRITE-CHAR"));
+}
+
+#[test]
+fn supports_read_char_array_with_max_length() {
+    let src = r#"
+program p;
+type
+  s8 = array[8] of char;
+var
+  s: s8;
+begin
+  Read(s, 5);
+  WriteLn(s)
 end.
 "#;
     let forth = run_compiler(src);
     assert!(forth.contains("PREAD-CHAR"));
     assert!(forth.contains("__WSTR_STOP"));
-    assert!(forth.contains("PWRITE-CHAR"));
+    assert!(forth.contains("R@ 5 <"));
+}
+
+#[test]
+fn rejects_read_char_array_without_max_length() {
+    let src = r#"
+program p;
+type
+  s8 = array[8] of char;
+var
+  s: s8;
+begin
+  Read(s)
+end.
+"#;
+    let err = run_compiler_fail(src);
+    assert!(err.contains("Read on array of char requires max length"));
+}
+
+#[test]
+fn supports_c_style_string_builtins() {
+    let src = r#"
+program p;
+type
+  s16 = array[16] of char;
+var
+  a: s16;
+  b: s16;
+  c: s16;
+begin
+  a := 'Hello';
+  b := 'World';
+  Copy(a, c);
+  Concat(a, b, c);
+  Delete(c, 6, 5);
+  Insert(b, a, 6);
+  WriteLn(Pos(b, a));
+  WriteLn(UpCase('q'))
+end.
+"#;
+    let forth = run_compiler(src);
+    assert!(forth.contains("__STRCPY"));
+    assert!(forth.contains("__STRPOS"));
+    assert!(forth.contains("__STRDELETE"));
+    assert!(forth.contains("__STRINSERT"));
 }
 
 #[test]
@@ -612,24 +697,27 @@ end.
 }
 
 #[test]
-fn supports_writehex_and_readln_builtins() {
+fn supports_inttohex_and_readln_builtins() {
     let src = r#"
 program p;
+type
+  s9 = array[9] of char;
 var
+  s: s9;
   a: integer;
   b: integer;
 begin
   Read(a);
   ReadLn;
   Read(b);
-  WriteHex(a);
-  WriteLn;
+  IntToHex(a, s, 8, true);
+  WriteLn(s);
   WriteLn(b)
 end.
 "#;
     let forth = run_compiler(src);
     assert!(forth.contains("PREADLN"));
-    assert!(forth.contains("PWRITE-HEX"));
+    assert!(forth.contains("__I32_TO_HEX_STR"));
 }
 
 #[test]
@@ -667,4 +755,394 @@ fn compiles_math_pas_include() {
     assert!(forth.contains("ROUTINE program::sqrt"));
     assert!(forth.contains("ROUTINE program::sin"));
     assert!(forth.contains("PWRITE-I32"));
+}
+
+#[test]
+fn supports_standard_pascal_real_subrange_enum_set_and_in_ops() {
+    let src = r#"
+program p;
+type
+  color = (red, green, blue);
+  colors = set of color;
+  idx = 1..3;
+  real_arr = array[1..3] of real;
+var
+  c: color;
+  s: colors;
+  i: idx;
+  a: real_arr;
+begin
+  i := 2;
+  c := green;
+  s := [red, green];
+  a[i] := 1.5 / 0.5;
+  WriteLn(a[i]);
+  WriteLn((c in s) and ((red in s) or (blue in s)));
+  WriteLn(Ord(c))
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("1069547520 1056964608 FDIV"));
+    assert!(forth.contains("PWRITE-F32"));
+    assert!(forth.contains("i PVAR@ 1 - 4 * +"));
+    assert!(forth.contains("AND"));
+    assert!(forth.contains("OR"));
+    assert!(forth.contains("LSHIFT"));
+}
+
+#[test]
+fn supports_multiple_const_type_var_sections_and_pointer_new_dispose() {
+    let src = r#"
+program p;
+const
+  one = 1;
+type
+  node = record
+    value: integer;
+  end;
+var
+  p: ^node;
+const
+  two = 2;
+var
+  x: integer;
+begin
+  new(p);
+  p^.value := one + two;
+  x := p^.value;
+  dispose(p);
+  WriteLn(x);
+  WriteLn(p = nil)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("HERE __NEWP PVAR!"));
+    assert!(forth.contains("ALLOT"));
+    assert!(forth.contains("__NEWP PVAR@ p PVAR!"));
+    assert!(forth.contains("0 p PVAR!"));
+    assert!(forth.contains("p PVAR@ 0 + PVAR!"));
+    assert!(forth.contains("p PVAR@ 0 + PVAR@"));
+}
+
+#[test]
+fn supports_addr_and_setaddr_for_pointer_aliasing() {
+    let src = r#"
+program p;
+type
+  cellp = ^integer;
+var
+  p: cellp;
+  q: cellp;
+  addr: integer;
+begin
+  new(p);
+  p^ := 123;
+  addr := Addr(p^);
+  SetAddr(q, addr);
+  q^ := 456;
+  WriteLn(p^)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("p PVAR@"));
+    assert!(forth.contains("addr PVAR!"));
+    assert!(forth.contains("addr PVAR@ q PVAR!"));
+    assert!(forth.contains("456 q PVAR@ PVAR!"));
+    assert!(forth.contains("p PVAR@ PVAR@"));
+}
+
+#[test]
+fn supports_with_variant_record_case_ranges_set_ops_and_3d_arrays() {
+    let src = r#"
+program p;
+type
+  color = (red, green, blue, yellow);
+  colors = set of color;
+  point = record
+    x: integer;
+    y: integer;
+  end;
+  node = record
+    case tag: integer of
+      0: (i: integer;);
+      1: (j: integer; k: integer;);
+  end;
+  cube = array[1..2, 1..2, 1..2] of integer;
+var
+  pnt: point;
+  n: node;
+  c: cube;
+  s1: colors;
+  s2: colors;
+begin
+  pnt.x := 10;
+  pnt.y := 20;
+  with pnt do
+  begin
+    x := x + 1;
+    y := y + 2
+  end;
+  c[1, 2, 2] := pnt.x + pnt.y;
+  n.tag := 1;
+  n.j := c[1, 2, 2];
+  s1 := [red, blue];
+  s2 := [blue, yellow];
+  WriteLn(true xor false);
+  WriteLn((s1 - s2) = [red]);
+  WriteLn([blue] <= s1);
+  case n.j of
+    30, 31..33: WriteLn(n.j);
+  else
+    WriteLn(0)
+  end
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("10 pnt PVAR!"));
+    assert!(forth.contains("20 pnt 4 PFIELD!"));
+    assert!(forth.contains("pnt PVAR@ 1 + pnt PVAR!"));
+    assert!(forth.contains("pnt 4 PFIELD@ 2 + pnt 4 PFIELD!"));
+    assert!(forth.contains("XOR PWRITE-BOOL"));
+    assert!(forth.contains("-1 XOR"));
+    assert!(forth.contains("R@ 30 ="));
+    assert!(forth.contains("R@ 31 >= R@ 33 <= AND"));
+}
+
+#[test]
+fn supports_four_dimensional_arrays() {
+    let src = r#"
+program p;
+type
+  hyper = array[1..2, 1..2, 1..2, 1..2] of integer;
+var
+  h: hyper;
+begin
+  h[2, 1, 2, 1] := 77;
+  WriteLn(h[2, 1, 2, 1])
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("77"));
+    assert!(forth.contains("PWRITE-I32"));
+}
+
+#[test]
+fn supports_nested_variant_records() {
+    let src = r#"
+program p;
+type
+  nested = record
+    case tag: integer of
+      0: (i: integer;);
+      1: (
+        case sub: integer of
+          0: (c: char;);
+          1: (j: integer;);
+      );
+  end;
+var
+  n: nested;
+begin
+  n.tag := 1;
+  n.sub := 1;
+  n.j := 42;
+  WriteLn(n.j)
+end.
+"#;
+    let forth = run_compiler(src);
+    assert!(forth.contains("42"));
+    assert!(forth.contains("PWRITE-I32"));
+}
+
+#[test]
+fn emits_variant_tag_runtime_checks() {
+    let src = r#"
+program p;
+type
+  node = record
+    case tag: integer of
+      0: (i: integer;);
+      1: (j: integer;);
+  end;
+var
+  n: node;
+begin
+  n.tag := 0;
+  WriteLn(n.j)
+end.
+"#;
+    let forth = run_compiler(src);
+    assert!(forth.contains("__VARIANT_MISMATCH"));
+    assert!(forth.contains("__VAR_TAG"));
+}
+
+#[test]
+fn emits_subrange_runtime_checks() {
+    let src = r#"
+program p;
+type
+  small = 1..10;
+var
+  x: small;
+
+procedure SetIt(v: small);
+begin
+  x := v
+end;
+
+begin
+  x := 3;
+  SetIt(4);
+  WriteLn(x)
+end.
+"#;
+    let forth = run_compiler(src);
+    assert!(forth.contains("__SUBRANGE_MISMATCH"));
+    assert!(forth.contains("DUP 1 >= OVER 10 <="));
+}
+
+#[test]
+fn supports_conformant_array_parameters() {
+    let src = r#"
+program p;
+type
+  arr = array[3..5] of integer;
+
+procedure Sum(var a: array[l..u: integer] of integer);
+var
+  i: integer;
+  s: integer;
+begin
+  s := 0;
+  for i := l to u do
+    s := s + a[i];
+  WriteLn(Low(a));
+  WriteLn(High(a));
+  WriteLn(Length(a));
+  WriteLn(s)
+end;
+
+var
+  data: arr;
+begin
+  data[3] := 10;
+  data[4] := 20;
+  data[5] := 30;
+  Sum(data)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("PVAR@ - 4 *"));
+    assert!(forth.contains("1 +"));
+    assert!(forth.contains("R_"));
+}
+
+#[test]
+fn supports_multidimensional_conformant_array_parameters() {
+    let src = r#"
+program p;
+type
+  matrix = array[1..2, 3..4] of integer;
+
+procedure Sum2(var a: array[i1..j1: integer; i2..j2: integer] of integer);
+begin
+  WriteLn(Low(a));
+  WriteLn(High(a));
+  WriteLn(Length(a));
+  WriteLn(a[i1, i2] + a[j1, j2])
+end;
+
+var
+  m: matrix;
+begin
+  m[1,3] := 10;
+  m[2,4] := 20;
+  Sum2(m)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("S_"));
+    assert!(forth.contains("PVAR@ -"));
+    assert!(forth.contains("* +"));
+}
+
+#[test]
+fn supports_set_literal_ranges_and_numeric_builtins() {
+    let src = r#"
+program p;
+type
+  idx = (i1, i2, i3, i4, i5, i6, i7, i8);
+  idxs = set of idx;
+var
+  s: idxs;
+begin
+  s := [i1, i3..i5, i8];
+  WriteLn(i4 in s);
+  WriteLn(i2 in s);
+  WriteLn(Abs(-7));
+  WriteLn(Sqr(3));
+  WriteLn(Round(2.6));
+  WriteLn(Trunc(2.6));
+  WriteLn(Succ(4));
+  WriteLn(Pred(4));
+  WriteLn(Odd(5))
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("LSHIFT"));
+    assert!(forth.contains("FROUND-I32"));
+    assert!(forth.contains("F>S"));
+    assert!(forth.contains("1 +"));
+    assert!(forth.contains("1 -"));
+}
+
+#[test]
+fn supports_writing_char_arrays_directly() {
+    let src = r#"
+program p;
+type
+  s6 = array[6] of char;
+var
+  s: s6;
+begin
+  s := 'Hello';
+  WriteLn(s)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("__WSTR_STOP"));
+    assert!(forth.contains("PWRITE-CHAR"));
+}
+
+#[test]
+fn supports_hex_string_to_integer_conversion() {
+    let src = r#"
+program p;
+type
+  s9 = array[9] of char;
+var
+  s: s9;
+begin
+  s := 'FF';
+  WriteLn(HexToInt('1A'));
+  WriteLn(HexToInt(s));
+  IntToHex(HexToInt(s), s, 8, true);
+  WriteLn(s)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("__HEX_TO_I32"));
+    assert!(forth.contains("__HEX_PTR PVAR!"));
+    assert!(forth.contains("__I32_TO_HEX_STR"));
+    assert!(forth.contains("__I2H_VAL PVAR!"));
 }

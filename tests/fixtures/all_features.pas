@@ -8,6 +8,7 @@ type
   arr3 = array[2,3,4] of integer;
   iarr = array[4] of integer;
   s8 = array[8] of char;
+  s9 = array[9] of char;
 
 var
   gi: integer;
@@ -21,6 +22,7 @@ var
   ga2: iarr;
   gcube: arr3;
   gstr: s8;
+  ghex: s9;
 
 (* $I math.pas *)
 
@@ -79,7 +81,7 @@ begin
   WriteLn(High(ga1));
 
   gstr := 'ABC';
-  WriteStr(gstr);
+  Write(gstr);
   WriteLn;
   WriteLn(gstr[3] = #0);
 
@@ -125,15 +127,17 @@ begin
   Read(gn);
   ReadLn;
   Read(gb, gch);
-  ReadArr(ga1, 3);
-  ReadStr(gstr, 5);
+  Read(ga1[0], ga1[1], ga1[2]);
+  Read(gstr, 5);
 
-  WriteHex(gn);
-  WriteLn;
+  IntToHex(gn, ghex, 8, true);
+  WriteLn(ghex);
   WriteLn(gb);
   WriteLn(gch);
-  WriteArr(ga1, 3);
-  WriteStr(gstr);
+  WriteLn(ga1[0]);
+  WriteLn(ga1[1]);
+  WriteLn(ga1[2]);
+  Write(gstr);
   WriteLn;
   WriteLn('END')
 end.

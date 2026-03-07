@@ -8,6 +8,7 @@ struct VarAccess {
     slot: String,
     ty: TypeInfo,
     by_ref: bool,
+    conformant_bounds: Option<Vec<(String, String)>>,
 }
 
 #[derive(Clone)]
@@ -23,6 +24,13 @@ struct AddrRef {
     offset: u32,
     dynamic_addr_expr: Option<String>,
     ty: TypeInfo,
+    variant_checks: Vec<RuntimeVariantCheck>,
+}
+
+#[derive(Clone)]
+struct RuntimeVariantCheck {
+    tag_addr_expr: String,
+    allowed_ranges: Vec<(i32, i32)>,
 }
 
 pub struct ForthGen<'a> {
@@ -30,6 +38,7 @@ pub struct ForthGen<'a> {
     out: String,
     indent: usize,
     routine_frames: HashMap<String, Vec<String>>,
+    string_literals: Vec<(String, String)>,
 }
 
 impl<'a> ForthGen<'a> {
@@ -39,6 +48,7 @@ impl<'a> ForthGen<'a> {
             out: String::new(),
             indent: 0,
             routine_frames: HashMap::new(),
+            string_literals: Vec::new(),
         }
     }
 
@@ -55,6 +65,7 @@ impl<'a> ForthGen<'a> {
     }
 
     pub fn gen_program(mut self, prog: &Program) -> Result<String, String> {
+        self.collect_string_literals_program(prog);
         self.collect_routine_frames(&prog.block.routines, "program");
         self.emit_debug_name_map(&prog.block.routines, "program");
         self.wln("");
@@ -64,7 +75,13 @@ impl<'a> ForthGen<'a> {
             match v {
                 ConstVal::I32(i) => self.wln(&format!("{i} CONSTANT {}", c.name)),
                 ConstVal::U32(u) => self.wln(&format!("{u} CONSTANT {}", c.name)),
-                ConstVal::Bool(b) => self.wln(&format!("{} CONSTANT {}", if b { 1 } else { 0 }, c.name)),
+                ConstVal::Real(bits) => self.wln(&format!("{bits} CONSTANT {}", c.name)),
+                ConstVal::EnumVal { ordinal, .. } => {
+                    self.wln(&format!("{ordinal} CONSTANT {}", c.name))
+                }
+                ConstVal::Bool(b) => {
+                    self.wln(&format!("{} CONSTANT {}", if b { 1 } else { 0 }, c.name))
+                }
             }
         }
 
@@ -76,6 +93,7 @@ impl<'a> ForthGen<'a> {
                 .ok_or_else(|| format!("internal: missing var type for {}", v.name))?;
             self.emit_storage_decl(&v.name, t)?;
         }
+        self.emit_string_literal_storage()?;
         self.wln("CREATE __CASE_MATCH 0 ,");
         self.wln("CREATE __WSTR_STOP 0 ,");
         self.wln("CREATE __CP_SRC 0 ,");
@@ -83,8 +101,379 @@ impl<'a> ForthGen<'a> {
         self.wln("CREATE __CP_N 0 ,");
         self.wln("CREATE __CP_I 0 ,");
         self.wln("CREATE __CALL_RET 0 ,");
+        self.wln("CREATE __NEWP 0 ,");
+        self.wln("CREATE __HEX_PTR 0 ,");
+        self.wln("CREATE __HEX_LEN 0 ,");
+        self.wln("CREATE __HEX_ACC 0 ,");
+        self.wln("CREATE __HEX_I 0 ,");
+        self.wln("CREATE __HEX_STOP 0 ,");
+        self.wln("CREATE __I2H_VAL 0 ,");
+        self.wln("CREATE __I2H_PTR 0 ,");
+        self.wln("CREATE __I2H_MAX 0 ,");
+        self.wln("CREATE __I2H_FILL 0 ,");
+        self.wln("CREATE __I2H_REQ 0 ,");
+        self.wln("CREATE __I2H_WIDTH 0 ,");
+        self.wln("CREATE __I2H_I 0 ,");
+        self.wln("CREATE __I2H_SRC 0 ,");
+        self.wln("CREATE __STR_SRC 0 ,");
+        self.wln("CREATE __STR_DST 0 ,");
+        self.wln("CREATE __STR_A 0 ,");
+        self.wln("CREATE __STR_B 0 ,");
+        self.wln("CREATE __STR_I 0 ,");
+        self.wln("CREATE __STR_J 0 ,");
+        self.wln("CREATE __STR_K 0 ,");
+        self.wln("CREATE __STR_LEN 0 ,");
+        self.wln("CREATE __STR_IDX 0 ,");
+        self.wln("CREATE __STR_CNT 0 ,");
+        self.wln("CREATE __STR_POS 0 ,");
+        self.wln("CREATE __STR_MATCH 0 ,");
+        self.wln("CREATE __VAR_TAG 0 ,");
 
         self.emit_slots_recursive(&prog.block.routines, "program")?;
+
+        self.wln(": __HEX_TO_I32");
+        self.indent += 1;
+        self.wln("0 __HEX_ACC PVAR!");
+        self.wln("0 __HEX_I PVAR!");
+        self.wln("0 __HEX_STOP PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__HEX_STOP PVAR@ 0= __HEX_I PVAR@ __HEX_LEN PVAR@ < AND WHILE");
+        self.indent += 1;
+        self.wln("__HEX_PTR PVAR@ __HEX_I PVAR@ 4 * + PVAR@ DUP 0= IF");
+        self.indent += 1;
+        self.wln("DROP");
+        self.wln("1 __HEX_STOP PVAR!");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("DUP 48 >= OVER 57 <= AND IF");
+        self.indent += 1;
+        self.wln("48 - __HEX_ACC PVAR@ 16 * + __HEX_ACC PVAR!");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("DUP 65 >= OVER 70 <= AND IF");
+        self.indent += 1;
+        self.wln("55 - __HEX_ACC PVAR@ 16 * + __HEX_ACC PVAR!");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("DUP 97 >= OVER 102 <= AND IF");
+        self.indent += 1;
+        self.wln("87 - __HEX_ACC PVAR@ 16 * + __HEX_ACC PVAR!");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("DROP");
+        self.wln("1 __HEX_STOP PVAR!");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.wln("__HEX_I PVAR@ 1 + __HEX_I PVAR!");
+        self.indent -= 1;
+        self.indent -= 1;
+        self.wln("REPEAT");
+        self.wln("__HEX_ACC PVAR@");
+        self.indent -= 1;
+        self.wln(";");
+
+        self.wln(": __HEX_DIGIT");
+        self.indent += 1;
+        self.wln("DUP 10 < IF");
+        self.indent += 1;
+        self.wln("48 +");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("55 +");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln(";");
+
+        self.wln(": __I32_TO_HEX_STR");
+        self.indent += 1;
+        self.wln("__I2H_MAX PVAR@ 0< IF");
+        self.indent += 1;
+        self.wln("0 __I2H_MAX PVAR!");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.wln("1 __I2H_REQ PVAR!");
+        self.wln("7 __I2H_I PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__I2H_I PVAR@ 0 >= WHILE");
+        self.indent += 1;
+        self.wln("__I2H_VAL PVAR@ __I2H_I PVAR@ 4 * RSHIFT 15 AND DUP 0= 0= IF");
+        self.indent += 1;
+        self.wln("__I2H_I PVAR@ 1 + __I2H_REQ PVAR!");
+        self.wln("DROP");
+        self.wln("-1 __I2H_I PVAR!");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("DROP");
+        self.wln("__I2H_I PVAR@ 1 - __I2H_I PVAR!");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.indent -= 1;
+        self.wln("REPEAT");
+        self.wln("__I2H_FILL PVAR@ IF");
+        self.indent += 1;
+        self.wln("__I2H_MAX PVAR@ __I2H_WIDTH PVAR!");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("__I2H_REQ PVAR@ __I2H_MAX PVAR@ < IF");
+        self.indent += 1;
+        self.wln("__I2H_REQ PVAR@ __I2H_WIDTH PVAR!");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("__I2H_MAX PVAR@ __I2H_WIDTH PVAR!");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.wln("0 __I2H_I PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__I2H_I PVAR@ __I2H_WIDTH PVAR@ < WHILE");
+        self.indent += 1;
+        self.wln("__I2H_FILL PVAR@ IF");
+        self.indent += 1;
+        self.wln("__I2H_WIDTH PVAR@ __I2H_I PVAR@ 1 + - __I2H_SRC PVAR!");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("__I2H_REQ PVAR@ __I2H_WIDTH PVAR@ - __I2H_WIDTH PVAR@ __I2H_I PVAR@ 1 + - + __I2H_SRC PVAR!");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.wln("__I2H_SRC PVAR@ 8 >= IF");
+        self.indent += 1;
+        self.wln("48");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("__I2H_VAL PVAR@ __I2H_SRC PVAR@ 4 * RSHIFT 15 AND __HEX_DIGIT");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.wln("__I2H_PTR PVAR@ __I2H_I PVAR@ 4 * + PVAR!");
+        self.wln("__I2H_I PVAR@ 1 + __I2H_I PVAR!");
+        self.indent -= 1;
+        self.indent -= 1;
+        self.wln("REPEAT");
+        self.wln("0 __I2H_PTR PVAR@ __I2H_WIDTH PVAR@ 4 * + PVAR!");
+        self.indent -= 1;
+        self.wln(";");
+
+        self.wln(": __STRLEN");
+        self.indent += 1;
+        self.wln("0 __STR_I PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__STR_SRC PVAR@ __STR_I PVAR@ 4 * + PVAR@ 0= IF");
+        self.indent += 1;
+        self.wln("1");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("__STR_I PVAR@ 1 + __STR_I PVAR!");
+        self.wln("0");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln("UNTIL");
+        self.wln("__STR_I PVAR@");
+        self.indent -= 1;
+        self.wln(";");
+
+        self.wln(": __STRCPY");
+        self.indent += 1;
+        self.wln("0 __STR_I PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__STR_SRC PVAR@ __STR_I PVAR@ 4 * + PVAR@ DUP __STR_DST PVAR@ __STR_I PVAR@ 4 * + PVAR!");
+        self.wln("0= IF");
+        self.indent += 1;
+        self.wln("1");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("__STR_I PVAR@ 1 + __STR_I PVAR!");
+        self.wln("0");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln("UNTIL");
+        self.indent -= 1;
+        self.wln(";");
+
+        self.wln(": __STRPOS");
+        self.indent += 1;
+        self.wln("__STR_A PVAR@ __STR_SRC PVAR!");
+        self.wln("__STRLEN __STR_LEN PVAR!");
+        self.wln("__STR_LEN PVAR@ 0= IF");
+        self.indent += 1;
+        self.wln("1");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("0 __STR_POS PVAR!");
+        self.wln("0 __STR_I PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__STR_POS PVAR@ 0= __STR_B PVAR@ __STR_I PVAR@ 4 * + PVAR@ 0= 0= AND WHILE");
+        self.indent += 1;
+        self.wln("0 __STR_J PVAR!");
+        self.wln("1 __STR_MATCH PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__STR_MATCH PVAR@ __STR_A PVAR@ __STR_J PVAR@ 4 * + PVAR@ 0= 0= AND WHILE");
+        self.indent += 1;
+        self.wln("__STR_B PVAR@ __STR_I PVAR@ __STR_J PVAR@ + 4 * + PVAR@");
+        self.wln("__STR_A PVAR@ __STR_J PVAR@ 4 * + PVAR@ = 0= IF");
+        self.indent += 1;
+        self.wln("0 __STR_MATCH PVAR!");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.wln("__STR_B PVAR@ __STR_I PVAR@ __STR_J PVAR@ + 4 * + PVAR@ 0= IF");
+        self.indent += 1;
+        self.wln("0 __STR_MATCH PVAR!");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.wln("__STR_J PVAR@ 1 + __STR_J PVAR!");
+        self.indent -= 1;
+        self.indent -= 1;
+        self.wln("REPEAT");
+        self.wln("__STR_MATCH PVAR@ __STR_A PVAR@ __STR_J PVAR@ 4 * + PVAR@ 0= AND IF");
+        self.indent += 1;
+        self.wln("__STR_I PVAR@ 1 + __STR_POS PVAR!");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.wln("__STR_I PVAR@ 1 + __STR_I PVAR!");
+        self.indent -= 1;
+        self.indent -= 1;
+        self.wln("REPEAT");
+        self.wln("__STR_POS PVAR@");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln(";");
+
+        self.wln(": __STRDELETE");
+        self.indent += 1;
+        self.wln("__STR_CNT PVAR@ 0 <= IF");
+        self.indent += 1;
+        self.wln("( no-op )");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("__STR_IDX PVAR@ 1 < IF");
+        self.indent += 1;
+        self.wln("1 __STR_IDX PVAR!");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.wln("__STR_IDX PVAR@ 1 - __STR_I PVAR!");
+        self.wln("__STR_I PVAR@ __STR_CNT PVAR@ + __STR_J PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__STR_DST PVAR@ __STR_J PVAR@ 4 * + PVAR@ DUP __STR_DST PVAR@ __STR_I PVAR@ 4 * + PVAR!");
+        self.wln("0= IF");
+        self.indent += 1;
+        self.wln("1");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("__STR_I PVAR@ 1 + __STR_I PVAR!");
+        self.wln("__STR_J PVAR@ 1 + __STR_J PVAR!");
+        self.wln("0");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln("UNTIL");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln(";");
+
+        self.wln(": __STRINSERT");
+        self.indent += 1;
+        self.wln("__STR_SRC PVAR@ __STR_A PVAR!");
+        self.wln("__STR_DST PVAR@ __STR_B PVAR!");
+        self.wln("__STR_A PVAR@ __STR_SRC PVAR!");
+        self.wln("__STRLEN __STR_LEN PVAR!");
+        self.wln("__STR_IDX PVAR@ 1 < IF");
+        self.indent += 1;
+        self.wln("1 __STR_IDX PVAR!");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.wln("__STR_B PVAR@ __STR_SRC PVAR!");
+        self.wln("__STRLEN __STR_J PVAR!");
+        self.wln("__STR_IDX PVAR@ 1 - __STR_I PVAR!");
+        self.wln("__STR_I PVAR@ __STR_J PVAR@ > IF");
+        self.indent += 1;
+        self.wln("__STR_J PVAR@ __STR_I PVAR!");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.wln("__STR_J PVAR@ __STR_K PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__STR_DST PVAR@ __STR_K PVAR@ 4 * + PVAR@ __STR_DST PVAR@ __STR_K PVAR@ __STR_LEN PVAR@ + 4 * + PVAR!");
+        self.wln("__STR_K PVAR@ __STR_I PVAR@ = IF");
+        self.indent += 1;
+        self.wln("1");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("__STR_K PVAR@ 1 - __STR_K PVAR!");
+        self.wln("0");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln("UNTIL");
+        self.wln("0 __STR_K PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__STR_A PVAR@ __STR_K PVAR@ 4 * + PVAR@ DUP 0= IF");
+        self.indent += 1;
+        self.wln("DROP");
+        self.wln("1");
+        self.indent -= 1;
+        self.wln("ELSE");
+        self.indent += 1;
+        self.wln("__STR_DST PVAR@ __STR_I PVAR@ __STR_K PVAR@ + 4 * + PVAR!");
+        self.wln("__STR_K PVAR@ 1 + __STR_K PVAR!");
+        self.wln("0");
+        self.indent -= 1;
+        self.wln("THEN");
+        self.indent -= 1;
+        self.wln("UNTIL");
+        self.indent -= 1;
+        self.wln(";");
+
+        self.wln(": __VARIANT_MISMATCH");
+        self.indent += 1;
+        self.wln("S\" Variant tag mismatch\" PWRITE-STR");
+        self.wln("PWRITELN");
+        self.wln("1 0 / DROP");
+        self.indent -= 1;
+        self.wln(";");
+
+        self.wln(": __SUBRANGE_MISMATCH");
+        self.indent += 1;
+        self.wln("S\" Subrange check failed\" PWRITE-STR");
+        self.wln("PWRITELN");
+        self.wln("1 0 / DROP");
+        self.indent -= 1;
+        self.wln(";");
 
         self.wln("");
 
@@ -112,7 +501,10 @@ impl<'a> ForthGen<'a> {
                 RoutineDecl::Function(f) => (&f.name, &f.block, &f.params, true),
             };
             let scoped = format!("{scope}::{name}");
-            self.wln(&format!("( ROUTINE {scoped} => {} )", self.routine_word(&scoped)));
+            self.wln(&format!(
+                "( ROUTINE {scoped} => {} )",
+                self.routine_word(&scoped)
+            ));
             for prm in params {
                 self.wln(&format!(
                     "( SLOT {scoped}::{} => {} )",
@@ -137,7 +529,11 @@ impl<'a> ForthGen<'a> {
         }
     }
 
-    fn emit_slots_recursive(&mut self, routines: &[RoutineDecl], scope: &str) -> Result<(), String> {
+    fn emit_slots_recursive(
+        &mut self,
+        routines: &[RoutineDecl],
+        scope: &str,
+    ) -> Result<(), String> {
         for r in routines {
             let (name, block, params, has_ret) = match r {
                 RoutineDecl::Procedure(p) => (&p.name, &p.block, &p.params, false),
@@ -145,6 +541,23 @@ impl<'a> ForthGen<'a> {
             };
             let scoped = format!("{scope}::{name}");
             for prm in params {
+                if let Some(c) = &prm.conformant {
+                    for dim in &c.dims {
+                        self.emit_storage_decl(
+                            &self.slot_name(&scoped, &dim.low_name),
+                            &self.ty_of_typeref(&dim.index_ty)?,
+                        )?;
+                        self.emit_storage_decl(
+                            &self.slot_name(&scoped, &dim.high_name),
+                            &self.ty_of_typeref(&dim.index_ty)?,
+                        )?;
+                    }
+                    self.emit_storage_decl(
+                        &self.slot_name(&scoped, &prm.name),
+                        &TypeInfo::Pointer("__conformant_array".into()),
+                    )?;
+                    continue;
+                }
                 let ty = self.ty_of_typeref(&prm.ty)?;
                 self.emit_storage_decl(&self.slot_name(&scoped, &prm.name), &ty)?;
             }
@@ -164,7 +577,12 @@ impl<'a> ForthGen<'a> {
         Ok(())
     }
 
-    fn emit_routines_recursive(&mut self, routines: &[RoutineDecl], scope: &str, parent_ctx: &Ctx) -> Result<(), String> {
+    fn emit_routines_recursive(
+        &mut self,
+        routines: &[RoutineDecl],
+        scope: &str,
+        parent_ctx: &Ctx,
+    ) -> Result<(), String> {
         let visible = self.extend_routine_visibility(&parent_ctx.routines, routines, scope);
 
         for r in routines {
@@ -178,7 +596,8 @@ impl<'a> ForthGen<'a> {
                 routines: visible.clone(),
             };
             self.extend_vars_for_routine(r, &scoped, &mut routine_ctx)?;
-            let body_routines = self.extend_routine_visibility(&routine_ctx.routines, &block.routines, &scoped);
+            let body_routines =
+                self.extend_routine_visibility(&routine_ctx.routines, &block.routines, &scoped);
             let body_ctx = Ctx {
                 vars: routine_ctx.vars.clone(),
                 routines: body_routines,
@@ -191,14 +610,31 @@ impl<'a> ForthGen<'a> {
         Ok(())
     }
 
-    fn gen_routine_scoped(&mut self, r: &RoutineDecl, scoped: &str, ctx: &Ctx) -> Result<(), String> {
+    fn gen_routine_scoped(
+        &mut self,
+        r: &RoutineDecl,
+        scoped: &str,
+        ctx: &Ctx,
+    ) -> Result<(), String> {
         match r {
             RoutineDecl::Procedure(p) => {
                 self.wln(&format!(": {}", self.routine_word(scoped)));
                 self.indent += 1;
                 for prm in p.params.iter().rev() {
-                    let slot = self.slot_name(scoped, &prm.name);
-                    self.wln(&format!("{slot} PVAR!"));
+                    for slot in self
+                        .runtime_param_slots(scoped, std::slice::from_ref(prm))
+                        .iter()
+                        .rev()
+                    {
+                        if slot == &self.slot_name(scoped, &prm.name)
+                            && !prm.by_ref
+                            && prm.conformant.is_none()
+                        {
+                            self.emit_param_store(slot, &self.ty_of_typeref(&prm.ty)?);
+                        } else {
+                            self.wln(&format!("{slot} PVAR!"));
+                        }
+                    }
                 }
                 self.gen_stmt_with_ctx(&p.block.body, ctx)?;
                 self.indent -= 1;
@@ -208,8 +644,20 @@ impl<'a> ForthGen<'a> {
                 self.wln(&format!(": {}", self.routine_word(scoped)));
                 self.indent += 1;
                 for prm in f.params.iter().rev() {
-                    let slot = self.slot_name(scoped, &prm.name);
-                    self.wln(&format!("{slot} PVAR!"));
+                    for slot in self
+                        .runtime_param_slots(scoped, std::slice::from_ref(prm))
+                        .iter()
+                        .rev()
+                    {
+                        if slot == &self.slot_name(scoped, &prm.name)
+                            && !prm.by_ref
+                            && prm.conformant.is_none()
+                        {
+                            self.emit_param_store(slot, &self.ty_of_typeref(&prm.ty)?);
+                        } else {
+                            self.wln(&format!("{slot} PVAR!"));
+                        }
+                    }
                 }
                 self.gen_stmt_with_ctx(&f.block.body, ctx)?;
                 self.wln(&format!("{} PVAR@", self.slot_name(scoped, &f.name)));
@@ -235,7 +683,15 @@ impl<'a> ForthGen<'a> {
                     self.emit_char_array_assign(&dst, s)?;
                     return Ok(());
                 }
-                if matches!(dst.ty, TypeInfo::Basic(_)) {
+                if matches!(
+                    dst.ty,
+                    TypeInfo::Basic(_)
+                        | TypeInfo::Enum(_)
+                        | TypeInfo::Subrange(_)
+                        | TypeInfo::Set(_)
+                        | TypeInfo::Pointer(_)
+                        | TypeInfo::Nil
+                ) {
                     let rhs_code = self.gen_expr_inline_ctx(rhs, ctx)?;
                     self.emit_store(&rhs_code, &dst);
                 } else {
@@ -247,18 +703,40 @@ impl<'a> ForthGen<'a> {
                 }
                 Ok(())
             }
-            Stmt::Read(lvs) => {
-                for lv in lvs {
-                    let dst = self.resolve_lvalue_addr_ctx(lv, ctx)?;
+            Stmt::Read(args) => {
+                let mut i = 0usize;
+                while i < args.len() {
+                    let lv = expr_to_lvalue(&args[i])
+                        .ok_or("Read arguments must be lvalues, except string max length")?;
+                    let dst = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+                    if matches!(&dst.ty, TypeInfo::Array(ai) if matches!(ai.elem_ty.as_ref(), TypeInfo::Basic(BasicType::Char)))
+                    {
+                        if i + 1 >= args.len() {
+                            return Err("Read on array of char requires max length".into());
+                        }
+                        self.emit_char_array_read(
+                            &dst,
+                            &self.gen_expr_inline_ctx(&args[i + 1], ctx)?,
+                            ctx,
+                            lv.base.as_str(),
+                        )?;
+                        i += 2;
+                        continue;
+                    }
                     let read_word = match dst.ty {
                         TypeInfo::Basic(BasicType::Integer) => "PREAD-I32",
                         TypeInfo::Basic(BasicType::Boolean) => "PREAD-BOOL",
                         TypeInfo::Basic(BasicType::Char) => "PREAD-CHAR",
+                        TypeInfo::Basic(BasicType::Real) => "PREAD-F32",
+                        TypeInfo::Enum(_) | TypeInfo::Subrange(_) => "PREAD-I32",
+                        TypeInfo::Pointer(_) | TypeInfo::Nil => "PREAD-I32",
                         TypeInfo::Record(_) | TypeInfo::Array(_) => {
                             return Err("Read on aggregate type is not supported".into())
                         }
+                        TypeInfo::Set(_) => return Err("Read on set type is not supported".into()),
                     };
                     self.emit_store(read_word, &dst);
+                    i += 1;
                 }
                 Ok(())
             }
@@ -306,11 +784,10 @@ impl<'a> ForthGen<'a> {
             } => {
                 self.wln(&format!("{} >R", self.gen_expr_inline_ctx(expr, ctx)?));
                 self.wln("0 __CASE_MATCH PVAR!");
-                for (c, st) in arms {
-                    let ctoken = self.const_to_token(c)?;
+                for (labels, st) in arms {
                     self.wln("__CASE_MATCH PVAR@ 0= IF");
                     self.indent += 1;
-                    self.wln(&format!("R@ {ctoken} = IF"));
+                    self.wln(&format!("{} IF", self.case_labels_inline(labels)?));
                     self.indent += 1;
                     self.wln("1 __CASE_MATCH PVAR!");
                     self.gen_stmt_with_ctx(st, ctx)?;
@@ -330,18 +807,26 @@ impl<'a> ForthGen<'a> {
                 Ok(())
             }
             Stmt::ProcCall(name, args) => {
-                if name == "ReadArr" || name == "WriteArr" {
-                    return self.gen_builtin_array_io(name, args, ctx);
+                if name == "Copy" {
+                    return self.gen_builtin_copy(args, ctx);
                 }
-                if name == "ReadStr" || name == "WriteStr" {
-                    return self.gen_builtin_str_io(name, args, ctx);
+                if name == "Concat" {
+                    return self.gen_builtin_concat(args, ctx);
                 }
-                if name == "WriteHex" {
-                    if args.len() != 1 {
-                        return Err("WriteHex requires 1 argument".into());
-                    }
-                    self.wln(&format!("{} PWRITE-HEX", self.gen_expr_inline_ctx(&args[0], ctx)?));
-                    return Ok(());
+                if name == "Delete" {
+                    return self.gen_builtin_delete(args, ctx);
+                }
+                if name == "Insert" {
+                    return self.gen_builtin_insert(args, ctx);
+                }
+                if name == "IntToHex" {
+                    return self.gen_builtin_inttohex(args, ctx);
+                }
+                if name == "SetAddr" {
+                    return self.gen_builtin_setaddr(args, ctx);
+                }
+                if name.eq_ignore_ascii_case("new") || name.eq_ignore_ascii_case("dispose") {
+                    return self.gen_builtin_new_dispose(name, args, ctx);
                 }
                 self.wln(&self.gen_call_inline_ctx(name, args, ctx)?);
                 Ok(())
@@ -359,6 +844,10 @@ impl<'a> ForthGen<'a> {
                 }
                 self.wln("THEN");
                 Ok(())
+            }
+            Stmt::With(bases, body) => {
+                let rewritten = self.rewrite_stmt_with_ctx(body, bases, ctx)?;
+                self.gen_stmt_with_ctx(&rewritten, ctx)
             }
             Stmt::While(cond, body) => {
                 self.wln("BEGIN");
@@ -388,16 +877,44 @@ impl<'a> ForthGen<'a> {
                             self.emit_string_write(s);
                         }
                         _ => {
-                            let t = type_of_expr_scoped(self.env, &self.ctx_to_types(ctx), &ctx.routines, e)?;
+                            let t = type_of_expr_scoped(
+                                self.env,
+                                &self.ctx_to_types(ctx),
+                                &ctx.routines,
+                                e,
+                            )?;
+                            if matches!(&t, TypeInfo::Array(ai) if matches!(ai.elem_ty.as_ref(), TypeInfo::Basic(BasicType::Char)))
+                            {
+                                let lv = expr_to_lvalue(e)
+                                    .ok_or("char array write requires lvalue in codegen")?;
+                                let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+                                self.emit_char_array_write(&a, ctx, lv.base.as_str())?;
+                                continue;
+                            }
                             match t {
                                 TypeInfo::Basic(BasicType::Char) => {
-                                    self.wln(&format!("{} PWRITE-CHAR", self.gen_expr_inline_ctx(e, ctx)?));
+                                    self.wln(&format!(
+                                        "{} PWRITE-CHAR",
+                                        self.gen_expr_inline_ctx(e, ctx)?
+                                    ));
                                 }
                                 TypeInfo::Basic(BasicType::Boolean) => {
-                                    self.wln(&format!("{} PWRITE-BOOL", self.gen_expr_inline_ctx(e, ctx)?));
+                                    self.wln(&format!(
+                                        "{} PWRITE-BOOL",
+                                        self.gen_expr_inline_ctx(e, ctx)?
+                                    ));
+                                }
+                                TypeInfo::Basic(BasicType::Real) => {
+                                    self.wln(&format!(
+                                        "{} PWRITE-F32",
+                                        self.gen_expr_inline_ctx(e, ctx)?
+                                    ));
                                 }
                                 _ => {
-                                    self.wln(&format!("{} PWRITE-I32", self.gen_expr_inline_ctx(e, ctx)?));
+                                    self.wln(&format!(
+                                        "{} PWRITE-I32",
+                                        self.gen_expr_inline_ctx(e, ctx)?
+                                    ));
                                 }
                             }
                         }
@@ -418,12 +935,17 @@ impl<'a> ForthGen<'a> {
             Expr::Int(i) => Ok(i.to_string()),
             Expr::Bool(b) => Ok(if *b { "1".to_string() } else { "0".to_string() }),
             Expr::Char(u) => Ok(u.to_string()),
+            Expr::Real(bits) => Ok(bits.to_string()),
             Expr::Str(_) => Err("string literal is only allowed in Write/WriteLn".into()),
+            Expr::SetLit(items) => self.gen_set_lit_inline(items, ctx),
+            Expr::Nil => Ok("0".into()),
             Expr::Var(n) => {
                 if let Some(c) = self.env.consts.get(n) {
                     Ok(match c {
                         ConstVal::I32(i) => i.to_string(),
                         ConstVal::U32(u) => u.to_string(),
+                        ConstVal::Real(bits) => bits.to_string(),
+                        ConstVal::EnumVal { ordinal, .. } => ordinal.to_string(),
                         ConstVal::Bool(b) => {
                             if *b {
                                 "1".to_string()
@@ -447,6 +969,11 @@ impl<'a> ForthGen<'a> {
                 }
                 self.gen_call_inline_ctx(name, args, ctx)
             }
+            Expr::Deref(_) => {
+                let lv = expr_to_lvalue(e).ok_or("deref base must be variable")?;
+                let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+                Ok(self.emit_load_inline(&a))
+            }
             Expr::Field(_, _) => {
                 let lv = expr_to_lvalue(e).ok_or("field base must be variable")?;
                 let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
@@ -468,32 +995,135 @@ impl<'a> ForthGen<'a> {
                 let la = self.gen_expr_inline_ctx(a, ctx)?;
                 let lb = self.gen_expr_inline_ctx(b, ctx)?;
                 use BinOp::*;
-                let w = match op {
-                    Add => "+",
-                    Sub => "-",
-                    Mul => "*",
-                    Div => "/",
-                    Mod => "MOD",
-                    Eq => "=",
-                    Ne => "<>",
-                    Lt => "<",
-                    Le => "<=",
-                    Gt => ">",
-                    Ge => ">=",
+                let ta = type_of_expr_scoped(self.env, &self.ctx_to_types(ctx), &ctx.routines, a)?;
+                let tb = type_of_expr_scoped(self.env, &self.ctx_to_types(ctx), &ctx.routines, b)?;
+                let both_realish = matches!(ta, TypeInfo::Basic(BasicType::Real))
+                    || matches!(tb, TypeInfo::Basic(BasicType::Real))
+                    || matches!(op, RealDiv);
+                let la = if both_realish {
+                    self.coerce_real_inline(a, &ta, ctx)?
+                } else {
+                    la
                 };
-                Ok(format!("{la} {lb} {w}"))
+                let lb = if both_realish {
+                    self.coerce_real_inline(b, &tb, ctx)?
+                } else {
+                    lb
+                };
+                let s = match op {
+                    Add => {
+                        if matches!(ta, TypeInfo::Set(_)) {
+                            format!("{la} {lb} OR")
+                        } else if both_realish {
+                            format!("{la} {lb} FADD")
+                        } else {
+                            format!("{la} {lb} +")
+                        }
+                    }
+                    Sub => {
+                        if matches!(ta, TypeInfo::Set(_)) {
+                            format!("{lb} -1 XOR {la} AND")
+                        } else if both_realish {
+                            format!("{la} {lb} FSUB")
+                        } else {
+                            format!("{la} {lb} -")
+                        }
+                    }
+                    Mul => {
+                        if both_realish {
+                            format!("{la} {lb} FMUL")
+                        } else if matches!(ta, TypeInfo::Set(_)) {
+                            format!("{la} {lb} AND")
+                        } else {
+                            format!("{la} {lb} *")
+                        }
+                    }
+                    RealDiv => format!("{la} {lb} FDIV"),
+                    Div => format!("{la} {lb} /"),
+                    Mod => format!("{la} {lb} MOD"),
+                    And => format!("{la} {lb} AND"),
+                    Or => format!("{la} {lb} OR"),
+                    Xor => format!("{la} {lb} XOR"),
+                    In => format!(
+                        "1 {} {} - LSHIFT {} AND 0= 0=",
+                        self.ordinal_inline(a, ctx)?,
+                        self.set_low_bound_expr(b, ctx)?,
+                        self.gen_expr_inline_ctx(b, ctx)?
+                    ),
+                    Eq => {
+                        if both_realish {
+                            format!("{la} {lb} F=")
+                        } else {
+                            format!("{la} {lb} =")
+                        }
+                    }
+                    Ne => {
+                        if both_realish {
+                            format!("{la} {lb} F= 0=")
+                        } else {
+                            format!("{la} {lb} <>")
+                        }
+                    }
+                    Lt => {
+                        if matches!(ta, TypeInfo::Set(_)) {
+                            format!("{la} {lb} AND {la} = {la} {lb} <> AND")
+                        } else if both_realish {
+                            format!("{la} {lb} F<")
+                        } else {
+                            format!("{la} {lb} <")
+                        }
+                    }
+                    Le => {
+                        if matches!(ta, TypeInfo::Set(_)) {
+                            format!("{la} {lb} AND {la} =")
+                        } else if both_realish {
+                            format!("{la} {lb} F<=")
+                        } else {
+                            format!("{la} {lb} <=")
+                        }
+                    }
+                    Gt => {
+                        if matches!(ta, TypeInfo::Set(_)) {
+                            format!("{la} {lb} AND {lb} = {la} {lb} <> AND")
+                        } else if both_realish {
+                            format!("{lb} {la} F<")
+                        } else {
+                            format!("{la} {lb} >")
+                        }
+                    }
+                    Ge => {
+                        if matches!(ta, TypeInfo::Set(_)) {
+                            format!("{la} {lb} AND {lb} =")
+                        } else if both_realish {
+                            format!("{lb} {la} F<=")
+                        } else {
+                            format!("{la} {lb} >=")
+                        }
+                    }
+                };
+                Ok(s)
             }
         }
     }
 
-    fn gen_builtin_expr_call(&self, name: &str, args: &[Expr], ctx: &Ctx) -> Result<Option<String>, String> {
+    fn gen_builtin_expr_call(
+        &self,
+        name: &str,
+        args: &[Expr],
+        ctx: &Ctx,
+    ) -> Result<Option<String>, String> {
         let n = name.to_ascii_lowercase();
         match n.as_str() {
             "ord" => {
                 if args.len() != 1 {
                     return Err("Ord requires 1 argument".into());
                 }
-                let t = type_of_expr_scoped(self.env, &self.ctx_to_types(ctx), &ctx.routines, &args[0])?;
+                let t = type_of_expr_scoped(
+                    self.env,
+                    &self.ctx_to_types(ctx),
+                    &ctx.routines,
+                    &args[0],
+                )?;
                 let v = self.gen_expr_inline_ctx(&args[0], ctx)?;
                 let out = match t {
                     TypeInfo::Basic(BasicType::Boolean) => format!("{v} PBOOL"),
@@ -507,11 +1137,179 @@ impl<'a> ForthGen<'a> {
                 }
                 Ok(Some(self.gen_expr_inline_ctx(&args[0], ctx)?))
             }
+            "abs" => {
+                if args.len() != 1 {
+                    return Err("Abs requires 1 argument".into());
+                }
+                let t = type_of_expr_scoped(
+                    self.env,
+                    &self.ctx_to_types(ctx),
+                    &ctx.routines,
+                    &args[0],
+                )?;
+                let v = self.gen_expr_inline_ctx(&args[0], ctx)?;
+                Ok(Some(if matches!(t, TypeInfo::Basic(BasicType::Real)) {
+                    format!("{v} FABS")
+                } else {
+                    format!("{v} DUP 0< IF NEGATE THEN")
+                }))
+            }
+            "sqr" => {
+                if args.len() != 1 {
+                    return Err("Sqr requires 1 argument".into());
+                }
+                let t = type_of_expr_scoped(
+                    self.env,
+                    &self.ctx_to_types(ctx),
+                    &ctx.routines,
+                    &args[0],
+                )?;
+                let v = self.gen_expr_inline_ctx(&args[0], ctx)?;
+                Ok(Some(if matches!(t, TypeInfo::Basic(BasicType::Real)) {
+                    format!("{v} DUP FMUL")
+                } else {
+                    format!("{v} DUP *")
+                }))
+            }
+            "round" => {
+                if args.len() != 1 {
+                    return Err("Round requires 1 argument".into());
+                }
+                let t = type_of_expr_scoped(
+                    self.env,
+                    &self.ctx_to_types(ctx),
+                    &ctx.routines,
+                    &args[0],
+                )?;
+                let v = self.gen_expr_inline_ctx(&args[0], ctx)?;
+                Ok(Some(if matches!(t, TypeInfo::Basic(BasicType::Real)) {
+                    format!("{v} FROUND-I32")
+                } else {
+                    v
+                }))
+            }
+            "trunc" => {
+                if args.len() != 1 {
+                    return Err("Trunc requires 1 argument".into());
+                }
+                let t = type_of_expr_scoped(
+                    self.env,
+                    &self.ctx_to_types(ctx),
+                    &ctx.routines,
+                    &args[0],
+                )?;
+                let v = self.gen_expr_inline_ctx(&args[0], ctx)?;
+                Ok(Some(if matches!(t, TypeInfo::Basic(BasicType::Real)) {
+                    format!("{v} F>S")
+                } else {
+                    v
+                }))
+            }
+            "succ" => {
+                if args.len() != 1 {
+                    return Err("Succ requires 1 argument".into());
+                }
+                Ok(Some(format!(
+                    "{} 1 +",
+                    self.gen_expr_inline_ctx(&args[0], ctx)?
+                )))
+            }
+            "pred" => {
+                if args.len() != 1 {
+                    return Err("Pred requires 1 argument".into());
+                }
+                Ok(Some(format!(
+                    "{} 1 -",
+                    self.gen_expr_inline_ctx(&args[0], ctx)?
+                )))
+            }
+            "odd" => {
+                if args.len() != 1 {
+                    return Err("Odd requires 1 argument".into());
+                }
+                Ok(Some(format!(
+                    "{} 1 AND 0= 0=",
+                    self.gen_expr_inline_ctx(&args[0], ctx)?
+                )))
+            }
+            "hextoint" => {
+                if args.len() != 1 {
+                    return Err("HexToInt requires 1 argument".into());
+                }
+                match &args[0] {
+                    Expr::Str(s) => Ok(Some(parse_hex_text(s)?.to_string())),
+                    _ => {
+                        let lv = expr_to_lvalue(&args[0])
+                            .ok_or("HexToInt argument must be lvalue char array in codegen")?;
+                        let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+                        let arr_len = match &a.ty {
+                            TypeInfo::Array(ai) => match ai.elem_ty.as_ref() {
+                                TypeInfo::Basic(BasicType::Char) => ai.len.to_string(),
+                                _ => return Err("HexToInt argument must be array of char".into()),
+                            },
+                            _ => return Err("HexToInt argument must be array of char".into()),
+                        };
+                        let arr_len = if let Some(v) = ctx.vars.get(&lv.base) {
+                            if let Some(bounds) = &v.conformant_bounds {
+                                let (low_name, high_name) =
+                                    bounds.first().ok_or("missing conformant string bounds")?;
+                                let low = self.runtime_bound_slot_expr(low_name, ctx)?;
+                                let high = self.runtime_bound_slot_expr(high_name, ctx)?;
+                                format!("{high} {low} - 1 +")
+                            } else {
+                                arr_len
+                            }
+                        } else {
+                            arr_len
+                        };
+                        Ok(Some(format!(
+                            "{} __HEX_PTR PVAR! {} __HEX_LEN PVAR! __HEX_TO_I32",
+                            self.emit_addr_inline(&a),
+                            arr_len
+                        )))
+                    }
+                }
+            }
+            "addr" => {
+                if args.len() != 1 {
+                    return Err("Addr requires 1 argument".into());
+                }
+                let lv = expr_to_lvalue(&args[0]).ok_or("Addr argument must be an lvalue")?;
+                let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+                Ok(Some(self.emit_addr_inline(&a)))
+            }
+            "pos" => {
+                if args.len() != 2 {
+                    return Err("Pos requires 2 arguments".into());
+                }
+                let needle = self.resolve_char_array_arg(&args[0], ctx, "Pos first argument")?;
+                let hay = self.resolve_char_array_arg(&args[1], ctx, "Pos second argument")?;
+                Ok(Some(format!(
+                    "{} __STR_A PVAR! {} __STR_B PVAR! __STRPOS",
+                    self.emit_addr_inline(&needle),
+                    self.emit_addr_inline(&hay)
+                )))
+            }
+            "upcase" => {
+                if args.len() != 1 {
+                    return Err("UpCase requires 1 argument".into());
+                }
+                let v = self.gen_expr_inline_ctx(&args[0], ctx)?;
+                Ok(Some(format!("{v} DUP 97 >= OVER 122 <= AND IF 32 - THEN")))
+            }
             "length" => {
                 if args.len() != 1 {
                     return Err("Length requires 1 argument".into());
                 }
-                let t = type_of_expr_scoped(self.env, &self.ctx_to_types(ctx), &ctx.routines, &args[0])?;
+                if let Some((low, high)) = self.runtime_array_bounds_for_expr(&args[0], ctx) {
+                    return Ok(Some(format!("{high} {low} - 1 +")));
+                }
+                let t = type_of_expr_scoped(
+                    self.env,
+                    &self.ctx_to_types(ctx),
+                    &ctx.routines,
+                    &args[0],
+                )?;
                 if let TypeInfo::Array(a) = t {
                     Ok(Some(a.len.to_string()))
                 } else {
@@ -522,9 +1320,17 @@ impl<'a> ForthGen<'a> {
                 if args.len() != 1 {
                     return Err("High requires 1 argument".into());
                 }
-                let t = type_of_expr_scoped(self.env, &self.ctx_to_types(ctx), &ctx.routines, &args[0])?;
+                if let Some((_, high)) = self.runtime_array_bounds_for_expr(&args[0], ctx) {
+                    return Ok(Some(high));
+                }
+                let t = type_of_expr_scoped(
+                    self.env,
+                    &self.ctx_to_types(ctx),
+                    &ctx.routines,
+                    &args[0],
+                )?;
                 if let TypeInfo::Array(a) = t {
-                    Ok(Some((a.len as i32 - 1).to_string()))
+                    Ok(Some(a.high.to_string()))
                 } else {
                     Err("High argument must be array".into())
                 }
@@ -533,9 +1339,21 @@ impl<'a> ForthGen<'a> {
                 if args.len() != 1 {
                     return Err("Low requires 1 argument".into());
                 }
-                let t = type_of_expr_scoped(self.env, &self.ctx_to_types(ctx), &ctx.routines, &args[0])?;
+                if let Some((low, _)) = self.runtime_array_bounds_for_expr(&args[0], ctx) {
+                    return Ok(Some(low));
+                }
+                let t = type_of_expr_scoped(
+                    self.env,
+                    &self.ctx_to_types(ctx),
+                    &ctx.routines,
+                    &args[0],
+                )?;
                 if let TypeInfo::Array(_) = t {
-                    Ok(Some("0".into()))
+                    if let TypeInfo::Array(a) = t {
+                        Ok(Some(a.low.to_string()))
+                    } else {
+                        unreachable!()
+                    }
                 } else {
                     Err("Low argument must be array".into())
                 }
@@ -562,7 +1380,26 @@ impl<'a> ForthGen<'a> {
         let (_, sig) = self.resolve_call_target(ctx, name)?;
         let mut out = vec![];
         for (arg, p) in args.iter().zip(&sig.params) {
-            if p.by_ref {
+            if let Some(_c) = &p.conformant {
+                let lv = expr_to_lvalue(arg).ok_or_else(|| {
+                    format!("conformant array argument must be lvalue in call to {name}")
+                })?;
+                let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+                let mut cur = &a.ty;
+                let mut rank = 0usize;
+                while let TypeInfo::Array(ai) = cur {
+                    out.push(ai.low.to_string());
+                    out.push(ai.high.to_string());
+                    cur = ai.elem_ty.as_ref();
+                    rank += 1;
+                }
+                if rank == 0 {
+                    return Err(format!(
+                        "conformant array argument must be array in call to {name}"
+                    ));
+                }
+                out.push(self.emit_addr_inline(&a));
+            } else if p.by_ref {
                 let lv = expr_to_lvalue(arg)
                     .ok_or_else(|| format!("by-ref argument must be lvalue in call to {name}"))?;
                 let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
@@ -603,32 +1440,88 @@ impl<'a> ForthGen<'a> {
     }
 
     fn emit_store(&mut self, rhs: &str, dst: &AddrRef) {
+        let checks = self.variant_check_prefix(dst);
+        let rhs_checked = self.checked_rhs_for_type(rhs, &dst.ty);
         if let Some(addr) = &dst.dynamic_addr_expr {
-            self.wln(&format!("{rhs} {addr} PVAR!"));
+            self.wln(&format!("{checks}{rhs_checked} {addr} PVAR!"));
         } else if dst.offset == 0 {
-            self.wln(&format!("{rhs} {} PVAR!", dst.base_expr));
+            self.wln(&format!("{checks}{rhs_checked} {} PVAR!", dst.base_expr));
         } else {
-            self.wln(&format!("{rhs} {} {} PFIELD!", dst.base_expr, dst.offset));
+            self.wln(&format!(
+                "{checks}{rhs_checked} {} {} PFIELD!",
+                dst.base_expr, dst.offset
+            ));
         }
     }
 
     fn emit_load_inline(&self, src: &AddrRef) -> String {
+        let checks = self.variant_check_prefix(src);
         if let Some(addr) = &src.dynamic_addr_expr {
-            format!("{addr} PVAR@")
+            format!("{checks}{addr} PVAR@")
         } else if src.offset == 0 {
-            format!("{} PVAR@", src.base_expr)
+            format!("{checks}{} PVAR@", src.base_expr)
         } else {
-            format!("{} {} PFIELD@", src.base_expr, src.offset)
+            format!("{checks}{} {} PFIELD@", src.base_expr, src.offset)
         }
     }
 
     fn emit_addr_inline(&self, a: &AddrRef) -> String {
+        let checks = self.variant_check_prefix(a);
         if let Some(addr) = &a.dynamic_addr_expr {
-            addr.clone()
+            format!("{checks}{addr}")
         } else if a.offset == 0 {
-            a.base_expr.clone()
+            format!("{checks}{}", a.base_expr)
         } else {
-            format!("{} {} +", a.base_expr, a.offset)
+            format!("{checks}{} {} +", a.base_expr, a.offset)
+        }
+    }
+
+    fn variant_check_prefix(&self, addr: &AddrRef) -> String {
+        let mut out = String::new();
+        for check in &addr.variant_checks {
+            out.push_str(&format!("{} PVAR@ __VAR_TAG PVAR! ", check.tag_addr_expr));
+            let mut first = true;
+            for (lo, hi) in &check.allowed_ranges {
+                let cond = if lo == hi {
+                    format!("__VAR_TAG PVAR@ {lo} =")
+                } else {
+                    format!("__VAR_TAG PVAR@ {lo} >= __VAR_TAG PVAR@ {hi} <= AND")
+                };
+                if first {
+                    out.push_str(&cond);
+                    first = false;
+                } else {
+                    out.push(' ');
+                    out.push_str(&cond);
+                    out.push_str(" OR");
+                }
+                out.push(' ');
+            }
+            if first {
+                out.push_str("0 ");
+            }
+            out.push_str("0= IF __VARIANT_MISMATCH THEN ");
+        }
+        out
+    }
+
+    fn checked_rhs_for_type(&self, rhs: &str, ty: &TypeInfo) -> String {
+        match ty {
+            TypeInfo::Subrange(s) => format!(
+                "{rhs} DUP {} >= OVER {} <= AND 0= IF __SUBRANGE_MISMATCH THEN",
+                s.low, s.high
+            ),
+            _ => rhs.to_string(),
+        }
+    }
+
+    fn emit_param_store(&mut self, slot: &str, ty: &TypeInfo) {
+        match ty {
+            TypeInfo::Subrange(s) => self.wln(&format!(
+                "DUP {} >= OVER {} <= AND 0= IF __SUBRANGE_MISMATCH THEN {slot} PVAR!",
+                s.low, s.high
+            )),
+            _ => self.wln(&format!("{slot} PVAR!")),
         }
     }
 
@@ -645,14 +1538,58 @@ impl<'a> ForthGen<'a> {
         let mut t = v.ty.clone();
         let mut offset = 0u32;
         let mut dynamic_addr_expr: Option<String> = None;
+        let mut conformant_bounds = v.conformant_bounds.clone();
+        let mut variant_checks = Vec::new();
         for sel in &lv.sels {
             match sel {
+                Selector::Deref => match t {
+                    TypeInfo::Pointer(ref target) => {
+                        let cur = AddrRef {
+                            base_expr: base_expr.clone(),
+                            offset,
+                            dynamic_addr_expr: dynamic_addr_expr.clone(),
+                            ty: t.clone(),
+                            variant_checks: variant_checks.clone(),
+                        };
+                        dynamic_addr_expr = Some(self.emit_load_inline(&cur));
+                        offset = 0;
+                        t = self
+                            .env
+                            .types
+                            .get(target)
+                            .cloned()
+                            .ok_or_else(|| format!("unknown pointed type: {target}"))?;
+                    }
+                    _ => return Err("deref on non-pointer lvalue".into()),
+                },
                 Selector::Field(f) => match t {
                     TypeInfo::Record(ref r) => {
                         let fi = r
                             .fields
                             .get(f)
                             .ok_or_else(|| format!("unknown field: {f}"))?;
+                        let record_base = if let Some(cur) = &dynamic_addr_expr {
+                            if offset == 0 {
+                                cur.clone()
+                            } else {
+                                format!("{cur} {offset} +")
+                            }
+                        } else if offset == 0 {
+                            base_expr.clone()
+                        } else {
+                            format!("{base_expr} {offset} +")
+                        };
+                        for check in &fi.variant_checks {
+                            let tag_addr_expr = if check.tag_offset_bytes == 0 {
+                                record_base.clone()
+                            } else {
+                                format!("{record_base} {} +", check.tag_offset_bytes)
+                            };
+                            variant_checks.push(RuntimeVariantCheck {
+                                tag_addr_expr,
+                                allowed_ranges: check.allowed_ranges.clone(),
+                            });
+                        }
                         if let Some(cur) = dynamic_addr_expr.take() {
                             dynamic_addr_expr = Some(format!("{cur} {} +", fi.offset_bytes));
                         } else {
@@ -664,28 +1601,56 @@ impl<'a> ForthGen<'a> {
                 },
                 Selector::Index(idxs) => {
                     for ix in idxs {
-                    let (len, elem_size, elem_ty) = match t {
-                        TypeInfo::Array(ref a) => (a.len, a.elem_size_bytes, (*a.elem_ty).clone()),
-                        _ => return Err("index on non-array lvalue".into()),
-                    };
-                    let idx_expr = self.gen_expr_inline_ctx(ix, ctx)?;
-                    // Minimal runtime bounds check hook point can be inserted here if needed.
-                    let _ = len;
-                    let scaled = if elem_size == 1 {
-                        idx_expr
-                    } else {
-                        format!("{idx_expr} {elem_size} *")
-                    };
-                    let base_addr = if let Some(cur) = dynamic_addr_expr.take() {
-                        cur
-                    } else if offset == 0 {
-                        base_expr.clone()
-                    } else {
-                        format!("{base_expr} {offset} +")
-                    };
-                    dynamic_addr_expr = Some(format!("{base_addr} {scaled} +"));
-                    offset = 0;
-                    t = elem_ty;
+                        let (low, len, elem_size, elem_ty) = match t {
+                            TypeInfo::Array(ref a) => {
+                                (a.low, a.len, a.elem_size_bytes, (*a.elem_ty).clone())
+                            }
+                            _ => return Err("index on non-array lvalue".into()),
+                        };
+                        let idx_expr = self.gen_expr_inline_ctx(ix, ctx)?;
+                        // Minimal runtime bounds check hook point can be inserted here if needed.
+                        let _ = len;
+                        let scaled = if let Some((low_name, high_name)) =
+                            conformant_bounds.as_mut().and_then(|bounds| {
+                                if bounds.is_empty() {
+                                    None
+                                } else {
+                                    Some(bounds.remove(0))
+                                }
+                            }) {
+                            let low = self.runtime_bound_slot_expr(&low_name, ctx)?;
+                            let stride = self.runtime_conformant_size_expr(
+                                &elem_ty,
+                                conformant_bounds.as_deref().unwrap_or(&[]),
+                                ctx,
+                            )?;
+                            let _ = high_name;
+                            if stride == "1" {
+                                format!("{idx_expr} {low} -")
+                            } else {
+                                format!("{idx_expr} {low} - {stride} *")
+                            }
+                        } else if elem_size == 1 {
+                            if low == 0 {
+                                idx_expr
+                            } else {
+                                format!("{idx_expr} {low} -")
+                            }
+                        } else if low == 0 {
+                            format!("{idx_expr} {elem_size} *")
+                        } else {
+                            format!("{idx_expr} {low} - {elem_size} *")
+                        };
+                        let base_addr = if let Some(cur) = dynamic_addr_expr.take() {
+                            cur
+                        } else if offset == 0 {
+                            base_expr.clone()
+                        } else {
+                            format!("{base_expr} {offset} +")
+                        };
+                        dynamic_addr_expr = Some(format!("{base_addr} {scaled} +"));
+                        offset = 0;
+                        t = elem_ty;
                     }
                 }
             }
@@ -695,6 +1660,7 @@ impl<'a> ForthGen<'a> {
             offset,
             dynamic_addr_expr,
             ty: t,
+            variant_checks,
         })
     }
 
@@ -703,6 +1669,30 @@ impl<'a> ForthGen<'a> {
         for ch in s.chars() {
             self.wln(&format!("{} PWRITE-CHAR", ch as u32));
         }
+    }
+
+    fn emit_string_literal_storage(&mut self) -> Result<(), String> {
+        for (name, value) in self.string_literals.clone() {
+            let len = value.chars().count() as u32 + 1;
+            let ty = TypeInfo::Array(ArrayInfo {
+                low: 0,
+                high: len as i32 - 1,
+                len,
+                elem_ty: Box::new(TypeInfo::Basic(BasicType::Char)),
+                elem_size_bytes: 4,
+                size_bytes: len * 4,
+            });
+            self.emit_storage_decl(&name, &ty)?;
+            let addr = AddrRef {
+                base_expr: name,
+                offset: 0,
+                dynamic_addr_expr: None,
+                ty,
+                variant_checks: Vec::new(),
+            };
+            self.emit_char_array_assign(&addr, &value)?;
+        }
+        Ok(())
     }
 
     fn emit_aggregate_copy(&mut self, src: &AddrRef, dst: &AddrRef, size_bytes: u32) {
@@ -788,107 +1778,33 @@ impl<'a> ForthGen<'a> {
         Ok(())
     }
 
-    fn emit_storage_decl(&mut self, name: &str, ty: &TypeInfo) -> Result<(), String> {
-        let sz = self.type_size_bytes(ty)?;
-        if sz <= 4 {
-            self.wln(&format!("CREATE {name} 0 ,"));
-        } else {
-            self.wln(&format!("CREATE {name} 0 , {} ALLOT", sz - 4));
-        }
-        Ok(())
-    }
-
-    fn type_size_bytes(&self, ty: &TypeInfo) -> Result<u32, String> {
-        match ty {
-            TypeInfo::Basic(_) => Ok(4),
-            TypeInfo::Record(r) => Ok(r.size_bytes),
-            TypeInfo::Array(a) => Ok(a.size_bytes),
-        }
-    }
-
-    fn gen_builtin_array_io(&mut self, name: &str, args: &[Expr], ctx: &Ctx) -> Result<(), String> {
-        if args.len() != 2 {
-            return Err(format!("{name} requires 2 arguments"));
-        }
-        let lv = expr_to_lvalue(&args[0]).ok_or_else(|| format!("{name} first argument must be lvalue array"))?;
-        let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
-        let ainfo = match &a.ty {
-            TypeInfo::Array(x) => x.clone(),
-            _ => return Err(format!("{name} first argument must be array")),
-        };
-        let elem_ty = (*ainfo.elem_ty).clone();
-        match elem_ty {
-            TypeInfo::Basic(_) => {}
-            _ => return Err(format!("{name} supports only scalar element arrays")),
-        }
-        let len_expr = self.gen_expr_inline_ctx(&args[1], ctx)?;
-        let base_addr = self.emit_addr_inline(&a);
-
-        self.wln("0 >R");
-        self.wln("BEGIN");
-        self.indent += 1;
-        self.wln(&format!("R@ {len_expr} < WHILE"));
-        self.indent += 1;
-        let cell_addr = if ainfo.elem_size_bytes == 1 {
-            format!("{base_addr} R@ +")
-        } else {
-            format!("{base_addr} R@ {} * +", ainfo.elem_size_bytes)
-        };
-        if name == "ReadArr" {
-            let rw = match elem_ty {
-                TypeInfo::Basic(BasicType::Integer) => "PREAD-I32",
-                TypeInfo::Basic(BasicType::Boolean) => "PREAD-BOOL",
-                TypeInfo::Basic(BasicType::Char) => "PREAD-CHAR",
-                _ => unreachable!(),
-            };
-            self.wln(&format!("{rw} {cell_addr} PVAR!"));
-        } else {
-            let ww = match elem_ty {
-                TypeInfo::Basic(BasicType::Integer) => "PWRITE-I32",
-                TypeInfo::Basic(BasicType::Boolean) => "PWRITE-BOOL",
-                TypeInfo::Basic(BasicType::Char) => "PWRITE-CHAR",
-                _ => unreachable!(),
-            };
-            self.wln(&format!("{cell_addr} PVAR@ {ww}"));
-            self.wln("PWRITELN");
-        }
-        self.wln("R> 1 + >R");
-        self.indent -= 1;
-        self.indent -= 1;
-        self.wln("REPEAT");
-        self.wln("R> DROP");
-        Ok(())
-    }
-
-    fn gen_builtin_str_io(&mut self, name: &str, args: &[Expr], ctx: &Ctx) -> Result<(), String> {
-        let lv = expr_to_lvalue(&args[0]).ok_or_else(|| format!("{name} first argument must be lvalue array"))?;
-        let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+    fn emit_char_array_write(
+        &mut self,
+        a: &AddrRef,
+        ctx: &Ctx,
+        base_name: &str,
+    ) -> Result<(), String> {
         let arr_len = match &a.ty {
             TypeInfo::Array(ai) => match ai.elem_ty.as_ref() {
-                TypeInfo::Basic(BasicType::Char) => ai.len,
-                _ => return Err(format!("{name} first argument must be array of char")),
+                TypeInfo::Basic(BasicType::Char) => ai.len.to_string(),
+                _ => return Err("Write/WriteLn char array requires array of char".into()),
             },
-            _ => return Err(format!("{name} first argument must be array of char")),
+            _ => return Err("Write/WriteLn char array requires array of char".into()),
         };
-        let base_addr = self.emit_addr_inline(&a);
-        if name == "ReadStr" {
-            let n = self.gen_expr_inline_ctx(&args[1], ctx)?;
-            let cap = arr_len.saturating_sub(1);
-            self.wln("0 >R");
-            self.wln("BEGIN");
-            self.indent += 1;
-            self.wln(&format!("R@ {n} < R@ {cap} < AND WHILE"));
-            self.indent += 1;
-            self.wln(&format!("PREAD-CHAR {base_addr} R@ 4 * + PVAR!"));
-            self.wln("R> 1 + >R");
-            self.indent -= 1;
-            self.indent -= 1;
-            self.wln("REPEAT");
-            self.wln(&format!("0 {base_addr} R@ 4 * + PVAR!"));
-            self.wln("R> DROP");
-            return Ok(());
-        }
-
+        let arr_len = if let Some(v) = ctx.vars.get(base_name) {
+            if let Some(bounds) = &v.conformant_bounds {
+                let (low_name, high_name) =
+                    bounds.first().ok_or("missing conformant string bounds")?;
+                let low = self.runtime_bound_slot_expr(low_name, ctx)?;
+                let high = self.runtime_bound_slot_expr(high_name, ctx)?;
+                format!("{high} {low} - 1 +")
+            } else {
+                arr_len
+            }
+        } else {
+            arr_len
+        };
+        let base_addr = self.emit_addr_inline(a);
         self.wln("0 __WSTR_STOP PVAR!");
         self.wln("0 >R");
         self.wln("BEGIN");
@@ -913,10 +1829,79 @@ impl<'a> ForthGen<'a> {
         Ok(())
     }
 
+    fn emit_char_array_read(
+        &mut self,
+        dst: &AddrRef,
+        max_len_expr: &str,
+        ctx: &Ctx,
+        base_name: &str,
+    ) -> Result<(), String> {
+        let arr_len = match &dst.ty {
+            TypeInfo::Array(ai) => match ai.elem_ty.as_ref() {
+                TypeInfo::Basic(BasicType::Char) => ai.len.to_string(),
+                _ => return Err("Read char array requires array of char".into()),
+            },
+            _ => return Err("Read char array requires array of char".into()),
+        };
+        let arr_len = if let Some(v) = ctx.vars.get(base_name) {
+            if let Some(bounds) = &v.conformant_bounds {
+                let (low_name, high_name) =
+                    bounds.first().ok_or("missing conformant string bounds")?;
+                let low = self.runtime_bound_slot_expr(low_name, ctx)?;
+                let high = self.runtime_bound_slot_expr(high_name, ctx)?;
+                format!("{high} {low} - 1 +")
+            } else {
+                arr_len
+            }
+        } else {
+            arr_len
+        };
+        let cap = format!("{arr_len} 1 -");
+        let base_addr = self.emit_addr_inline(dst);
+        self.wln("0 >R");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln(&format!("R@ {max_len_expr} < R@ {cap} < AND WHILE"));
+        self.indent += 1;
+        self.wln(&format!("PREAD-CHAR {base_addr} R@ 4 * + PVAR!"));
+        self.wln("R> 1 + >R");
+        self.indent -= 1;
+        self.indent -= 1;
+        self.wln("REPEAT");
+        self.wln(&format!("0 {base_addr} R@ 4 * + PVAR!"));
+        self.wln("R> DROP");
+        Ok(())
+    }
+
+    fn emit_storage_decl(&mut self, name: &str, ty: &TypeInfo) -> Result<(), String> {
+        let sz = self.type_size_bytes(ty)?;
+        if sz <= 4 {
+            self.wln(&format!("CREATE {name} 0 ,"));
+        } else {
+            self.wln(&format!("CREATE {name} 0 , {} ALLOT", sz - 4));
+        }
+        Ok(())
+    }
+
+    fn type_size_bytes(&self, ty: &TypeInfo) -> Result<u32, String> {
+        match ty {
+            TypeInfo::Basic(_)
+            | TypeInfo::Enum(_)
+            | TypeInfo::Subrange(_)
+            | TypeInfo::Set(_)
+            | TypeInfo::Pointer(_)
+            | TypeInfo::Nil => Ok(4),
+            TypeInfo::Record(r) => Ok(r.size_bytes),
+            TypeInfo::Array(a) => Ok(a.size_bytes),
+        }
+    }
+
     fn const_to_token(&self, c: &ConstExpr) -> Result<String, String> {
         Ok(match eval_const(self.env, c)? {
             ConstVal::I32(i) => i.to_string(),
             ConstVal::U32(u) => u.to_string(),
+            ConstVal::Real(bits) => bits.to_string(),
+            ConstVal::EnumVal { ordinal, .. } => ordinal.to_string(),
             ConstVal::Bool(b) => {
                 if b {
                     "1".to_string()
@@ -933,6 +1918,20 @@ impl<'a> ForthGen<'a> {
 
     fn slot_name(&self, scoped: &str, vname: &str) -> String {
         format!("S_{}", self.short_symbol(&format!("{scoped}::{vname}"), 12))
+    }
+
+    fn runtime_param_slots(&self, scoped: &str, params: &[ParamDecl]) -> Vec<String> {
+        let mut slots = Vec::new();
+        for prm in params {
+            if let Some(c) = &prm.conformant {
+                for dim in &c.dims {
+                    slots.push(self.slot_name(scoped, &dim.low_name));
+                    slots.push(self.slot_name(scoped, &dim.high_name));
+                }
+            }
+            slots.push(self.slot_name(scoped, &prm.name));
+        }
+        slots
     }
 
     fn short_symbol(&self, raw: &str, max_len: usize) -> String {
@@ -969,6 +1968,7 @@ impl<'a> ForthGen<'a> {
                     slot: n.clone(),
                     ty: t.clone(),
                     by_ref: false,
+                    conformant_bounds: None,
                 },
             );
         }
@@ -976,19 +1976,53 @@ impl<'a> ForthGen<'a> {
         Ctx { vars, routines }
     }
 
-    fn extend_vars_for_routine(&self, r: &RoutineDecl, scoped: &str, ctx: &mut Ctx) -> Result<(), String> {
+    fn extend_vars_for_routine(
+        &self,
+        r: &RoutineDecl,
+        scoped: &str,
+        ctx: &mut Ctx,
+    ) -> Result<(), String> {
         match r {
             RoutineDecl::Procedure(p) => {
                 for prm in &p.params {
-                    let ty = self.ty_of_typeref(&prm.ty)?;
+                    let ty = self.ty_of_param_decl(prm)?;
                     ctx.vars.insert(
                         prm.name.clone(),
                         VarAccess {
                             slot: self.slot_name(scoped, &prm.name),
                             ty,
-                            by_ref: prm.by_ref,
+                            by_ref: prm.by_ref || prm.conformant.is_some(),
+                            conformant_bounds: prm.conformant.as_ref().map(|c| {
+                                c.dims
+                                    .iter()
+                                    .map(|d| (d.low_name.clone(), d.high_name.clone()))
+                                    .collect()
+                            }),
                         },
                     );
+                    if let Some(c) = &prm.conformant {
+                        for dim in &c.dims {
+                            let bound_ty = self.ty_of_typeref(&dim.index_ty)?;
+                            ctx.vars.insert(
+                                dim.low_name.clone(),
+                                VarAccess {
+                                    slot: self.slot_name(scoped, &dim.low_name),
+                                    ty: bound_ty.clone(),
+                                    by_ref: false,
+                                    conformant_bounds: None,
+                                },
+                            );
+                            ctx.vars.insert(
+                                dim.high_name.clone(),
+                                VarAccess {
+                                    slot: self.slot_name(scoped, &dim.high_name),
+                                    ty: bound_ty,
+                                    by_ref: false,
+                                    conformant_bounds: None,
+                                },
+                            );
+                        }
+                    }
                 }
                 for lv in &p.block.vars {
                     let ty = self.ty_of_typeref(&lv.ty)?;
@@ -998,21 +2032,51 @@ impl<'a> ForthGen<'a> {
                             slot: self.slot_name(scoped, &lv.name),
                             ty,
                             by_ref: false,
+                            conformant_bounds: None,
                         },
                     );
                 }
             }
             RoutineDecl::Function(f) => {
                 for prm in &f.params {
-                    let ty = self.ty_of_typeref(&prm.ty)?;
+                    let ty = self.ty_of_param_decl(prm)?;
                     ctx.vars.insert(
                         prm.name.clone(),
                         VarAccess {
                             slot: self.slot_name(scoped, &prm.name),
                             ty,
-                            by_ref: prm.by_ref,
+                            by_ref: prm.by_ref || prm.conformant.is_some(),
+                            conformant_bounds: prm.conformant.as_ref().map(|c| {
+                                c.dims
+                                    .iter()
+                                    .map(|d| (d.low_name.clone(), d.high_name.clone()))
+                                    .collect()
+                            }),
                         },
                     );
+                    if let Some(c) = &prm.conformant {
+                        for dim in &c.dims {
+                            let bound_ty = self.ty_of_typeref(&dim.index_ty)?;
+                            ctx.vars.insert(
+                                dim.low_name.clone(),
+                                VarAccess {
+                                    slot: self.slot_name(scoped, &dim.low_name),
+                                    ty: bound_ty.clone(),
+                                    by_ref: false,
+                                    conformant_bounds: None,
+                                },
+                            );
+                            ctx.vars.insert(
+                                dim.high_name.clone(),
+                                VarAccess {
+                                    slot: self.slot_name(scoped, &dim.high_name),
+                                    ty: bound_ty,
+                                    by_ref: false,
+                                    conformant_bounds: None,
+                                },
+                            );
+                        }
+                    }
                 }
                 for lv in &f.block.vars {
                     let ty = self.ty_of_typeref(&lv.ty)?;
@@ -1022,6 +2086,7 @@ impl<'a> ForthGen<'a> {
                             slot: self.slot_name(scoped, &lv.name),
                             ty,
                             by_ref: false,
+                            conformant_bounds: None,
                         },
                     );
                 }
@@ -1031,6 +2096,7 @@ impl<'a> ForthGen<'a> {
                         slot: self.slot_name(scoped, &f.name),
                         ty: self.ty_of_typeref(&f.ret_ty)?,
                         by_ref: false,
+                        conformant_bounds: None,
                     },
                 );
             }
@@ -1064,7 +2130,7 @@ impl<'a> ForthGen<'a> {
             let scoped = format!("{scope}::{name}");
             let mut slots = Vec::new();
             for prm in params {
-                slots.push(self.slot_name(&scoped, &prm.name));
+                slots.extend(self.runtime_param_slots(&scoped, std::slice::from_ref(prm)));
             }
             for lv in &block.vars {
                 slots.push(self.slot_name(&scoped, &lv.name));
@@ -1080,12 +2146,36 @@ impl<'a> ForthGen<'a> {
     fn ty_of_typeref(&self, tr: &TypeRef) -> Result<TypeInfo, String> {
         match tr {
             TypeRef::Basic(b) => Ok(TypeInfo::Basic(b.clone())),
+            TypeRef::PointerNamed(n) => Ok(TypeInfo::Pointer(n.clone())),
+            TypeRef::Array { dims, elem } => build_array_info(self.env, dims, elem),
+            TypeRef::Subrange { low, high } => build_subrange_info(self.env, low, high),
+            TypeRef::Set(elem) => build_set_info(self.env, elem),
             TypeRef::Named(n) => self
                 .env
                 .types
                 .get(n)
                 .cloned()
                 .ok_or_else(|| format!("unknown type: {n}")),
+        }
+    }
+
+    fn ty_of_param_decl(&self, prm: &ParamDecl) -> Result<TypeInfo, String> {
+        if let Some(c) = &prm.conformant {
+            let mut ty = self.ty_of_typeref(&c.elem_ty)?;
+            for _ in c.dims.iter().rev() {
+                let elem_size_bytes = self.type_size_bytes(&ty)?;
+                ty = TypeInfo::Array(ArrayInfo {
+                    low: 0,
+                    high: 0,
+                    len: 0,
+                    elem_ty: Box::new(ty),
+                    elem_size_bytes,
+                    size_bytes: 0,
+                });
+            }
+            Ok(ty)
+        } else {
+            self.ty_of_typeref(&prm.ty)
         }
     }
 
@@ -1096,4 +2186,683 @@ impl<'a> ForthGen<'a> {
         }
         m
     }
+
+    fn runtime_array_bounds_for_lvalue(&self, lv: &LValue, ctx: &Ctx) -> Option<(String, String)> {
+        if !lv.sels.is_empty() {
+            return None;
+        }
+        let v = ctx.vars.get(&lv.base)?;
+        let bounds = v.conformant_bounds.as_ref()?;
+        let (low_name, high_name) = bounds.first()?;
+        let low_slot = ctx.vars.get(low_name)?.slot.clone();
+        let high_slot = ctx.vars.get(high_name)?.slot.clone();
+        Some((format!("{low_slot} PVAR@"), format!("{high_slot} PVAR@")))
+    }
+
+    fn runtime_array_bounds_for_expr(&self, expr: &Expr, ctx: &Ctx) -> Option<(String, String)> {
+        let lv = expr_to_lvalue(expr)?;
+        self.runtime_array_bounds_for_lvalue(&lv, ctx)
+    }
+
+    fn runtime_bound_slot_expr(&self, name: &str, ctx: &Ctx) -> Result<String, String> {
+        let slot = ctx
+            .vars
+            .get(name)
+            .ok_or_else(|| format!("unknown var: {name}"))?
+            .slot
+            .clone();
+        Ok(format!("{slot} PVAR@"))
+    }
+
+    fn runtime_conformant_size_expr(
+        &self,
+        ty: &TypeInfo,
+        bounds: &[(String, String)],
+        ctx: &Ctx,
+    ) -> Result<String, String> {
+        if let TypeInfo::Array(a) = ty {
+            if !bounds.is_empty() {
+                let (low_name, high_name) = &bounds[0];
+                let low = self.runtime_bound_slot_expr(low_name, ctx)?;
+                let high = self.runtime_bound_slot_expr(high_name, ctx)?;
+                let inner =
+                    self.runtime_conformant_size_expr(a.elem_ty.as_ref(), &bounds[1..], ctx)?;
+                return Ok(format!("{high} {low} - 1 + {inner} *"));
+            }
+            if a.size_bytes != 0 {
+                return Ok(a.size_bytes.to_string());
+            }
+            return self.runtime_conformant_size_expr(a.elem_ty.as_ref(), &[], ctx);
+        }
+        Ok(self.type_size_bytes(ty)?.to_string())
+    }
+
+    fn rewrite_stmt_with_ctx(
+        &self,
+        stmt: &Stmt,
+        bases: &[LValue],
+        ctx: &Ctx,
+    ) -> Result<Stmt, String> {
+        Ok(match stmt {
+            Stmt::Empty => Stmt::Empty,
+            Stmt::Compound(v) => Stmt::Compound(
+                v.iter()
+                    .map(|s| self.rewrite_stmt_with_ctx(s, bases, ctx))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            Stmt::Assign(lv, rhs) => Stmt::Assign(
+                self.rewrite_lvalue_with_ctx(lv, bases, ctx)?,
+                self.rewrite_expr_with_ctx(rhs, bases, ctx)?,
+            ),
+            Stmt::Read(args) => Stmt::Read(
+                args.iter()
+                    .map(|e| self.rewrite_expr_with_ctx(e, bases, ctx))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            Stmt::ReadLn => Stmt::ReadLn,
+            Stmt::For {
+                var,
+                init,
+                limit,
+                downto,
+                body,
+            } => Stmt::For {
+                var: var.clone(),
+                init: self.rewrite_expr_with_ctx(init, bases, ctx)?,
+                limit: self.rewrite_expr_with_ctx(limit, bases, ctx)?,
+                downto: *downto,
+                body: Box::new(self.rewrite_stmt_with_ctx(body, bases, ctx)?),
+            },
+            Stmt::If(c, t, e) => Stmt::If(
+                self.rewrite_expr_with_ctx(c, bases, ctx)?,
+                Box::new(self.rewrite_stmt_with_ctx(t, bases, ctx)?),
+                e.as_ref()
+                    .map(|s| self.rewrite_stmt_with_ctx(s, bases, ctx).map(Box::new))
+                    .transpose()?,
+            ),
+            Stmt::With(inner, body) => {
+                let mut merged = bases.to_vec();
+                merged.extend(inner.iter().cloned());
+                self.rewrite_stmt_with_ctx(body, &merged, ctx)?
+            }
+            Stmt::While(c, b) => Stmt::While(
+                self.rewrite_expr_with_ctx(c, bases, ctx)?,
+                Box::new(self.rewrite_stmt_with_ctx(b, bases, ctx)?),
+            ),
+            Stmt::Repeat(v, c) => Stmt::Repeat(
+                v.iter()
+                    .map(|s| self.rewrite_stmt_with_ctx(s, bases, ctx))
+                    .collect::<Result<Vec<_>, _>>()?,
+                self.rewrite_expr_with_ctx(c, bases, ctx)?,
+            ),
+            Stmt::Case {
+                expr,
+                arms,
+                else_stmt,
+            } => Stmt::Case {
+                expr: self.rewrite_expr_with_ctx(expr, bases, ctx)?,
+                arms: arms.clone(),
+                else_stmt: else_stmt
+                    .as_ref()
+                    .map(|s| self.rewrite_stmt_with_ctx(s, bases, ctx).map(Box::new))
+                    .transpose()?,
+            },
+            Stmt::ProcCall(name, args) => Stmt::ProcCall(
+                name.clone(),
+                args.iter()
+                    .map(|e| self.rewrite_expr_with_ctx(e, bases, ctx))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            Stmt::Write(args) => Stmt::Write(
+                args.iter()
+                    .map(|e| self.rewrite_expr_with_ctx(e, bases, ctx))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            Stmt::WriteLn(args) => Stmt::WriteLn(
+                args.iter()
+                    .map(|e| self.rewrite_expr_with_ctx(e, bases, ctx))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+        })
+    }
+
+    fn rewrite_expr_with_ctx(
+        &self,
+        expr: &Expr,
+        bases: &[LValue],
+        ctx: &Ctx,
+    ) -> Result<Expr, String> {
+        Ok(match expr {
+            Expr::Var(name)
+                if !ctx.vars.contains_key(name)
+                    && !self.env.consts.contains_key(name)
+                    && !ctx.routines.contains_key(name) =>
+            {
+                Self::lvalue_to_expr(self.rewrite_lvalue_with_ctx(
+                    &LValue {
+                        base: name.clone(),
+                        sels: vec![],
+                    },
+                    bases,
+                    ctx,
+                )?)
+            }
+            Expr::Call(name, args) => Expr::Call(
+                name.clone(),
+                args.iter()
+                    .map(|e| self.rewrite_expr_with_ctx(e, bases, ctx))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            Expr::Field(_, _) | Expr::Index(_, _) | Expr::Deref(_) => {
+                if let Some(lv) = expr_to_lvalue(expr) {
+                    Self::lvalue_to_expr(self.rewrite_lvalue_with_ctx(&lv, bases, ctx)?)
+                } else {
+                    expr.clone()
+                }
+            }
+            Expr::Unary(op, inner) => Expr::Unary(
+                *op,
+                Box::new(self.rewrite_expr_with_ctx(inner, bases, ctx)?),
+            ),
+            Expr::Binary(a, op, b) => Expr::Binary(
+                Box::new(self.rewrite_expr_with_ctx(a, bases, ctx)?),
+                *op,
+                Box::new(self.rewrite_expr_with_ctx(b, bases, ctx)?),
+            ),
+            Expr::SetLit(items) => Expr::SetLit(
+                items
+                    .iter()
+                    .map(|item| match item {
+                        SetItem::Single(e) => self
+                            .rewrite_expr_with_ctx(e, bases, ctx)
+                            .map(SetItem::Single),
+                        SetItem::Range(lo, hi) => Ok(SetItem::Range(
+                            self.rewrite_expr_with_ctx(lo, bases, ctx)?,
+                            self.rewrite_expr_with_ctx(hi, bases, ctx)?,
+                        )),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            _ => expr.clone(),
+        })
+    }
+
+    fn rewrite_lvalue_with_ctx(
+        &self,
+        lv: &LValue,
+        bases: &[LValue],
+        ctx: &Ctx,
+    ) -> Result<LValue, String> {
+        if ctx.vars.contains_key(&lv.base) {
+            return Ok(lv.clone());
+        }
+        for base in bases.iter().rev() {
+            let bt = self.resolve_lvalue_addr_ctx(base, ctx)?.ty;
+            if let TypeInfo::Record(r) = bt {
+                if r.fields.contains_key(&lv.base) {
+                    let mut sels = base.sels.clone();
+                    sels.push(Selector::Field(lv.base.clone()));
+                    sels.extend(lv.sels.clone());
+                    return Ok(LValue {
+                        base: base.base.clone(),
+                        sels,
+                    });
+                }
+            }
+        }
+        Ok(lv.clone())
+    }
+
+    fn lvalue_to_expr(lv: LValue) -> Expr {
+        let mut e = Expr::Var(lv.base);
+        for sel in lv.sels {
+            e = match sel {
+                Selector::Deref => Expr::Deref(Box::new(e)),
+                Selector::Field(f) => Expr::Field(Box::new(e), f),
+                Selector::Index(ixs) => {
+                    let mut acc = e;
+                    for ix in ixs {
+                        acc = Expr::Index(Box::new(acc), Box::new(ix));
+                    }
+                    acc
+                }
+            };
+        }
+        e
+    }
+
+    fn coerce_real_inline(&self, e: &Expr, t: &TypeInfo, ctx: &Ctx) -> Result<String, String> {
+        let v = self.gen_expr_inline_ctx(e, ctx)?;
+        Ok(if matches!(t, TypeInfo::Basic(BasicType::Real)) {
+            v
+        } else {
+            format!("{v} S>F")
+        })
+    }
+
+    fn ordinal_inline(&self, e: &Expr, ctx: &Ctx) -> Result<String, String> {
+        self.gen_expr_inline_ctx(e, ctx)
+    }
+
+    fn set_low_bound_expr(&self, set_expr: &Expr, ctx: &Ctx) -> Result<String, String> {
+        let ty = type_of_expr_scoped(self.env, &self.ctx_to_types(ctx), &ctx.routines, set_expr)?;
+        match ty {
+            TypeInfo::Set(s) => Ok(s.low.to_string()),
+            _ => Err("right-hand side of 'in' must be a set".into()),
+        }
+    }
+
+    fn gen_set_lit_inline(&self, items: &[SetItem], ctx: &Ctx) -> Result<String, String> {
+        if items.is_empty() {
+            return Ok("0".into());
+        }
+        let first_expr = match &items[0] {
+            SetItem::Single(e) => e,
+            SetItem::Range(lo, _) => lo,
+        };
+        let first_ty =
+            type_of_expr_scoped(self.env, &self.ctx_to_types(ctx), &ctx.routines, first_expr)?;
+        let low = match first_ty {
+            TypeInfo::Enum(ref e) => e.low,
+            TypeInfo::Subrange(ref s) => s.low,
+            TypeInfo::Basic(BasicType::Boolean) => 0,
+            TypeInfo::Basic(BasicType::Char) => 0,
+            TypeInfo::Basic(BasicType::Integer) => 0,
+            _ => return Err("set literal items must be ordinal".into()),
+        };
+        let mut parts = Vec::new();
+        for item in items {
+            match item {
+                SetItem::Single(expr) => {
+                    let iv = self.ordinal_inline(expr, ctx)?;
+                    parts.push(format!("1 {iv} {low} - LSHIFT"));
+                }
+                SetItem::Range(lo_expr, hi_expr) => {
+                    let lo = self.ordinal_inline(lo_expr, ctx)?;
+                    let hi = self.ordinal_inline(hi_expr, ctx)?;
+                    parts.push(format!("1 {hi} {lo} - 1 + LSHIFT 1 - {lo} {low} - LSHIFT"));
+                }
+            }
+        }
+        let mut out = String::new();
+        for (idx, part) in parts.iter().enumerate() {
+            if idx > 0 {
+                out.push(' ');
+            }
+            out.push_str(part);
+            if idx > 0 {
+                out.push_str(" OR");
+            }
+        }
+        Ok(out)
+    }
+
+    fn case_labels_inline(&self, labels: &[CaseLabel]) -> Result<String, String> {
+        let mut parts = Vec::new();
+        for label in labels {
+            match label {
+                CaseLabel::Single(c) => parts.push(format!("R@ {} =", self.const_to_token(c)?)),
+                CaseLabel::Range(lo, hi) => {
+                    parts.push(format!(
+                        "R@ {} >= R@ {} <= AND",
+                        self.const_to_token(lo)?,
+                        self.const_to_token(hi)?
+                    ));
+                }
+            }
+        }
+        if parts.is_empty() {
+            return Ok("0".into());
+        }
+        let mut out = String::new();
+        for (idx, part) in parts.iter().enumerate() {
+            if idx > 0 {
+                out.push(' ');
+            }
+            out.push_str(part);
+            if idx > 0 {
+                out.push_str(" OR");
+            }
+        }
+        Ok(out)
+    }
+
+    fn gen_builtin_new_dispose(
+        &mut self,
+        name: &str,
+        args: &[Expr],
+        ctx: &Ctx,
+    ) -> Result<(), String> {
+        if args.len() != 1 {
+            return Err(format!("{name} requires 1 argument"));
+        }
+        let lv = expr_to_lvalue(&args[0])
+            .ok_or_else(|| format!("{name} argument must be lvalue pointer"))?;
+        let dst = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+        if name.eq_ignore_ascii_case("dispose") {
+            self.emit_store("0", &dst);
+            return Ok(());
+        }
+        let target = match &dst.ty {
+            TypeInfo::Pointer(n) => n.clone(),
+            _ => return Err("new argument must be pointer".into()),
+        };
+        let pointee = self
+            .env
+            .types
+            .get(&target)
+            .cloned()
+            .ok_or_else(|| format!("unknown pointed type: {target}"))?;
+        let sz = self.type_size_bytes(&pointee)?;
+        self.wln("HERE __NEWP PVAR!");
+        self.wln(&format!("{sz} ALLOT"));
+        self.emit_store("__NEWP PVAR@", &dst);
+        Ok(())
+    }
+
+    fn gen_builtin_inttohex(&mut self, args: &[Expr], ctx: &Ctx) -> Result<(), String> {
+        if args.len() != 4 {
+            return Err("IntToHex requires 4 arguments".into());
+        }
+        let value = self.gen_expr_inline_ctx(&args[0], ctx)?;
+        let lv =
+            expr_to_lvalue(&args[1]).ok_or("IntToHex second argument must be lvalue char array")?;
+        let dst = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+        match &dst.ty {
+            TypeInfo::Array(ai)
+                if matches!(ai.elem_ty.as_ref(), TypeInfo::Basic(BasicType::Char)) => {}
+            _ => return Err("IntToHex second argument must be array of char".into()),
+        }
+        let max_len = self.gen_expr_inline_ctx(&args[2], ctx)?;
+        let zero_fill = self.gen_expr_inline_ctx(&args[3], ctx)?;
+        self.wln(&format!("{value} __I2H_VAL PVAR!"));
+        self.wln(&format!("{} __I2H_PTR PVAR!", self.emit_addr_inline(&dst)));
+        self.wln(&format!("{max_len} __I2H_MAX PVAR!"));
+        self.wln(&format!("{zero_fill} __I2H_FILL PVAR!"));
+        self.wln("__I32_TO_HEX_STR");
+        Ok(())
+    }
+
+    fn gen_builtin_setaddr(&mut self, args: &[Expr], ctx: &Ctx) -> Result<(), String> {
+        if args.len() != 2 {
+            return Err("SetAddr requires 2 arguments".into());
+        }
+        let lv = expr_to_lvalue(&args[0]).ok_or("SetAddr first argument must be lvalue pointer")?;
+        let dst = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+        match dst.ty {
+            TypeInfo::Pointer(_) => {}
+            _ => return Err("SetAddr first argument must be pointer".into()),
+        }
+        let addr = self.gen_expr_inline_ctx(&args[1], ctx)?;
+        self.emit_store(&addr, &dst);
+        Ok(())
+    }
+
+    fn gen_builtin_copy(&mut self, args: &[Expr], ctx: &Ctx) -> Result<(), String> {
+        if args.len() != 2 {
+            return Err("Copy requires 2 arguments".into());
+        }
+        let src = self.resolve_char_array_arg(&args[0], ctx, "Copy source")?;
+        let dst = self.resolve_char_array_lvalue_arg(&args[1], ctx, "Copy destination")?;
+        self.wln(&format!("{} __STR_SRC PVAR!", self.emit_addr_inline(&src)));
+        self.wln(&format!("{} __STR_DST PVAR!", self.emit_addr_inline(&dst)));
+        self.wln("__STRCPY");
+        Ok(())
+    }
+
+    fn gen_builtin_concat(&mut self, args: &[Expr], ctx: &Ctx) -> Result<(), String> {
+        if args.len() != 3 {
+            return Err("Concat requires 3 arguments".into());
+        }
+        let a = self.resolve_char_array_arg(&args[0], ctx, "Concat first source")?;
+        let b = self.resolve_char_array_arg(&args[1], ctx, "Concat second source")?;
+        let dst = self.resolve_char_array_lvalue_arg(&args[2], ctx, "Concat destination")?;
+        self.wln(&format!("{} __STR_SRC PVAR!", self.emit_addr_inline(&a)));
+        self.wln(&format!("{} __STR_DST PVAR!", self.emit_addr_inline(&dst)));
+        self.wln("__STRCPY");
+        self.wln(&format!("{} __STR_SRC PVAR!", self.emit_addr_inline(&a)));
+        self.wln("__STRLEN __STR_LEN PVAR!");
+        self.wln(&format!("{} __STR_SRC PVAR!", self.emit_addr_inline(&b)));
+        self.wln(&format!(
+            "{} __STR_LEN PVAR@ 4 * + __STR_DST PVAR!",
+            self.emit_addr_inline(&dst)
+        ));
+        self.wln("__STRCPY");
+        Ok(())
+    }
+
+    fn gen_builtin_delete(&mut self, args: &[Expr], ctx: &Ctx) -> Result<(), String> {
+        if args.len() != 3 {
+            return Err("Delete requires 3 arguments".into());
+        }
+        let dst = self.resolve_char_array_lvalue_arg(&args[0], ctx, "Delete target")?;
+        let idx = self.gen_expr_inline_ctx(&args[1], ctx)?;
+        let cnt = self.gen_expr_inline_ctx(&args[2], ctx)?;
+        self.wln(&format!("{} __STR_DST PVAR!", self.emit_addr_inline(&dst)));
+        self.wln(&format!("{idx} __STR_IDX PVAR!"));
+        self.wln(&format!("{cnt} __STR_CNT PVAR!"));
+        self.wln("__STRDELETE");
+        Ok(())
+    }
+
+    fn gen_builtin_insert(&mut self, args: &[Expr], ctx: &Ctx) -> Result<(), String> {
+        if args.len() != 3 {
+            return Err("Insert requires 3 arguments".into());
+        }
+        let src = self.resolve_char_array_arg(&args[0], ctx, "Insert source")?;
+        let dst = self.resolve_char_array_lvalue_arg(&args[1], ctx, "Insert destination")?;
+        let idx = self.gen_expr_inline_ctx(&args[2], ctx)?;
+        self.wln(&format!("{} __STR_SRC PVAR!", self.emit_addr_inline(&src)));
+        self.wln(&format!("{} __STR_DST PVAR!", self.emit_addr_inline(&dst)));
+        self.wln(&format!("{idx} __STR_IDX PVAR!"));
+        self.wln("__STRINSERT");
+        Ok(())
+    }
+
+    fn resolve_char_array_arg(
+        &self,
+        expr: &Expr,
+        ctx: &Ctx,
+        what: &str,
+    ) -> Result<AddrRef, String> {
+        if let Expr::Str(s) = expr {
+            let Some((name, _)) = self.string_literals.iter().find(|(_, value)| value == s) else {
+                return Err(format!(
+                    "internal: missing string literal backing storage for {what}"
+                ));
+            };
+            let len = s.chars().count() as u32 + 1;
+            return Ok(AddrRef {
+                base_expr: name.clone(),
+                offset: 0,
+                dynamic_addr_expr: None,
+                ty: TypeInfo::Array(ArrayInfo {
+                    low: 0,
+                    high: len as i32 - 1,
+                    len,
+                    elem_ty: Box::new(TypeInfo::Basic(BasicType::Char)),
+                    elem_size_bytes: 4,
+                    size_bytes: len * 4,
+                }),
+                variant_checks: Vec::new(),
+            });
+        }
+        let lv = expr_to_lvalue(expr).ok_or_else(|| format!("{what} must be array of char"))?;
+        let addr = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+        match &addr.ty {
+            TypeInfo::Array(ai)
+                if matches!(ai.elem_ty.as_ref(), TypeInfo::Basic(BasicType::Char)) =>
+            {
+                Ok(addr)
+            }
+            _ => Err(format!("{what} must be array of char")),
+        }
+    }
+
+    fn resolve_char_array_lvalue_arg(
+        &self,
+        expr: &Expr,
+        ctx: &Ctx,
+        what: &str,
+    ) -> Result<AddrRef, String> {
+        self.resolve_char_array_arg(expr, ctx, what)
+    }
+
+    fn collect_string_literals_program(&mut self, prog: &Program) {
+        self.collect_string_literals_block(&prog.block);
+    }
+
+    fn collect_string_literals_block(&mut self, block: &Block) {
+        for decl in &block.consts {
+            self.collect_string_literals_const_expr(&decl.expr);
+        }
+        for routine in &block.routines {
+            match routine {
+                RoutineDecl::Procedure(p) => self.collect_string_literals_block(&p.block),
+                RoutineDecl::Function(f) => self.collect_string_literals_block(&f.block),
+            }
+        }
+        self.collect_string_literals_stmt(&block.body);
+    }
+
+    fn collect_string_literals_stmt(&mut self, stmt: &Stmt) {
+        match stmt {
+            Stmt::Empty | Stmt::ReadLn => {}
+            Stmt::Compound(stmts) => {
+                for stmt in stmts {
+                    self.collect_string_literals_stmt(stmt);
+                }
+            }
+            Stmt::Assign(_, expr) => self.collect_string_literals_expr(expr),
+            Stmt::Read(args) | Stmt::Write(args) | Stmt::WriteLn(args) => {
+                for expr in args {
+                    self.collect_string_literals_expr(expr);
+                }
+            }
+            Stmt::For {
+                init, limit, body, ..
+            } => {
+                self.collect_string_literals_expr(init);
+                self.collect_string_literals_expr(limit);
+                self.collect_string_literals_stmt(body);
+            }
+            Stmt::If(cond, then_s, else_s) => {
+                self.collect_string_literals_expr(cond);
+                self.collect_string_literals_stmt(then_s);
+                if let Some(else_s) = else_s {
+                    self.collect_string_literals_stmt(else_s);
+                }
+            }
+            Stmt::With(_, body) | Stmt::While(_, body) => {
+                if let Stmt::While(cond, _) = stmt {
+                    self.collect_string_literals_expr(cond);
+                }
+                self.collect_string_literals_stmt(body);
+            }
+            Stmt::Repeat(stmts, cond) => {
+                for stmt in stmts {
+                    self.collect_string_literals_stmt(stmt);
+                }
+                self.collect_string_literals_expr(cond);
+            }
+            Stmt::Case {
+                expr,
+                arms,
+                else_stmt,
+            } => {
+                self.collect_string_literals_expr(expr);
+                for (_, stmt) in arms {
+                    self.collect_string_literals_stmt(stmt);
+                }
+                if let Some(stmt) = else_stmt {
+                    self.collect_string_literals_stmt(stmt);
+                }
+            }
+            Stmt::ProcCall(_, args) => {
+                for expr in args {
+                    self.collect_string_literals_expr(expr);
+                }
+            }
+        }
+    }
+
+    fn collect_string_literals_expr(&mut self, expr: &Expr) {
+        match expr {
+            Expr::Str(s) => self.intern_string_literal(s),
+            Expr::Call(_, args) => {
+                for expr in args {
+                    self.collect_string_literals_expr(expr);
+                }
+            }
+            Expr::Deref(expr) | Expr::Field(expr, _) | Expr::Unary(_, expr) => {
+                self.collect_string_literals_expr(expr)
+            }
+            Expr::Index(base, index) | Expr::Binary(base, _, index) => {
+                self.collect_string_literals_expr(base);
+                self.collect_string_literals_expr(index);
+            }
+            Expr::SetLit(items) => {
+                for item in items {
+                    match item {
+                        SetItem::Single(expr) => self.collect_string_literals_expr(expr),
+                        SetItem::Range(lo, hi) => {
+                            self.collect_string_literals_expr(lo);
+                            self.collect_string_literals_expr(hi);
+                        }
+                    }
+                }
+            }
+            Expr::Int(_)
+            | Expr::Bool(_)
+            | Expr::Char(_)
+            | Expr::Real(_)
+            | Expr::Nil
+            | Expr::Var(_) => {}
+        }
+    }
+
+    fn collect_string_literals_const_expr(&mut self, expr: &ConstExpr) {
+        match expr {
+            ConstExpr::Call(_, args) => {
+                for expr in args {
+                    self.collect_string_literals_const_expr(expr);
+                }
+            }
+            ConstExpr::Unary(_, expr) => self.collect_string_literals_const_expr(expr),
+            ConstExpr::Binary(a, _, b) => {
+                self.collect_string_literals_const_expr(a);
+                self.collect_string_literals_const_expr(b);
+            }
+            ConstExpr::Int(_)
+            | ConstExpr::Bool(_)
+            | ConstExpr::Char(_)
+            | ConstExpr::Real(_)
+            | ConstExpr::Const(_) => {}
+        }
+    }
+
+    fn intern_string_literal(&mut self, value: &str) {
+        if self
+            .string_literals
+            .iter()
+            .any(|(_, existing)| existing == value)
+        {
+            return;
+        }
+        let name = format!("__STRLIT_{}", self.string_literals.len());
+        self.string_literals.push((name, value.to_string()));
+    }
+}
+
+fn parse_hex_text(s: &str) -> Result<i32, String> {
+    let raw = s.trim();
+    let raw = raw
+        .strip_prefix("0x")
+        .or_else(|| raw.strip_prefix("0X"))
+        .or_else(|| raw.strip_prefix('$'))
+        .unwrap_or(raw);
+    if raw.is_empty() {
+        return Ok(0);
+    }
+    i32::from_str_radix(raw, 16).map_err(|_| "invalid hex string literal for HexToInt".into())
 }
