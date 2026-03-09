@@ -40,7 +40,8 @@ begin
 
   for i := 0 to 3 do
     zs[i] := xs[i] + 1;
-  WriteArr(zs, 4);
+  for i := 0 to 3 do
+    WriteLn(zs[i]);
 
   n := 0;
   for i := 0 to 3 do
@@ -55,7 +56,8 @@ begin
       n := n + 1
     end;
   WriteLn(n);
-  WriteArr(ys, n);
+  for i := 0 to n - 1 do
+    WriteLn(ys[i]);
 
   s := 0;
   for i := 0 to 3 do

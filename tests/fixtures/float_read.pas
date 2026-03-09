@@ -1,7 +1,7 @@
 program floatread;
 var
-  x: float;
-  y: float;
+  x: real;
+  y: real;
 begin
   Read(x, y);
   WriteLn(x + y);

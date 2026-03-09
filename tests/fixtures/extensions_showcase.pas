@@ -75,6 +75,5 @@ begin
   end;
 
   WriteLn(fixed_pair.x + fixed_pair.y);
-  WriteStr(title);
-  WriteLn
+  WriteLn(title)
 end.

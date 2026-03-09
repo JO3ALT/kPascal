@@ -172,12 +172,12 @@ fn generates_float_ops_and_io_words() {
     let src = r#"
 program p;
 var
-  x: float;
-  y: float;
+  x: real;
+  y: real;
 begin
   Read(x);
-  y := Float(Trunc(-x)) + 1.5 * 2.0;
-  y := y + Float(Round(2.6));
+  y := Trunc(-x) + 1.5 * 2.0;
+  y := y + Round(2.6);
   WriteLn(y);
   WriteLn(y > x)
 end.
@@ -191,7 +191,7 @@ end.
     assert!(forth.contains("F>S"));
     assert!(forth.contains("S>F"));
     assert!(forth.contains("FROUND-I32"));
-    assert!(forth.contains("SWAP F<"));
+    assert!(forth.contains("F<"));
     assert!(forth.contains("PWRITE-F32"));
 }
 
@@ -400,8 +400,8 @@ end.
     assert!(forth.contains("a PVAR@"));
     assert!(forth.contains("a 4 PFIELD@"));
     assert!(forth.contains("v PVAR@"));
-    assert!(forth.contains("v 4 PFIELD@"));
-    assert!(forth.contains("v 8 PFIELD@"));
+    assert!(forth.contains("S_PROGR_C15B20 1 4 * + PVAR@"));
+    assert!(forth.contains("S_PROGR_C15B20 2 4 * + PVAR@"));
     assert!(forth.contains("PFIELD!"));
 }
 
@@ -543,40 +543,6 @@ end.
     let err = run_compiler_fail(src);
     assert!(err.contains("line"));
     assert!(err.contains("column"));
-}
-
-#[test]
-fn supports_readarr_writearr_for_integer_array() {
-    let src = r#"
-program p;
-type
-  arr = array[4] of integer;
-var
-  a: arr;
-begin
-  ReadArr(a, 3);
-  WriteArr(a, 3)
-end.
-"#;
-    let forth = run_compiler(src);
-    assert!(forth.contains("0 >R"));
-    assert!(forth.contains("R@ 3 < WHILE"));
-    assert!(forth.contains("PREAD-I32"));
-    assert!(forth.contains("PWRITE-I32"));
-}
-
-#[test]
-fn rejects_readarr_non_array_argument() {
-    let src = r#"
-program p;
-var
-  x: integer;
-begin
-  ReadArr(x, 1)
-end.
-"#;
-    let err = run_compiler_fail(src);
-    assert!(err.contains("ReadArr first argument must be array"));
 }
 
 #[test]
@@ -908,26 +874,6 @@ end.
 }
 
 #[test]
-fn supports_readstr_writestr_for_char_array() {
-    let src = r#"
-program p;
-type
-  s8 = array[8] of char;
-var
-  s: s8;
-begin
-  ReadStr(s, 5);
-  WriteStr(s);
-  WriteLn
-end.
-"#;
-    let forth = run_compiler(src);
-    assert!(forth.contains("PREAD-CHAR"));
-    assert!(forth.contains("__WSTR_STOP"));
-    assert!(forth.contains("PWRITE-CHAR"));
-}
-
-#[test]
 fn reports_detailed_argument_type_mismatch() {
     let src = r#"
 program p;
@@ -970,27 +916,6 @@ end.
     assert!(forth.contains("5 PWRITE-I32"));
     assert!(forth.contains("0 PWRITE-I32"));
     assert!(forth.contains("4 PWRITE-I32"));
-}
-
-#[test]
-fn supports_writehex_and_readln_builtins() {
-    let src = r#"
-program p;
-var
-  a: integer;
-  b: integer;
-begin
-  Read(a);
-  ReadLn;
-  Read(b);
-  WriteHex(a);
-  WriteLn;
-  WriteLn(b)
-end.
-"#;
-    let forth = run_compiler(src);
-    assert!(forth.contains("PREADLN"));
-    assert!(forth.contains("PWRITE-HEX"));
 }
 
 #[test]
@@ -1037,4 +962,33 @@ fn compiles_math_pas_float_include() {
     assert!(forth.contains("ROUTINE program::abs"));
     assert!(forth.contains("ROUTINE program::sqrt"));
     assert!(forth.contains("PWRITE-F32"));
+}
+
+#[test]
+fn supports_aggregate_return_storage_for_record_functions() {
+    let src = r#"
+program p;
+type
+  pair = record
+    x: integer;
+    y: integer;
+  end;
+var
+  p1: pair;
+function MakePair(a: integer; b: integer): pair;
+begin
+  MakePair.x := a;
+  MakePair.y := b
+end;
+begin
+  p1 := MakePair(1, 2);
+  WriteLn(p1.x);
+  WriteLn(p1.y)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("CREATE __CRS 0 ,"));
+    assert!(forth.contains("CREATE __CRA"));
+    assert!(forth.contains("__CRS PVAR!"));
 }

@@ -79,8 +79,7 @@ begin
   WriteLn(High(ga1));
 
   gstr := 'ABC';
-  WriteStr(gstr);
-  WriteLn;
+  WriteLn(gstr);
   WriteLn(gstr[3] = #0);
 
   for gi := 1 to 3 do
@@ -125,15 +124,15 @@ begin
   Read(gn);
   ReadLn;
   Read(gb, gch);
-  ReadArr(ga1, 3);
-  ReadStr(gstr, 5);
+  Read(ga1[0], ga1[1], ga1[2]);
+  Read(gstr, 5);
 
-  WriteHex(gn);
-  WriteLn;
+  WriteLn(gn);
   WriteLn(gb);
   WriteLn(gch);
-  WriteArr(ga1, 3);
-  WriteStr(gstr);
-  WriteLn;
+  WriteLn(ga1[0]);
+  WriteLn(ga1[1]);
+  WriteLn(ga1[2]);
+  WriteLn(gstr);
   WriteLn('END')
 end.

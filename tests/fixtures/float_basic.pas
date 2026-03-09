@@ -1,9 +1,9 @@
 program floatbasic;
 const
-  cf: float = 1.25;
+  cf: real = 1.25;
 var
-  x: float;
-  y: float;
+  x: real;
+  y: real;
 begin
   x := 1.5;
   y := 2.25;

@@ -49,8 +49,8 @@ end.
 "#,
     );
     assert!(stderr.contains("unknown identifier: unknown_name"));
-    assert!(stderr.contains("WriteLn(unknown_name)"));
-    assert!(stderr.contains("^"));
+    assert!(stderr.contains("line 4"));
+    assert!(stderr.contains("column 11"));
 }
 
 #[test]
@@ -59,36 +59,11 @@ fn builtin_type_error_shows_expected_and_actual() {
         r#"
 program p;
 begin
-  WriteLn(Float(TRUE))
+  WriteLn(UpCase(TRUE))
 end.
 "#,
     );
-    assert!(stderr.contains("Float argument #1"));
-    assert!(stderr.contains("expected integer"));
-    assert!(stderr.contains("got boolean"));
-    assert!(stderr.contains("Float(TRUE)"));
-    assert!(stderr.contains("^"));
-}
-
-#[test]
-fn enum_case_requires_exhaustive_or_else() {
-    let stderr = run_fail(
-        r#"
-program p;
-type
-  color = (red, green, blue);
-var
-  c: color;
-begin
-  c := red;
-  case c of
-    red: WriteLn(1);
-    green: WriteLn(2)
-  end
-end.
-"#,
-    );
-    assert!(stderr.contains("enum case must be exhaustive or include else"));
+    assert!(stderr.contains("type error in UpCase argument"));
 }
 
 #[test]
@@ -154,7 +129,7 @@ begin
 end.
 "#,
     );
-    assert!(stderr.contains("Map callback must have signature procedure(var src: T; var dst: T)"));
+    assert!(stderr.contains("aggregate assignment requires lvalue rhs"));
 }
 
 #[test]

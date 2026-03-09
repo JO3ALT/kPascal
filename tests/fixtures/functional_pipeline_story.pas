@@ -46,7 +46,8 @@ begin
 
   for i := 0 to 7 do
     shifted[i - 3] := raw[i - 3] + cfg.offset;
-  WriteArr(shifted, 8);
+  for i := -3 to 4 do
+    WriteLn(shifted[i]);
 
   patched := shifted with [-3 := 99, 4 := 77];
   WriteLn(patched[-3]);
@@ -61,7 +62,8 @@ begin
       n := n + 1
     end;
   WriteLn(n);
-  WriteArr(hot_only, n);
+  for i := 0 to n - 1 do
+    WriteLn(hot_only[i + Low(hot_only)]);
 
   total := 0;
   for i := 0 to n - 1 do

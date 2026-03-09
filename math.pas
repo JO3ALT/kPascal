@@ -1,4 +1,4 @@
-function abs(x: float): float;
+function abs(x: real): real;
 begin
   if x < 0.0 then
     abs := -x
@@ -6,9 +6,9 @@ begin
     abs := x
 end;
 
-function sqrt(x: float): float;
+function sqrt(x: real): real;
 var
-  g: float;
+  g: real;
   i: integer;
 begin
   if x <= 0.0 then
@@ -24,11 +24,11 @@ begin
 	    end
 end;
 
-function pow(x: float; n: integer): float;
+function pow(x: real; n: integer): real;
 var
   i: integer;
   e: integer;
-  r: float;
+  r: real;
 begin
   if n = 0 then
     pow := 1.0
@@ -51,12 +51,12 @@ begin
     end
 end;
 
-function sin(x: float): float;
+function sin(x: real): real;
 var
-  x2: float;
-  x3: float;
-  x5: float;
-  x7: float;
+  x2: real;
+  x3: real;
+  x5: real;
+  x7: real;
 begin
   x2 := x * x;
   x3 := x * x2;
@@ -65,11 +65,11 @@ begin
   sin := x - x3 / 6.0 + x5 / 120.0 - x7 / 5040.0
 end;
 
-function cos(x: float): float;
+function cos(x: real): real;
 var
-  x2: float;
-  x4: float;
-  x6: float;
+  x2: real;
+  x4: real;
+  x6: real;
 begin
   x2 := x * x;
   x4 := x2 * x2;
@@ -77,27 +77,27 @@ begin
   cos := 1.0 - x2 / 2.0 + x4 / 24.0 - x6 / 720.0
 end;
 
-function f_trunc(x: float): float;
+function f_trunc(x: real): real;
 begin
-  f_trunc := Float(Trunc(x))
+  f_trunc := Trunc(x)
 end;
 
-function f_round(x: float): float;
+function f_round(x: real): real;
 begin
-  f_round := Float(Round(x))
+  f_round := Round(x)
 end;
 
-function floor(x: float): float;
+function floor(x: real): real;
 var
   t: integer;
-  tf: float;
+  tf: real;
 begin
   t := Trunc(x);
-  tf := Float(t);
+  tf := t;
   if x < 0.0 then
     begin
       if x <> tf then
-        floor := Float(t - 1)
+        floor := t - 1
       else
         floor := tf
     end
@@ -105,17 +105,17 @@ begin
     floor := tf
 end;
 
-function ceil(x: float): float;
+function ceil(x: real): real;
 var
   t: integer;
-  tf: float;
+  tf: real;
 begin
   t := Trunc(x);
-  tf := Float(t);
+  tf := t;
   if x > 0.0 then
     begin
       if x <> tf then
-        ceil := Float(t + 1)
+        ceil := t + 1
       else
         ceil := tf
     end

@@ -65,54 +65,15 @@ fn parse_program(src: &str) -> Result<Program, String> {
 }
 
 fn with_source_hint(src: &str, err: &str) -> String {
-    if err.contains('\n') {
+    if err.contains("line ") && err.contains("column ") {
         return err.to_string();
-    }
-    if let Some((line, col)) = extract_line_col(err) {
-        return format_with_source_hint(src, line, col, err);
     }
     if let Some(sym) = extract_symbol_from_error(err) {
         if let Some((line, col)) = find_symbol(src, &sym) {
-            return format_with_source_hint(
-                src,
-                line,
-                col,
-                &format!("{err} at line {line}, column {col}"),
-            );
+            return format!("{err} at line {line}, column {col}");
         }
     }
     err.to_string()
-}
-
-fn extract_line_col(err: &str) -> Option<(usize, usize)> {
-    let line_key = "line ";
-    let col_key = ", column ";
-    let line_pos = err.find(line_key)?;
-    let after_line = &err[line_pos + line_key.len()..];
-    let col_sep = after_line.find(col_key)?;
-    let line = after_line[..col_sep].trim().parse().ok()?;
-    let after_col = &after_line[col_sep + col_key.len()..];
-    let col_digits: String = after_col
-        .chars()
-        .take_while(|c| c.is_ascii_digit())
-        .collect();
-    if col_digits.is_empty() {
-        return None;
-    }
-    let col = col_digits.parse().ok()?;
-    Some((line, col))
-}
-
-fn format_with_source_hint(src: &str, line: usize, col: usize, msg: &str) -> String {
-    let Some(line_text) = src.lines().nth(line.saturating_sub(1)) else {
-        return msg.to_string();
-    };
-    let mut caret_pad = String::new();
-    let width = col.saturating_sub(1);
-    for ch in line_text.chars().take(width) {
-        caret_pad.push(if ch == '\t' { '\t' } else { ' ' });
-    }
-    format!("{msg}\n{line_text}\n{caret_pad}^")
 }
 
 fn extract_symbol_from_error(err: &str) -> Option<String> {
@@ -129,12 +90,6 @@ fn extract_symbol_from_error(err: &str) -> Option<String> {
             return Some(rest.trim().to_string());
         }
     }
-    if let Some(rest) = err.strip_prefix("const type mismatch for ") {
-        let name = rest.split(':').next().unwrap_or("").trim();
-        if !name.is_empty() {
-            return Some(name.to_string());
-        }
-    }
     if let Some(pos) = err.find("call to ") {
         let tail = &err[pos + "call to ".len()..];
         let name = tail
@@ -144,14 +99,6 @@ fn extract_symbol_from_error(err: &str) -> Option<String> {
             .trim();
         if !name.is_empty() {
             return Some(name.to_string());
-        }
-    }
-    if let Some(rest) = err.strip_prefix("type mismatch in ") {
-        if let Some(arg_pos) = rest.find(" argument") {
-            let name = rest[..arg_pos].trim();
-            if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                return Some(name.to_string());
-            }
         }
     }
     None
@@ -185,8 +132,8 @@ fn build_block(p: pest::iterators::Pair<Rule>) -> Result<Block, String> {
     let mut b = Block::default();
     for item in p.into_inner() {
         match item.as_rule() {
-            Rule::const_section => b.consts = build_consts(item)?,
-            Rule::type_section => b.types = build_types(item)?,
+            Rule::const_section => b.consts.extend(build_consts(item)?),
+            Rule::type_section => b.types.extend(build_types(item)?),
             Rule::var_section => b.vars.extend(build_vars(item, false)?),
             Rule::imut_section => b.vars.extend(build_vars(item, true)?),
             Rule::procedure_decl | Rule::function_decl => {
@@ -259,9 +206,47 @@ fn build_formal_params(p: pest::iterators::Pair<Rule>) -> Result<Vec<ParamDecl>,
             .map(|s| s.eq_ignore_ascii_case("var"))
             .unwrap_or(false);
         let mut ty: Option<TypeRef> = None;
+        let mut conformant: Option<ConformantArrayParam> = None;
         for x in g.into_inner() {
             match x.as_rule() {
                 Rule::ident => names.push(x.as_str().to_string()),
+                Rule::conformant_array_param => {
+                    let it = x.into_inner();
+                    let mut dims = Vec::new();
+                    let mut elem_ty_pair = None;
+                    for item in it {
+                        match item.as_rule() {
+                            Rule::conformant_array_dim => {
+                                let mut jt = item.into_inner();
+                                let low_name = jt.next().unwrap().as_str().to_string();
+                                let high_name = jt.next().unwrap().as_str().to_string();
+                                let index_ty = build_typeref(jt.next().unwrap())?;
+                                dims.push(ConformantArrayDim {
+                                    low_name,
+                                    high_name,
+                                    index_ty,
+                                });
+                            }
+                            Rule::type_ref_or_basic | Rule::type_ref | Rule::basic_type => {
+                                elem_ty_pair = Some(build_typeref(item)?);
+                            }
+                            _ => {}
+                        }
+                    }
+                    let elem_ty = elem_ty_pair.ok_or("missing conformant array element type")?;
+                    let mut arr_dims = Vec::new();
+                    for dim in &dims {
+                        arr_dims.push(ArrayDim {
+                            low: ConstExpr::Const(dim.low_name.clone()),
+                            high: ConstExpr::Const(dim.high_name.clone()),
+                        });
+                    }
+                    ty = Some(TypeRef::Array {
+                        dims: arr_dims,
+                        elem: Box::new(elem_ty.clone()),
+                    });
+                    conformant = Some(ConformantArrayParam { dims, elem_ty });
+                }
                 Rule::type_ref_or_basic | Rule::type_ref | Rule::basic_type => {
                     ty = Some(build_typeref(x)?)
                 }
@@ -274,6 +259,7 @@ fn build_formal_params(p: pest::iterators::Pair<Rule>) -> Result<Vec<ParamDecl>,
                 name: n,
                 ty: ty.clone(),
                 by_ref,
+                conformant: conformant.clone(),
             });
         }
     }
@@ -343,58 +329,64 @@ fn build_type_spec(p: pest::iterators::Pair<Rule>) -> Result<TypeSpec, String> {
     match p.as_rule() {
         Rule::type_spec => build_type_spec(p.into_inner().next().unwrap()),
         Rule::basic_type => Ok(TypeSpec::Basic(parse_basic(p.as_str())?)),
+        Rule::type_ref => Ok(TypeSpec::Alias(TypeRef::Named(p.as_str().to_string()))),
         Rule::option_type | Rule::result_type | Rule::pointer_type => {
             Ok(TypeSpec::Alias(build_typeref(p)?))
         }
         Rule::enum_type => {
-            let mut names = vec![];
-            for x in p.into_inner() {
-                if x.as_rule() == Rule::ident {
-                    names.push(x.as_str().to_string());
-                }
-            }
-            if names.is_empty() {
-                return Err("enum type must have at least one label".into());
-            }
-            Ok(TypeSpec::Enum(names))
+            let members = p.into_inner().map(|x| x.as_str().to_string()).collect();
+            Ok(TypeSpec::Enum(members))
         }
-        Rule::type_ref => Ok(TypeSpec::Alias(TypeRef::Named(p.as_str().to_string()))),
-        Rule::record_type => {
-            let mut fields = vec![];
-            for fd in p.into_inner() {
-                if fd.as_rule() != Rule::field_decl {
-                    continue;
-                }
-                let mut it = fd.into_inner();
-                let name = it.next().unwrap().as_str().to_string();
-                let ty = build_typeref(it.next().unwrap())?;
-                fields.push(FieldDecl { name, ty });
-            }
-            Ok(TypeSpec::Record(fields))
+        Rule::subrange_type => {
+            let mut it = p.into_inner();
+            let low = build_const_expr(it.next().unwrap())?;
+            let high = build_const_expr(it.next().unwrap())?;
+            Ok(TypeSpec::Subrange { low, high })
+        }
+        Rule::set_type => {
+            let elem = build_typeref(p.into_inner().next().unwrap())?;
+            Ok(TypeSpec::Set(elem))
         }
         Rule::sum_record_type => {
             let mut arms = vec![];
-            for ad in p.into_inner() {
-                if ad.as_rule() != Rule::sum_arm_decl {
+            for arm in p.into_inner() {
+                if arm.as_rule() != Rule::sum_arm_decl {
                     continue;
                 }
-                let mut it = ad.into_inner();
+                let mut it = arm.into_inner();
                 let name = it.next().unwrap().as_str().to_string();
                 let mut fields = vec![];
-                if let Some(fs) = it.next() {
-                    for fd in fs.into_inner() {
-                        let mut fit = fd.into_inner();
-                        let fname = fit.next().unwrap().as_str().to_string();
-                        let fty = build_typeref(fit.next().unwrap())?;
+                if let Some(sum_fields) = it.next() {
+                    for fd in sum_fields.into_inner() {
+                        let mut jt = fd.into_inner();
                         fields.push(FieldDecl {
-                            name: fname,
-                            ty: fty,
+                            name: jt.next().unwrap().as_str().to_string(),
+                            ty: build_typeref(jt.next().unwrap())?,
                         });
                     }
                 }
                 arms.push(SumArmDecl { name, fields });
             }
             Ok(TypeSpec::SumRecord(arms))
+        }
+        Rule::record_type => {
+            let mut fields = vec![];
+            let mut variant = None;
+            for fd in p.into_inner() {
+                match fd.as_rule() {
+                    Rule::field_decl => {
+                        let mut it = fd.into_inner();
+                        let name = it.next().unwrap().as_str().to_string();
+                        let ty = build_typeref(it.next().unwrap())?;
+                        fields.push(FieldDecl { name, ty });
+                    }
+                    Rule::variant_part => {
+                        variant = Some(build_variant_part(fd)?);
+                    }
+                    _ => {}
+                }
+            }
+            Ok(TypeSpec::Record { fields, variant })
         }
         Rule::array_type => {
             let mut dims = vec![];
@@ -404,12 +396,29 @@ fn build_type_spec(p: pest::iterators::Pair<Rule>) -> Result<TypeSpec, String> {
                     Rule::type_ref_or_basic | Rule::type_ref | Rule::basic_type => {
                         elem = Some(build_typeref(x)?)
                     }
-                    Rule::array_dim => dims.push(build_array_dim(x)?),
+                    Rule::array_dim => {
+                        let mut it = x.into_inner();
+                        let first = build_const_expr(it.next().unwrap())?;
+                        let (low, high) = if let Some(second) = it.next() {
+                            (first, build_const_expr(second)?)
+                        } else {
+                            let n = match eval_const(&Env::new(), &first)? {
+                                ConstVal::I32(i) if i > 0 => i,
+                                _ => {
+                                    return Err(
+                                        "array length must be positive integer constant".into()
+                                    )
+                                }
+                            };
+                            (ConstExpr::Int(0), ConstExpr::Int(n - 1))
+                        };
+                        dims.push(ArrayDim { low, high });
+                    }
                     _ => {}
                 }
             }
-            if dims.is_empty() || dims.len() > 3 {
-                return Err("array dimensions must be 1..3".into());
+            if dims.is_empty() {
+                return Err("array must have at least one dimension".into());
             }
             Ok(TypeSpec::Array {
                 dims,
@@ -425,42 +434,59 @@ fn build_typeref(p: pest::iterators::Pair<Rule>) -> Result<TypeRef, String> {
         Rule::type_ref_or_basic => build_typeref(p.into_inner().next().unwrap()),
         Rule::basic_type => Ok(TypeRef::Basic(parse_basic(p.as_str())?)),
         Rule::type_ref => Ok(TypeRef::Named(p.as_str().to_string())),
-        Rule::pointer_type => {
-            let inner = p
-                .into_inner()
-                .next()
-                .ok_or("pointer type missing target type")?;
-            Ok(TypeRef::PointerNamed(inner.as_str().to_string()))
-        }
-        Rule::option_type => {
-            let inner = p
-                .into_inner()
-                .next()
-                .ok_or("option type missing inner type")?;
-            Ok(TypeRef::Option(Box::new(build_typeref(inner)?)))
-        }
+        Rule::pointer_type => Ok(TypeRef::PointerNamed(
+            p.into_inner().next().unwrap().as_str().to_string(),
+        )),
+        Rule::option_type => Ok(TypeRef::Option(Box::new(build_typeref(
+            p.into_inner().next().unwrap(),
+        )?))),
         Rule::result_type => {
             let mut it = p.into_inner();
-            let ok_ty = build_typeref(it.next().ok_or("result type missing ok type")?)?;
-            let err_ty = build_typeref(it.next().ok_or("result type missing err type")?)?;
+            let ok_ty = build_typeref(it.next().ok_or("missing result ok type")?)?;
+            let err_ty = build_typeref(it.next().ok_or("missing result err type")?)?;
             Ok(TypeRef::Result(Box::new(ok_ty), Box::new(err_ty)))
         }
+        Rule::subrange_type => {
+            let mut it = p.into_inner();
+            Ok(TypeRef::Subrange {
+                low: build_const_expr(it.next().unwrap())?,
+                high: build_const_expr(it.next().unwrap())?,
+            })
+        }
+        Rule::set_type => Ok(TypeRef::Set(Box::new(build_typeref(
+            p.into_inner().next().unwrap(),
+        )?))),
         Rule::array_type => {
             let mut dims = vec![];
             let mut elem: Option<TypeRef> = None;
             for x in p.into_inner() {
                 match x.as_rule() {
-                    Rule::type_ref_or_basic
-                    | Rule::type_ref
-                    | Rule::basic_type
-                    | Rule::array_type
-                    | Rule::pointer_type => elem = Some(build_typeref(x)?),
-                    Rule::array_dim => dims.push(build_array_dim(x)?),
+                    Rule::type_ref_or_basic | Rule::type_ref | Rule::basic_type => {
+                        elem = Some(build_typeref(x)?)
+                    }
+                    Rule::array_dim => {
+                        let mut it = x.into_inner();
+                        let first = build_const_expr(it.next().unwrap())?;
+                        let (low, high) = if let Some(second) = it.next() {
+                            (first, build_const_expr(second)?)
+                        } else {
+                            let n = match eval_const(&Env::new(), &first)? {
+                                ConstVal::I32(i) if i > 0 => i,
+                                _ => {
+                                    return Err(
+                                        "array length must be positive integer constant".into()
+                                    )
+                                }
+                            };
+                            (ConstExpr::Int(0), ConstExpr::Int(n - 1))
+                        };
+                        dims.push(ArrayDim { low, high });
+                    }
                     _ => {}
                 }
             }
-            if dims.is_empty() || dims.len() > 3 {
-                return Err("array dimensions must be 1..3".into());
+            if dims.is_empty() {
+                return Err("array must have at least one dimension".into());
             }
             Ok(TypeRef::Array {
                 dims,
@@ -471,26 +497,58 @@ fn build_typeref(p: pest::iterators::Pair<Rule>) -> Result<TypeRef, String> {
     }
 }
 
-fn build_array_dim(p: pest::iterators::Pair<Rule>) -> Result<ArrayDim, String> {
+fn build_variant_case(p: pest::iterators::Pair<Rule>) -> Result<VariantCase, String> {
     let mut it = p.into_inner();
-    let first = build_const_expr(it.next().ok_or("array dim missing lower/len")?)?;
-    if let Some(second) = it.next() {
-        Ok(ArrayDim {
-            low: first,
-            high: build_const_expr(second)?,
-        })
-    } else {
-        // Backward-compatible shorthand: array[N] means array[0..N-1]
-        let n_minus_1 = ConstExpr::Binary(
-            Box::new(first.clone()),
-            BinOp::Sub,
-            Box::new(ConstExpr::Int(1)),
-        );
-        Ok(ArrayDim {
-            low: ConstExpr::Int(0),
-            high: n_minus_1,
-        })
+    let labels = build_case_label_list(it.next().ok_or("variant case missing labels")?)?;
+    let mut fields = vec![];
+    let mut variant = None;
+    for fd in it {
+        match fd.as_rule() {
+            Rule::field_decl => {
+                let mut jt = fd.into_inner();
+                fields.push(FieldDecl {
+                    name: jt.next().unwrap().as_str().to_string(),
+                    ty: build_typeref(jt.next().unwrap())?,
+                });
+            }
+            Rule::variant_part => variant = Some(build_variant_part(fd)?),
+            _ => {}
+        }
     }
+    Ok(VariantCase {
+        labels,
+        fields,
+        variant,
+    })
+}
+
+fn build_variant_part(p: pest::iterators::Pair<Rule>) -> Result<VariantPart, String> {
+    let mut it = p.into_inner();
+    let first = it.next().ok_or("variant part missing content")?;
+    let (tag_name, tag_ty, first_case) = match first.as_rule() {
+        Rule::ident => {
+            let tag_name = Some(first.as_str().to_string());
+            let tag_ty = build_typeref(it.next().ok_or("variant tag type missing")?)?;
+            let first_case = it.next().ok_or("variant case missing")?;
+            (tag_name, tag_ty, first_case)
+        }
+        Rule::type_ref_or_basic | Rule::type_ref | Rule::basic_type => {
+            let tag_ty = build_typeref(first)?;
+            let first_case = it.next().ok_or("variant case missing")?;
+            (None, tag_ty, first_case)
+        }
+        Rule::variant_case => (None, TypeRef::Basic(BasicType::Integer), first),
+        _ => return Err("unexpected variant part".into()),
+    };
+    let mut cases = vec![build_variant_case(first_case)?];
+    for item in it {
+        cases.push(build_variant_case(item)?);
+    }
+    Ok(VariantPart {
+        tag_name,
+        tag_ty,
+        cases,
+    })
 }
 
 fn parse_basic(s: &str) -> Result<BasicType, String> {
@@ -498,7 +556,7 @@ fn parse_basic(s: &str) -> Result<BasicType, String> {
         "integer" => Ok(BasicType::Integer),
         "boolean" => Ok(BasicType::Boolean),
         "char" => Ok(BasicType::Char),
-        "float" => Ok(BasicType::Float),
+        "real" => Ok(BasicType::Real),
         _ => Err(format!("unknown basic type: {s}")),
     }
 }
@@ -532,8 +590,8 @@ fn build_stmt(p: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
             Ok(Stmt::Assign(lv, rhs))
         }
         Rule::read_stmt => {
-            let lvs = build_lvalue_list(p.into_inner().next().unwrap())?;
-            Ok(Stmt::Read(lvs))
+            let args = build_expr_list(p.into_inner().next().unwrap())?;
+            Ok(Stmt::Read(args))
         }
         Rule::readln_stmt => Ok(Stmt::ReadLn),
         Rule::for_stmt => {
@@ -547,7 +605,7 @@ fn build_stmt(p: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
                 var,
                 init,
                 limit,
-                downto: dir.eq_ignore_ascii_case("downto"),
+                downto: dir == "downto",
                 body: Box::new(body),
             })
         }
@@ -560,9 +618,9 @@ fn build_stmt(p: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
                 match x.as_rule() {
                     Rule::case_arm => {
                         let mut jt = x.into_inner();
-                        let c = build_const_expr(jt.next().unwrap())?;
+                        let labels = build_case_label_list(jt.next().unwrap())?;
                         let s = build_stmt(jt.next().unwrap())?;
-                        arms.push((c, s));
+                        arms.push((labels, s));
                     }
                     _ => else_stmt = Some(Box::new(build_stmt(x)?)),
                 }
@@ -584,27 +642,25 @@ fn build_stmt(p: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
                         let mut jt = x.into_inner();
                         let ctor = jt.next().unwrap().as_str().to_string();
                         let mut binds = vec![];
-                        let mut body: Option<Stmt> = None;
-                        for y in jt {
-                            match y.as_rule() {
+                        let mut body = None;
+                        for item in jt {
+                            match item.as_rule() {
                                 Rule::bind_list => {
-                                    for b in y.into_inner() {
-                                        binds.push(b.as_str().to_string());
-                                    }
+                                    binds =
+                                        item.into_inner().map(|n| n.as_str().to_string()).collect();
                                 }
-                                _ => body = Some(build_stmt(y)?),
+                                _ => body = Some(build_stmt(item)?),
                             }
                         }
                         arms.push(SumCaseArm {
                             ctor,
                             binds,
-                            body: body.ok_or("sum case arm missing body")?,
+                            body: body.ok_or("sum-case arm missing body")?,
                         });
                     }
                     Rule::sum_case_else => {
-                        let mut jt = x.into_inner();
-                        let s = build_stmt(jt.next().unwrap())?;
-                        else_stmt = Some(Box::new(s));
+                        let stmt = x.into_inner().next().ok_or("sum-case else missing body")?;
+                        else_stmt = Some(Box::new(build_stmt(stmt)?));
                     }
                     _ => {}
                 }
@@ -635,6 +691,22 @@ fn build_stmt(p: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
                 None
             };
             Ok(Stmt::If(cond, Box::new(then_s), else_s))
+        }
+        Rule::with_stmt => {
+            let mut it = p.into_inner();
+            let mut bases = vec![build_lvalue(it.next().unwrap())?];
+            let mut body = None;
+            for x in it {
+                if x.as_rule() == Rule::lvalue {
+                    bases.push(build_lvalue(x)?);
+                } else {
+                    body = Some(build_stmt(x)?);
+                }
+            }
+            Ok(Stmt::With(
+                bases,
+                Box::new(body.ok_or("with missing body")?),
+            ))
         }
         Rule::while_stmt => {
             let mut it = p.into_inner();
@@ -677,14 +749,6 @@ fn build_stmt(p: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
     }
 }
 
-fn build_lvalue_list(p: pest::iterators::Pair<Rule>) -> Result<Vec<LValue>, String> {
-    let mut v = vec![];
-    for x in p.into_inner() {
-        v.push(build_lvalue(x)?);
-    }
-    Ok(v)
-}
-
 fn build_expr_list(p: pest::iterators::Pair<Rule>) -> Result<Vec<Expr>, String> {
     let mut v = vec![];
     for x in p.into_inner() {
@@ -699,7 +763,6 @@ fn build_lvalue(p: pest::iterators::Pair<Rule>) -> Result<LValue, String> {
     let mut sels = vec![];
     for s in it {
         match s.as_rule() {
-            Rule::deref_access => sels.push(Selector::Deref),
             Rule::field_access => {
                 let mut jt = s.into_inner();
                 let name = jt.next().unwrap().as_str().to_string();
@@ -710,11 +773,12 @@ fn build_lvalue(p: pest::iterators::Pair<Rule>) -> Result<LValue, String> {
                 for ie in s.into_inner() {
                     idxs.push(build_expr(ie)?);
                 }
-                if idxs.is_empty() || idxs.len() > 3 {
-                    return Err("index dimensions must be 1..3".into());
+                if idxs.is_empty() {
+                    return Err("index access must include at least one index".into());
                 }
                 sels.push(Selector::Index(idxs));
             }
+            Rule::deref_access => sels.push(Selector::Deref),
             _ => return Err(format!("unexpected selector: {:?}", s.as_rule())),
         }
     }
@@ -743,9 +807,12 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
             let mut e = build_expr(it.next().unwrap())?;
             while let Some(op) = it.next() {
                 let rhs = build_expr(it.next().unwrap())?;
-                let bop = match op.as_str() {
+                let op_s = op.as_str().to_ascii_lowercase();
+                let bop = match op_s.as_str() {
                     "+" => BinOp::Add,
                     "-" => BinOp::Sub,
+                    "or" => BinOp::Or,
+                    "xor" => BinOp::Xor,
                     _ => return Err("unknown add op".into()),
                 };
                 e = Expr::Binary(Box::new(e), bop, Box::new(rhs));
@@ -760,9 +827,10 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
                 let op_s = op.as_str().to_ascii_lowercase();
                 let bop = match op_s.as_str() {
                     "*" => BinOp::Mul,
-                    "/" => BinOp::Div,
+                    "/" => BinOp::RealDiv,
                     "div" => BinOp::Div,
                     "mod" => BinOp::Mod,
+                    "and" => BinOp::And,
                     _ => return Err("unknown mul op".into()),
                 };
                 e = Expr::Binary(Box::new(e), bop, Box::new(rhs));
@@ -786,24 +854,21 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
             }
         }
         Rule::primary => build_expr(p.into_inner().next().unwrap()),
-        Rule::cond_expr => build_cond_expr(p),
         Rule::bool_lit => Ok(Expr::Bool(p.as_str().eq_ignore_ascii_case("true"))),
         Rule::nil_expr => Ok(Expr::Nil),
         Rule::none_expr => Ok(Expr::OptionNone),
-        Rule::some_expr => {
-            let mut it = p.into_inner();
-            let inner = build_expr(it.next().unwrap())?;
-            Ok(Expr::OptionSome(Box::new(inner)))
-        }
+        Rule::some_expr => Ok(Expr::OptionSome(Box::new(build_expr(
+            p.into_inner().next().unwrap(),
+        )?))),
         Rule::cast_expr => {
             let mut it = p.into_inner();
-            let ty = build_typeref(it.next().ok_or("cast missing target type")?)?;
-            let inner = build_expr(it.next().ok_or("cast missing expression")?)?;
-            Ok(Expr::Cast(ty, Box::new(inner)))
+            let ty = build_typeref(it.next().unwrap())?;
+            let expr = build_expr(it.next().unwrap())?;
+            Ok(Expr::Cast(ty, Box::new(expr)))
         }
+        Rule::cond_expr => build_cond_expr(p),
         Rule::array_lit => {
-            let mut it = p.into_inner();
-            let elems = if let Some(list) = it.next() {
+            let elems = if let Some(list) = p.into_inner().next() {
                 build_expr_list(list)?
             } else {
                 vec![]
@@ -817,9 +882,10 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
             if let Some(list) = it.next() {
                 for a in list.into_inner() {
                     let mut jt = a.into_inner();
-                    let fname = jt.next().unwrap().as_str().to_string();
-                    let e = build_expr(jt.next().unwrap())?;
-                    args.push((fname, e));
+                    args.push((
+                        jt.next().unwrap().as_str().to_string(),
+                        build_expr(jt.next().unwrap())?,
+                    ));
                 }
             }
             Ok(Expr::RecordUpdate(Box::new(base), args))
@@ -831,15 +897,16 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
             if let Some(list) = it.next() {
                 for a in list.into_inner() {
                     let mut jt = a.into_inner();
-                    let idx = build_expr(jt.next().unwrap())?;
-                    let val = build_expr(jt.next().unwrap())?;
-                    ups.push((idx, val));
+                    ups.push((
+                        build_expr(jt.next().unwrap())?,
+                        build_expr(jt.next().unwrap())?,
+                    ));
                 }
             }
             Ok(Expr::ArrayUpdate(Box::new(base), ups))
         }
+        Rule::real_lit => Ok(Expr::Real(parse_real_literal_bits(p.as_str())?)),
         Rule::number => Ok(Expr::Int(parse_int_literal(p.as_str())?)),
-        Rule::float_lit => Ok(Expr::Float(parse_float_literal_bits(p.as_str())?)),
         Rule::string_lit => {
             let s = decode_pascal_string(p.as_str())?;
             if s.chars().count() == 1 {
@@ -868,9 +935,10 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
             if let Some(list) = it.next() {
                 for a in list.into_inner() {
                     let mut jt = a.into_inner();
-                    let fname = jt.next().unwrap().as_str().to_string();
-                    let e = build_expr(jt.next().unwrap())?;
-                    args.push((fname, e));
+                    args.push((
+                        jt.next().unwrap().as_str().to_string(),
+                        build_expr(jt.next().unwrap())?,
+                    ));
                 }
             }
             Ok(Expr::Ctor(name, args))
@@ -884,6 +952,14 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
                 vec![]
             };
             Ok(Expr::Call(name, args))
+        }
+        Rule::set_lit => {
+            let elems = if let Some(list) = p.into_inner().next() {
+                build_set_items(list)?
+            } else {
+                vec![]
+            };
+            Ok(Expr::SetLit(elems))
         }
         Rule::ident => Ok(Expr::Var(p.as_str().to_string())),
         Rule::lvalue => {
@@ -909,6 +985,23 @@ fn build_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
     }
 }
 
+fn build_set_items(p: pest::iterators::Pair<Rule>) -> Result<Vec<SetItem>, String> {
+    let mut items = Vec::new();
+    for x in p.into_inner() {
+        if x.as_rule() != Rule::set_item {
+            continue;
+        }
+        let mut it = x.into_inner();
+        let first = build_expr(it.next().unwrap())?;
+        if let Some(second) = it.next() {
+            items.push(SetItem::Range(first, build_expr(second)?));
+        } else {
+            items.push(SetItem::Single(first));
+        }
+    }
+    Ok(items)
+}
+
 fn build_cond_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
     let mut arms = vec![];
     let mut else_block = None;
@@ -922,8 +1015,7 @@ fn build_cond_expr(p: pest::iterators::Pair<Rule>) -> Result<Expr, String> {
             }
             Rule::cond_else_arm => {
                 let mut it = x.into_inner();
-                let block = build_cond_block(it.next().unwrap())?;
-                else_block = Some(block);
+                else_block = Some(build_cond_block(it.next().unwrap())?);
             }
             _ => {}
         }
@@ -964,6 +1056,7 @@ fn parse_relop(s: &str) -> Result<BinOp, String> {
         "<=" => Ok(BinOp::Le),
         ">" => Ok(BinOp::Gt),
         ">=" => Ok(BinOp::Ge),
+        "in" | "IN" | "In" => Ok(BinOp::In),
         _ => Err(format!("unknown relop: {s}")),
     }
 }
@@ -990,9 +1083,12 @@ fn build_const_expr(p: pest::iterators::Pair<Rule>) -> Result<ConstExpr, String>
             let mut e = build_const_expr(it.next().unwrap())?;
             while let Some(op) = it.next() {
                 let rhs = build_const_expr(it.next().unwrap())?;
-                let bop = match op.as_str() {
+                let op_s = op.as_str().to_ascii_lowercase();
+                let bop = match op_s.as_str() {
                     "+" => BinOp::Add,
                     "-" => BinOp::Sub,
+                    "or" => BinOp::Or,
+                    "xor" => BinOp::Xor,
                     _ => return Err("unknown const add op".into()),
                 };
                 e = ConstExpr::Binary(Box::new(e), bop, Box::new(rhs));
@@ -1007,9 +1103,10 @@ fn build_const_expr(p: pest::iterators::Pair<Rule>) -> Result<ConstExpr, String>
                 let op_s = op.as_str().to_ascii_lowercase();
                 let bop = match op_s.as_str() {
                     "*" => BinOp::Mul,
-                    "/" => BinOp::Div,
+                    "/" => BinOp::RealDiv,
                     "div" => BinOp::Div,
                     "mod" => BinOp::Mod,
+                    "and" => BinOp::And,
                     _ => return Err("unknown const mul op".into()),
                 };
                 e = ConstExpr::Binary(Box::new(e), bop, Box::new(rhs));
@@ -1034,7 +1131,7 @@ fn build_const_expr(p: pest::iterators::Pair<Rule>) -> Result<ConstExpr, String>
         }
         Rule::const_primary => build_const_expr(p.into_inner().next().unwrap()),
         Rule::bool_lit => Ok(ConstExpr::Bool(p.as_str().eq_ignore_ascii_case("true"))),
-        Rule::float_lit => Ok(ConstExpr::Float(parse_float_literal_bits(p.as_str())?)),
+        Rule::real_lit => Ok(ConstExpr::Real(parse_real_literal_bits(p.as_str())?)),
         Rule::number => Ok(ConstExpr::Int(parse_int_literal(p.as_str())?)),
         Rule::string_lit => {
             let s = decode_pascal_string(p.as_str())?;
@@ -1113,11 +1210,28 @@ fn parse_int_literal(s: &str) -> Result<i32, String> {
     s.parse::<i32>().map_err(|e| e.to_string())
 }
 
-fn parse_float_literal_bits(s: &str) -> Result<u32, String> {
+fn parse_real_literal_bits(s: &str) -> Result<u32, String> {
     let f = s
         .parse::<f32>()
-        .map_err(|e| format!("invalid float literal '{s}': {e}"))?;
+        .map_err(|e| format!("invalid real literal '{s}': {e}"))?;
     Ok(f.to_bits())
+}
+
+fn build_case_label_list(p: pest::iterators::Pair<Rule>) -> Result<Vec<CaseLabel>, String> {
+    let mut out = vec![];
+    for x in p.into_inner() {
+        if x.as_rule() != Rule::case_label {
+            continue;
+        }
+        let mut it = x.into_inner();
+        let first = build_const_expr(it.next().unwrap())?;
+        if let Some(second) = it.next() {
+            out.push(CaseLabel::Range(first, build_const_expr(second)?));
+        } else {
+            out.push(CaseLabel::Single(first));
+        }
+    }
+    Ok(out)
 }
 
 fn preprocess_includes(src: &str, base_dir: &Path) -> Result<String, String> {
@@ -1177,12 +1291,11 @@ fn parse_include_directive(body: &str) -> Option<String> {
     if rest.is_empty() {
         return None;
     }
-    if (rest.starts_with('\'') && rest.ends_with('\''))
-        || (rest.starts_with('"') && rest.ends_with('"'))
+    if rest.len() >= 2
+        && ((rest.starts_with('\'') && rest.ends_with('\''))
+            || (rest.starts_with('"') && rest.ends_with('"')))
     {
-        if rest.len() >= 2 {
-            rest = &rest[1..rest.len() - 1];
-        }
+        rest = &rest[1..rest.len() - 1];
     }
     if rest.is_empty() {
         return None;

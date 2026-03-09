@@ -96,6 +96,36 @@ fn run_kforth_with_bootstrap(forth_src: &str, runtime_input: &str) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
+fn run_kforth_with_bootstrap_raw(forth_src: &str, runtime_input: &str) -> (bool, String, String) {
+    let bootstrap = fs::read_to_string("../kforth/bootstrap.fth")
+        .expect("failed to read ../kforth/bootstrap.fth");
+    let payload = format!("{bootstrap}\n{forth_src}\n{runtime_input}\nBYE\n");
+
+    let mut child = Command::new(kforth_binary_path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn ../kforth/build/kforth");
+
+    {
+        use std::io::Write;
+        child
+            .stdin
+            .as_mut()
+            .expect("stdin not available")
+            .write_all(payload.as_bytes())
+            .expect("failed to feed kforth input");
+    }
+
+    let out = child.wait_with_output().expect("failed to wait for kforth");
+    (
+        out.status.success(),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
 fn normalize_kforth_output(raw: &str) -> Vec<String> {
     let mut lines = Vec::new();
     for original in raw.lines() {
@@ -148,17 +178,6 @@ fn e2e_read_all_types_runs_on_kforth() {
 }
 
 #[test]
-fn e2e_read_write_array_runs_on_kforth() {
-    require_kforth!();
-    let src = include_str!("fixtures/read_write_arr.pas");
-    let forth = compile_pascal(src);
-    let out = run_kforth_with_bootstrap(&forth, "7 8 9");
-    let got = normalize_kforth_output(&out);
-    let expected = vec!["7".to_string(), "8".to_string(), "9".to_string()];
-    assert_eq!(got, expected, "unexpected runtime output");
-}
-
-#[test]
 fn e2e_aggregate_and_3d_runs_on_kforth() {
     require_kforth!();
     let src = include_str!("fixtures/aggregate_and_3d.pas");
@@ -181,36 +200,6 @@ fn e2e_string_assignment_to_char_array_runs_on_kforth() {
         "TRUE".to_string(),
         "XYZLO".to_string(),
         "TRUE".to_string(),
-    ];
-    assert_eq!(got, expected, "unexpected runtime output");
-}
-
-#[test]
-fn e2e_readstr_writestr_runs_on_kforth() {
-    require_kforth!();
-    let src = include_str!("fixtures/read_write_str.pas");
-    let forth = compile_pascal(src);
-    let out = run_kforth_with_bootstrap(&forth, "H e l l o");
-    let got = normalize_kforth_output(&out);
-    let expected = vec!["Hello".to_string(), "XYZ".to_string()];
-    assert_eq!(got, expected, "unexpected runtime output");
-}
-
-#[test]
-fn e2e_builtins_and_hex_runs_on_kforth() {
-    require_kforth!();
-    let src = include_str!("fixtures/builtins_and_hex.pas");
-    let forth = compile_pascal(src);
-    let out = run_kforth_with_bootstrap(&forth, "255\n42");
-    let got = normalize_kforth_output(&out);
-    let expected = vec![
-        "81".to_string(),
-        "B".to_string(),
-        "5".to_string(),
-        "0".to_string(),
-        "4".to_string(),
-        "000000FF".to_string(),
-        "42".to_string(),
     ];
     assert_eq!(got, expected, "unexpected runtime output");
 }
@@ -378,6 +367,412 @@ fn e2e_use_math_runs_on_kforth() {
         "9998".to_string(),
     ];
     assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_dispose_sets_pointer_to_nil_runs_on_kforth() {
+    require_kforth!();
+    let src = r#"
+program p;
+type
+  pnode = ^node;
+  node = record
+    value: integer;
+  end;
+var
+  p1: pnode;
+begin
+  New(p1);
+  p1^.value := 7;
+  WriteLn(p1^.value);
+  Dispose(p1);
+  WriteLn(p1 = nil)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec!["7".to_string(), "TRUE".to_string()];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_with_cond_and_record_update_run_on_kforth() {
+    require_kforth!();
+    let src = r#"
+program p;
+type
+  pair = record
+    x: integer;
+    y: integer;
+  end;
+var
+  p1: pair;
+  p2: pair;
+begin
+  p1.x := 10;
+  p1.y := 20;
+  with p1 do
+    p2 := p1 with (y := cond(
+      x = 10: begin
+        value y + 5
+      end;
+      else: begin
+        value 0
+      end
+    ));
+  WriteLn(p2.x);
+  WriteLn(p2.y)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec!["10".to_string(), "25".to_string()];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_pointer_integer_cast_roundtrip_runs_on_kforth() {
+    require_kforth!();
+    let src = r#"
+program p;
+type
+  pnode = ^node;
+  node = record
+    value: integer;
+  end;
+var
+  p1: pnode;
+  p2: pnode;
+  addr: integer;
+begin
+  New(p1);
+  p1^.value := 123;
+  addr := cast(integer, p1);
+  p2 := cast(pnode, addr);
+  WriteLn(p2^.value)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec!["123".to_string()];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_multiple_new_allocations_keep_distinct_storage() {
+    require_kforth!();
+    let src = r#"
+program p;
+type
+  pnode = ^node;
+  node = record
+    value: integer;
+    next: pnode;
+  end;
+var
+  a: pnode;
+  b: pnode;
+begin
+  New(a);
+  New(b);
+  a^.value := 11;
+  b^.value := 22;
+  a^.next := b;
+  b^.next := nil;
+  WriteLn(a^.value);
+  WriteLn(b^.value);
+  WriteLn(a^.next = b);
+  WriteLn(b^.next = nil)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec![
+        "11".to_string(),
+        "22".to_string(),
+        "TRUE".to_string(),
+        "TRUE".to_string(),
+    ];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_multiple_new_allocations_across_different_types() {
+    require_kforth!();
+    let src = r#"
+program p;
+type
+  psmall = ^smallrec;
+  smallrec = record
+    a: integer;
+  end;
+  pbig = ^bigrec;
+  bigrec = record
+    x: integer;
+    y: integer;
+    z: integer;
+  end;
+var
+  s1: psmall;
+  b1: pbig;
+  s2: psmall;
+begin
+  New(s1);
+  New(b1);
+  New(s2);
+
+  s1^.a := 11;
+  b1^.x := 21;
+  b1^.y := 22;
+  b1^.z := 23;
+  s2^.a := 31;
+
+  WriteLn(s1^.a);
+  WriteLn(b1^.x);
+  WriteLn(b1^.y);
+  WriteLn(b1^.z);
+  WriteLn(s2^.a)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec![
+        "11".to_string(),
+        "21".to_string(),
+        "22".to_string(),
+        "23".to_string(),
+        "31".to_string(),
+    ];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_string_copy_builtin_differs_from_fixed_array_assignment() {
+    require_kforth!();
+    let src = r#"
+program p;
+type
+  s6 = array[6] of char;
+var
+  src: s6;
+  dst_assign: s6;
+  dst_copy: s6;
+begin
+  src[0] := 'A';
+  src[1] := 'B';
+  src[2] := #0;
+  src[3] := 'X';
+  src[4] := 'Y';
+  src[5] := #0;
+
+  dst_assign := src;
+  Copy(src, dst_copy);
+
+  WriteLn(dst_assign[3] = 'X');
+  WriteLn(dst_assign[4] = 'Y');
+  WriteLn(dst_copy[3] = #0);
+  WriteLn(dst_copy[4] = #0);
+  WriteLn(dst_assign);
+  WriteLn(dst_copy)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec![
+        "TRUE".to_string(),
+        "TRUE".to_string(),
+        "TRUE".to_string(),
+        "TRUE".to_string(),
+        "AB".to_string(),
+        "AB".to_string(),
+    ];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_list_builtins_handle_empty_and_singleton_lists() {
+    require_kforth!();
+    let src = r#"
+program p;
+(* $I list.pas *)
+
+procedure plus1(var src: integer; var dst: integer);
+begin
+  dst := src + 1
+end;
+
+function keep_even(var v: integer): boolean;
+begin
+  keep_even := (v mod 2) = 0
+end;
+
+function add_i(acc: integer; var v: integer): integer;
+begin
+  add_i := acc + v
+end;
+
+var
+  empty: plist;
+  one: plist;
+  mapped: plist;
+  filtered_empty: plist;
+  filtered_one: plist;
+begin
+  empty := list_nil();
+  WriteLn(list_len(empty));
+  mapped := Map(empty, plus1);
+  WriteLn(list_len(mapped));
+  filtered_empty := Filter(empty, keep_even);
+  WriteLn(list_len(filtered_empty));
+  WriteLn(Fold(empty, 99, add_i));
+
+  one := list_cons(4, list_nil());
+  filtered_one := Filter(one, keep_even);
+  WriteLn(list_len(filtered_one));
+  WriteLn(list_head(filtered_one));
+  WriteLn(Fold(one, 10, add_i));
+
+  list_free(filtered_one);
+  list_free(filtered_empty);
+  list_free(mapped);
+  list_free(one);
+  list_free(empty)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec![
+        "0".to_string(),
+        "0".to_string(),
+        "0".to_string(),
+        "99".to_string(),
+        "1".to_string(),
+        "4".to_string(),
+        "14".to_string(),
+    ];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_nested_option_result_and_sum_case_run_on_kforth() {
+    require_kforth!();
+    let src = r#"
+program p;
+type
+  pair = record
+    x: integer;
+    y: integer;
+  end;
+  maybe_pair = option of pair;
+  nested = result of maybe_pair, integer;
+var
+  v: nested;
+  outv: integer;
+
+function build(flag: integer): nested;
+var
+  p: pair;
+begin
+  p := pair(x := 7; y := 9);
+  build := cond(
+    flag = 0: begin
+      value ok(value := none)
+    end;
+    flag = 1: begin
+      value ok(value := some(p))
+    end;
+    else: begin
+      value err(error := 5)
+    end
+  )
+end;
+
+procedure consume(n: nested);
+begin
+  case n of
+    ok(opt): begin
+      case opt of
+        none(): outv := 100;
+        some(p): begin
+          outv := p.x + p.y
+        end
+      end
+    end;
+    err(e): outv := e
+  end
+end;
+
+begin
+  v := build(0);
+  consume(v);
+  WriteLn(outv);
+
+  v := build(1);
+  consume(v);
+  WriteLn(outv);
+
+  v := build(2);
+  consume(v);
+  WriteLn(outv)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_kforth_with_bootstrap(&forth, "");
+    let got = normalize_kforth_output(&out);
+    let expected = vec!["100".to_string(), "16".to_string(), "5".to_string()];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
+fn e2e_variant_tag_mismatch_fails_on_kforth() {
+    require_kforth!();
+    let src = r#"
+program p;
+type
+  rec = record
+    case kind: integer of
+      0: (a: integer);
+      1: (b: integer)
+  end;
+var
+  r: rec;
+begin
+  r.kind := 0;
+  WriteLn(r.b)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let (ok, stdout, stderr) = run_kforth_with_bootstrap_raw(&forth, "");
+    assert!(
+        !ok,
+        "expected runtime failure, got success.\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn e2e_subrange_check_fails_on_kforth() {
+    require_kforth!();
+    let src = r#"
+program p;
+var
+  x: 1..3;
+begin
+  x := 4
+end.
+"#;
+    let forth = compile_pascal(src);
+    let (ok, stdout, stderr) = run_kforth_with_bootstrap_raw(&forth, "");
+    assert!(
+        !ok,
+        "expected runtime failure, got success.\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
 }
 
 #[test]

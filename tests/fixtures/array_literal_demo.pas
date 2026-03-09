@@ -8,7 +8,7 @@ var
   xs: array[4] of integer;
   ps: array[2] of pair;
 imut
-  ys: array[3] of float;
+  ys: array[3] of real;
 begin
   xs := [10, 20, 30, 40];
   ps := [pair(a := 1; b := 2), pair(a := 3; b := 4)];

@@ -60,16 +60,47 @@ pub struct ParamDecl {
     pub name: String,
     pub ty: TypeRef,
     pub by_ref: bool,
+    pub conformant: Option<ConformantArrayParam>,
 }
 
 #[derive(Debug, Clone)]
 pub enum TypeSpec {
     Basic(BasicType),
     Enum(Vec<String>),
-    Record(Vec<FieldDecl>),
+    Record {
+        fields: Vec<FieldDecl>,
+        variant: Option<VariantPart>,
+    },
     SumRecord(Vec<SumArmDecl>),
-    Array { dims: Vec<ArrayDim>, elem: TypeRef },
+    Array {
+        dims: Vec<ArrayDim>,
+        elem: TypeRef,
+    },
+    Subrange {
+        low: ConstExpr,
+        high: ConstExpr,
+    },
+    Set(TypeRef),
     Alias(TypeRef),
+}
+
+#[derive(Debug, Clone)]
+pub struct ConformantArrayParam {
+    pub dims: Vec<ConformantArrayDim>,
+    pub elem_ty: TypeRef,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConformantArrayDim {
+    pub low_name: String,
+    pub high_name: String,
+    pub index_ty: TypeRef,
+}
+
+#[derive(Debug, Clone)]
+pub struct ArrayDim {
+    pub low: ConstExpr,
+    pub high: ConstExpr,
 }
 
 #[derive(Debug, Clone)]
@@ -85,11 +116,25 @@ pub struct SumArmDecl {
 }
 
 #[derive(Debug, Clone)]
+pub struct VariantPart {
+    pub tag_name: Option<String>,
+    pub tag_ty: TypeRef,
+    pub cases: Vec<VariantCase>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VariantCase {
+    pub labels: Vec<CaseLabel>,
+    pub fields: Vec<FieldDecl>,
+    pub variant: Option<VariantPart>,
+}
+
+#[derive(Debug, Clone)]
 pub enum BasicType {
     Integer,
     Boolean,
     Char,
-    Float,
+    Real,
 }
 
 #[derive(Debug, Clone)]
@@ -103,20 +148,20 @@ pub enum TypeRef {
         dims: Vec<ArrayDim>,
         elem: Box<TypeRef>,
     },
+    Subrange {
+        low: ConstExpr,
+        high: ConstExpr,
+    },
+    Set(Box<TypeRef>),
 }
 
-#[derive(Debug, Clone)]
-pub struct ArrayDim {
-    pub low: ConstExpr,
-    pub high: ConstExpr,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum Stmt {
+    #[default]
     Empty,
     Compound(Vec<Stmt>),
     Assign(LValue, Expr),
-    Read(Vec<LValue>),
+    Read(Vec<Expr>),
     ReadLn,
     For {
         var: String,
@@ -126,11 +171,12 @@ pub enum Stmt {
         body: Box<Stmt>,
     },
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
+    With(Vec<LValue>, Box<Stmt>),
     While(Expr, Box<Stmt>),
     Repeat(Vec<Stmt>, Expr),
     Case {
         expr: Expr,
-        arms: Vec<(ConstExpr, Stmt)>,
+        arms: Vec<(Vec<CaseLabel>, Stmt)>,
         else_stmt: Option<Box<Stmt>>,
     },
     SumCase {
@@ -150,12 +196,6 @@ pub struct SumCaseArm {
     pub body: Stmt,
 }
 
-impl Default for Stmt {
-    fn default() -> Self {
-        Self::Empty
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct LValue {
     pub base: String,
@@ -173,9 +213,10 @@ pub enum Selector {
 pub enum Expr {
     Int(i32),
     Bool(bool),
-    Char(u32),  // UTF-32
-    Float(u32), // IEEE754 binary32 bits in u32 cell
+    Char(u32), // UTF-32
+    Real(u32), // IEEE754 binary32 bits stored in one cell
     Str(String),
+    SetLit(Vec<SetItem>),
     Nil,
     Var(String),
     Call(String, Vec<Expr>),
@@ -210,11 +251,23 @@ pub struct CondValueBlock {
 }
 
 #[derive(Debug, Clone)]
+pub enum SetItem {
+    Single(Expr),
+    Range(Expr, Expr),
+}
+
+#[derive(Debug, Clone)]
+pub enum CaseLabel {
+    Single(ConstExpr),
+    Range(ConstExpr, ConstExpr),
+}
+
+#[derive(Debug, Clone)]
 pub enum ConstExpr {
     Int(i32),
     Bool(bool),
     Char(u32),
-    Float(u32),
+    Real(u32),
     Const(String),
     Call(String, Vec<ConstExpr>),
     Unary(UnOp, Box<ConstExpr>),
@@ -232,8 +285,13 @@ pub enum BinOp {
     Add,
     Sub,
     Mul,
+    RealDiv,
     Div,
     Mod,
+    And,
+    Or,
+    Xor,
+    In,
     Eq,
     Ne,
     Lt,

@@ -76,8 +76,7 @@ begin
   end;
 
   WriteLn(fixed_pair.x + fixed_pair.y);
-  WriteStr(title);
-  WriteLn;
+  WriteLn(title);
 
   { ---- 以下は意図的なエラー例（コメントアウト） ---- }
   { c := 1; }              { NG: enum color と integer は別型 }
