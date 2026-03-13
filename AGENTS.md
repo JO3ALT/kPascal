@@ -28,6 +28,16 @@ Run `cargo fmt` and `cargo clippy -- -D warnings` before opening a PR.
 - Keep parsing, semantic analysis, and code generation concerns separated by module.
 - Prefer `Result<T, String>` error propagation patterns already used in `src/main.rs` and `src/sema.rs`.
 
+## Selfhost Pascal Grammar Notes
+- When editing Pascal under `selfhost/`, treat [src/kpascal.pest](/home/kamitani/kPascal/src/kpascal.pest) as the source of truth.
+- `if` follows `if <expr> then <stmt> (else <stmt>)?`.
+- If either branch contains multiple statements, write it as a compound statement with `begin ... end`.
+- Preferred forms:
+  - `if cond then begin ... end;`
+  - `if cond then begin ... end else begin ... end;`
+- Do not write `end; else ...`. If there is an `else`, it must come immediately after the `end` that closes the `then` branch.
+- Be careful in `selfhost/parser.inc`: deep nested `if/else` chains should use explicit `begin/end` blocks so the flattened Pascal still matches the Pest grammar.
+
 ## Testing Guidelines
 No tests are currently committed; new features should include tests.
 

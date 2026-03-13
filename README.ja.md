@@ -20,6 +20,7 @@ Pascal/0 を基礎に、32bit Forth VM 向けの Standard Pascal 寄りコアへ
 - `(* $I ファイル名 *)` インクルード（Turbo Pascal v3 風）
 - 組み込み: `Read`, `ReadLn`, `Write`, `WriteLn`, `Copy`, `Concat`, `Delete`, `Insert`, `Pos`, `UpCase`, `IntToHex`, `HexToInt`, `Addr`, `SetAddr`, `Ord`, `Chr`, `Length`, `Low`, `High`, `Abs`, `Sqr`, `Round`, `Trunc`, `Succ`, `Pred`, `Odd`
 - `math.pas`
+- `string_utils.pas` 固定長 `array[...] of char` 向け文字列補助ライブラリ
 - Standard Pascal コアへ統合済みの拡張: typed `const`、`imut`、`option of`、`result of`、`record of`、`cond(...)`、名前付きコンストラクタ、sum-case destructuring、record update、array update、list/functional 系 builtin
 
 ## 構成
@@ -30,6 +31,7 @@ Pascal/0 を基礎に、32bit Forth VM 向けの Standard Pascal 寄りコアへ
 - `src/sema.rs`: 意味解析/型検査
 - `src/codegen.rs`: Forthコード生成
 - `math.pas`: Pascal数学ライブラリ
+- `string_utils.pas`: 固定長文字列向け Pascal 補助ライブラリ
 - `tests/`: コンパイラ/実行テスト
 - `AVAILABLE_WORDS.txt`: 使用可能Forthワード
 
@@ -90,7 +92,15 @@ cargo run -q < tests/fixtures/all_features.pas
 - 現在のスコープ規則は厳格（シャドー禁止方針）です。
 - `enum` に対する `case` は、`else` が無い場合は網羅的である必要があります。
 - `math.pas` は `real` ベースの数学関数群（`abs`, `sqrt`, `pow`, `sin`, `cos`, `f_trunc`, `f_round`, `floor`, `ceil`）を提供します。
+- `string_utils.pas` は、コンパイラ実装で使う固定長文字列補助として `ClearStr`, `AppendChar`, `AppendStr`, `StrCopy`, `StrEq`, `StrEqLit`, `StrEqIgnoreCase`, `StrEqIgnoreCaseLit`, `HasNameEqIgnoreCase`, `StrCmp`, `StartsWith`, `TrimLeft`, `TrimRight`, `ParseInt` を提供します。
+- 固定長バッファでの比較例:
+  `name := 'Pascal'; lit := 'Pascal';`
+  `WriteLn(StrEqLit(name, lit));`
+  `WriteLn(StrEqIgnoreCaseLit(name, lit));`
+  `WriteLn(HasNameEqIgnoreCase(name, lit));`
+- セルフホスティング初期版という前提なら、現行の言語機能は概ね足りています。前提は 1 プロセス・stdin/stdout・固定長バッファ設計です。引き続き意図的に未実装なのは主に `forward`、本当の `dispose` 解放、Pascal の file I/O です。
 - テストはコンパイラ単体、kforth end-to-end、復元した Standard Pascal sample regression を含めて `main` で通る状態です。
+- セルフホスティング系では、外部プリプロセッサ `prekpascal` で `selfhost/kpsc_main.pas` を単一ソース化した経路も検証済みです。前処理済み `kpsc_main` は、少なくとも sample 群の `01_hello` から `20_scalar_builtins` までを direct にコンパイルできることを確認しています。
 
 ## ライセンス
 

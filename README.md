@@ -20,6 +20,7 @@ This project started from Pascal/0 and now targets a 32-bit Forth VM with a Stan
 - Include directive: `(* $I filename *)` (Turbo Pascal v3 style)
 - Built-ins: `Read`, `ReadLn`, `Write`, `WriteLn`, `Copy`, `Concat`, `Delete`, `Insert`, `Pos`, `UpCase`, `IntToHex`, `HexToInt`, `Addr`, `SetAddr`, `Ord`, `Chr`, `Length`, `Low`, `High`, `Abs`, `Sqr`, `Round`, `Trunc`, `Succ`, `Pred`, `Odd`
 - `math.pas` include library
+- `string_utils.pas` include library for fixed-size `array[...] of char` text handling
 - Extensions integrated on top of the Standard Pascal core: typed `const`, `imut`, `option of`, `result of`, `record of`, `cond(...)`, named constructors, sum-case destructuring, record updates, array updates, list/functional built-ins
 
 ## Repository Layout
@@ -30,6 +31,7 @@ This project started from Pascal/0 and now targets a 32-bit Forth VM with a Stan
 - `src/sema.rs`: semantic analysis and type checks
 - `src/codegen.rs`: Forth code generator
 - `math.pas`: Pascal math library
+- `string_utils.pas`: Pascal string helper library for fixed-size char arrays
 - `tests/`: compiler and end-to-end tests
 - `AVAILABLE_WORDS.txt`: allowed target Forth words
 
@@ -90,7 +92,15 @@ Run generated Forth with kforth (from this repository root):
 - Current scope rules are strict (no-shadowing policy).
 - `case` over an `enum` must be exhaustive unless it includes `else`.
 - `math.pas` provides `real`-based math helpers (`abs`, `sqrt`, `pow`, `sin`, `cos`, `f_trunc`, `f_round`, `floor`, `ceil`).
+- `string_utils.pas` provides fixed-size char-array helpers aimed at compiler-style text processing: `ClearStr`, `AppendChar`, `AppendStr`, `StrCopy`, `StrEq`, `StrEqLit`, `StrEqIgnoreCase`, `StrEqIgnoreCaseLit`, `HasNameEqIgnoreCase`, `StrCmp`, `StartsWith`, `TrimLeft`, `TrimRight`, and `ParseInt`.
+- Typical comparison usage with fixed buffers is:
+  `name := 'Pascal'; lit := 'Pascal';`
+  `WriteLn(StrEqLit(name, lit));`
+  `WriteLn(StrEqIgnoreCaseLit(name, lit));`
+  `WriteLn(HasNameEqIgnoreCase(name, lit));`
+- For an initial self-hosting compiler, the current language surface is broadly sufficient if you stay within a single-process, stdin/stdout, fixed-buffer design. What is still intentionally missing is mainly `forward`, true deallocation in `dispose`, and Pascal file I/O.
 - The test suite currently covers compiler, kforth end-to-end, and restored Standard Pascal sample regressions on `main`.
+- Self-hosting work also covers an external preprocessing path: `prekpascal` can flatten `selfhost/kpsc_main.pas` into a single source file, and that preprocessed `kpsc_main` has been validated as a direct compiler path for the sample set `01_hello` through `20_scalar_builtins`.
 
 ## License
 

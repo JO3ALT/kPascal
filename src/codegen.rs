@@ -2196,7 +2196,16 @@ impl<'a> ForthGen<'a> {
     }
 
     fn emit_string_write(&mut self, s: &str) {
-        // Emit chars directly to avoid implementation-specific S" parsing quirks.
+        // Use compact S" ... " output when the literal is safe for Forth parsing.
+        if !s.is_empty()
+            && s.is_ascii()
+            && !s.contains('"')
+            && !s.contains('\n')
+            && !s.contains('\r')
+        {
+            self.wln(&format!("S\" {}\" PWRITE-STR", s));
+            return;
+        }
         for ch in s.chars() {
             self.wln(&format!("{} PWRITE-CHAR", ch as u32));
         }
@@ -2301,11 +2310,12 @@ impl<'a> ForthGen<'a> {
         }
         let chars: Vec<u32> = s.chars().map(|c| c as u32).collect();
         let body = len - 1;
-        for i in 0..body {
-            let v = chars.get(i as usize).copied().unwrap_or(0);
+        let copied = body.min(chars.len() as u32);
+        for i in 0..copied {
+            let v = chars[i as usize];
             self.emit_store_at(&v.to_string(), dst, i * 4);
         }
-        self.emit_store_at("0", dst, (len - 1) * 4);
+        self.emit_store_at("0", dst, copied * 4);
         Ok(())
     }
 

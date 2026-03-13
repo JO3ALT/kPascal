@@ -12,6 +12,8 @@ Current language policy:
 - String literal assignment truncates to fit, writes at most `len - 1` characters, and appends `#0`.
 - `Read(s, max_len)`, `Write(s)`, `WriteLn(s)`, `Copy`, `Concat`, `Delete`, `Insert`, `Pos`, `HexToInt`, and `IntToHex` all operate on `#0`-terminated text.
 - `Copy`, `Concat`, `Insert`, and `Pos` also accept string literals through compiler-generated static char-array storage.
+- `string_utils.pas` provides fixed-buffer text helpers for compiler-style code: `ClearStr`, `AppendChar`, `AppendStr`, `StrCopy`, `StrEq`, `StrEqLit`, `StrEqIgnoreCase`, `StrEqIgnoreCaseLit`, `HasNameEqIgnoreCase`, `StrCmp`, `StartsWith`, `TrimLeft`, `TrimRight`, and `ParseInt`.
+- The safest first selfhost-side adoption point for these helpers is not the `IsExact*Name` literal checks but variable-to-variable predicates such as `IsStringVar`, where repeated `HasName(...) and StrEqIgnoreCase(...)` chains can be consolidated without introducing literal-argument calling constraints.
 - Aggregate assignment of char arrays remains a raw fixed-size copy and does not stop at `#0`.
 - The removed helper I/O extensions `ReadArr`, `WriteArr`, `ReadStr`, `WriteStr`, and `WriteHex` are intentionally not part of the current language surface.
 - Runtime safety checks are selective: array bounds checks are intentionally omitted for speed, while subrange checks and named variant-tag checks are inserted at runtime.
@@ -22,6 +24,7 @@ Current language policy:
 - `SetAddr` is intentionally unsafe: only the pointer-lvalue/integer types are checked. The compiler does not try to validate the runtime address value, mapping, alignment, accessibility, or pointee-type correctness.
 - `dispose(p)` does not reclaim memory; it simply stores `nil` back into `p`.
 - The final runtime target does not provide a filesystem, so Pascal file I/O is intentionally not implemented.
+- For self-hosting, the current language surface is considered sufficient for an initial compiler that uses stdin/stdout, include files, and fixed-size buffers rather than filesystem-driven compilation units.
 
 End-to-end testing assumes this native backend pipeline:
 
@@ -46,3 +49,5 @@ cargo clippy -- -D warnings
 ```
 
 At the time of this document, all of the commands above pass in this worktree. The active `main` test set covers compiler checks, kforth end-to-end execution, error-message regressions, enum semantics, and the restored Standard Pascal sample regressions.
+
+Self-hosting validation also includes a preprocessed single-source path. Using `prekpascal` to flatten `selfhost/kpsc_main.pas`, the resulting single-source compiler has been checked as a direct compilation path for the sample set `01_hello` through `20_scalar_builtins`.
