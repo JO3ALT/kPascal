@@ -89,6 +89,16 @@ begin
   HasRecordVarName := record_var_name[0] <> #0
 end;
 
+function IsSavedRecordVarName: boolean;
+begin
+  IsSavedRecordVarName := false;
+  if record_var_name[0] <> #0 then
+    begin
+      if StrEqIgnoreCase(record_var_name, saved_text) then
+        IsSavedRecordVarName := true
+    end
+end;
+
 function HasEnumVarName: boolean;
 begin
   HasEnumVarName := enum_var_name[0] <> #0
@@ -540,6 +550,71 @@ procedure EmitCurrentWord;
 begin
   Write(current_text);
   Write(' ')
+end;
+
+procedure EmitPVarReadWord;
+begin
+  Write('PVAR@ ')
+end;
+
+procedure EmitCurrentStrSrcWord;
+begin
+  WriteLn('PVAR@ __STR_SRC PVAR!')
+end;
+
+procedure EmitStrLenWord;
+begin
+  Write('__STRLEN ')
+end;
+
+procedure EmitSourceAtWord;
+begin
+  Write('SourceAt ')
+end;
+
+procedure EmitMatchPairWord;
+begin
+  Write('MatchPair ')
+end;
+
+procedure EmitIsStringVarWord;
+begin
+  Write('IsStringVar ')
+end;
+
+procedure EmitIsIntArrayVarWord;
+begin
+  Write('IsIntArrayVar ')
+end;
+
+procedure EmitHasRecordVarNameWord;
+begin
+  Write('HasRecordVarName ')
+end;
+
+procedure EmitStrEqIgnoreCaseWord;
+begin
+  Write('StrEqIgnoreCase ')
+end;
+
+procedure EmitIsSavedRecordVarNameWord;
+begin
+  Write('IsSavedRecordVarName ')
+end;
+
+procedure EmitStringIndexScaleWord;
+begin
+  Write(' 4 * + ')
+end;
+
+procedure EmitMinusWord;
+begin
+  Write(' - ')
+end;
+
+procedure EmitMulAddWord;
+begin
+  Write(' * + ')
 end;
 
 procedure EmitSavedWord;
@@ -1241,6 +1316,17 @@ end;
 procedure EmitRuntimeHasRecordVarNameRoutine;
 begin
   WriteLn(': HasRecordVarName record_var_name 0 4 * + PVAR@ 0<> ;')
+end;
+
+procedure EmitRuntimeIsSavedRecordVarNameRoutine;
+begin
+  WriteLn(': IsSavedRecordVarName');
+  WriteLn('  record_var_name 0 4 * + PVAR@ 0<> IF');
+  WriteLn('    record_var_name saved_text StrEqIgnoreCase');
+  WriteLn('  ELSE');
+  WriteLn('    0');
+  WriteLn('  THEN');
+  WriteLn(';');
 end;
 
 procedure EmitRuntimeHasEnumVarNameRoutine;
@@ -2449,6 +2535,8 @@ end;
 procedure ParseArrayIndexes(var base_name: lexeme_buf);
 var
   dim_index: integer;
+  lower_bound_value: integer;
+  stride_value: integer;
 begin
   Write(base_name);
   Write(' ');
@@ -2458,10 +2546,40 @@ begin
   while dim_index <= array_dim_count do
     begin
       ParseSimpleExpr();
-      Write(ArrayLowerBound(dim_index));
-      Write(' - ');
-      Write(ArrayStride(dim_index) * 4);
-      Write(' * + ');
+      if dim_index = 1 then
+        lower_bound_value := array_lo1
+      else if dim_index = 2 then
+        lower_bound_value := array_lo2
+      else if dim_index = 3 then
+        lower_bound_value := array_lo3
+      else
+        lower_bound_value := array_lo4;
+      Write(lower_bound_value);
+      EmitMinusWord();
+      if dim_index = 4 then
+        stride_value := 1
+      else
+        begin
+          stride_value := 1;
+          if dim_index < array_dim_count then
+            begin
+              if dim_index = 1 then
+                stride_value := array_hi2 - array_lo2 + 1
+              else if dim_index = 2 then
+                stride_value := array_hi3 - array_lo3 + 1
+              else if dim_index = 3 then
+                stride_value := array_hi4 - array_lo4 + 1;
+              if dim_index + 1 < array_dim_count then
+                begin
+                  if dim_index <= 1 then
+                    stride_value := stride_value * (array_hi3 - array_lo3 + 1);
+                  if dim_index <= 2 then
+                    stride_value := stride_value * (array_hi4 - array_lo4 + 1)
+                end
+            end
+        end;
+      Write(stride_value * 4);
+      EmitMulAddWord();
       if dim_index < array_dim_count then
         begin
           ExpectSymbolChar(',');
@@ -2499,82 +2617,181 @@ begin
 end;
 
 procedure ParseFactor;
+var
+  is_true_name: integer;
+  is_false_name: integer;
+  is_nil_name: integer;
+  is_chr_name: integer;
+  is_ord_name: integer;
+  is_addr_name: integer;
+  is_sourceat_name: integer;
+  is_matchpair_name: integer;
+  is_isstringvar_name: integer;
+  is_isintarrayvar_name: integer;
+  is_hasrecordvarname_name: integer;
+  is_streqignorecase_name: integer;
+  is_issavedrecordvarname_name: integer;
 begin
   if current_kind = 2 then
     begin
-      Write(current_text);
-      Write(' ');
-      NextToken()
+      ParseFactorLiteral()
     end
   else if current_kind = 4 then
     begin
-      Write(Ord(current_text[0]));
-      Write(' ');
-      NextToken()
+      ParseFactorLiteral()
     end
   else if current_kind = 3 then
     begin
       if current_text[0] <> '#' then
         FailParse();
-      NextToken();
-      ExpectKind(2);
-      Write(current_text);
-      Write(' ');
-      NextToken()
+      ParseFactorLiteral()
     end
-  else if current_kind = TOK_IDENT then
+  else if current_kind = 1 then
     begin
       StrCopy(current_text, saved_text);
-      builtin_text := 'true';
-      if StrEqIgnoreCase(saved_text, builtin_text) then
+      is_true_name := 0;
+      if saved_text[0] = 't' then
+        begin
+          if saved_text[1] = 'r' then
+            begin
+              if saved_text[2] = 'u' then
+                begin
+                  if saved_text[3] = 'e' then
+                    begin
+                      if saved_text[4] = #0 then
+                        is_true_name := 1
+                    end
+                end
+            end
+        end;
+      if is_true_name <> 0 then
         begin
           NextToken();
-          Write('1 ')
+          current_value := 1;
+          EmitCurrentWord()
         end
       else
         begin
-          builtin_text := 'false';
-          if StrEqIgnoreCase(saved_text, builtin_text) then
+          is_false_name := 0;
+          if saved_text[0] = 'f' then
+            begin
+              if saved_text[1] = 'a' then
+                begin
+                  if saved_text[2] = 'l' then
+                    begin
+                      if saved_text[3] = 's' then
+                        begin
+                          if saved_text[4] = 'e' then
+                            begin
+                              if saved_text[5] = #0 then
+                                is_false_name := 1
+                            end
+                        end
+                    end
+                end
+            end;
+          if is_false_name <> 0 then
             begin
               NextToken();
-              Write('0 ')
+              current_value := 0;
+              EmitCurrentWord()
             end
           else
             begin
-              builtin_text := 'nil';
-              if StrEqIgnoreCase(saved_text, builtin_text) then
+              is_nil_name := 0;
+              if saved_text[0] = 'n' then
+                begin
+                  if saved_text[1] = 'i' then
+                    begin
+                      if saved_text[2] = 'l' then
+                        begin
+                          if saved_text[3] = #0 then
+                            is_nil_name := 1
+                        end
+                    end
+                end;
+              if is_nil_name <> 0 then
                 begin
                   NextToken();
-                  Write('0 ')
+                  current_value := 0;
+                  EmitCurrentWord()
                 end
               else
                 begin
-                  builtin_text := 'Chr';
-                  if StrEqIgnoreCase(saved_text, builtin_text) then
+                  is_chr_name := 0;
+                  if saved_text[0] = 'C' then
+                    begin
+                      if saved_text[1] = 'h' then
+                        begin
+                          if saved_text[2] = 'r' then
+                            begin
+                              if saved_text[3] = #0 then
+                                is_chr_name := 1
+                            end
+                        end
+                    end;
+                  if is_chr_name <> 0 then
                     begin
                       NextToken();
-                      ExpectSymbolChar('(');
+                      if current_kind <> TOK_SYMBOL then
+                        FailParse();
+                      if current_text[0] <> '(' then
+                        FailParse();
                       NextToken();
                       ParseSimpleExpr();
-                      ExpectSymbolChar(')');
+                      if current_kind <> TOK_SYMBOL then
+                        FailParse();
+                      if current_text[0] <> ')' then
+                        FailParse();
                       NextToken()
                     end
                   else
                     begin
-                      builtin_text := 'Ord';
-                      if StrEqIgnoreCase(saved_text, builtin_text) then
+                      is_ord_name := 0;
+                      if saved_text[0] = 'O' then
+                        begin
+                          if saved_text[1] = 'r' then
+                            begin
+                              if saved_text[2] = 'd' then
+                                begin
+                                  if saved_text[3] = #0 then
+                                    is_ord_name := 1
+                                end
+                            end
+                        end;
+                      if is_ord_name <> 0 then
                         begin
                           NextToken();
-                          ExpectSymbolChar('(');
+                          if current_kind <> TOK_SYMBOL then
+                            FailParse();
+                          if current_text[0] <> '(' then
+                            FailParse();
                           NextToken();
                           ParseSimpleExpr();
-                          ExpectSymbolChar(')');
+                          if current_kind <> TOK_SYMBOL then
+                            FailParse();
+                          if current_text[0] <> ')' then
+                            FailParse();
                           NextToken()
                         end
                       else
                         begin
-                          builtin_text := 'Addr';
-                          if StrEqIgnoreCase(saved_text, builtin_text) then
+                          is_addr_name := 0;
+                          if saved_text[0] = 'A' then
+                            begin
+                              if saved_text[1] = 'd' then
+                                begin
+                                  if saved_text[2] = 'd' then
+                                    begin
+                                      if saved_text[3] = 'r' then
+                                        begin
+                                          if saved_text[4] = #0 then
+                                            is_addr_name := 1
+                                        end
+                                    end
+                                end
+                            end;
+                          if is_addr_name <> 0 then
                             begin
                               NextToken();
                               ExpectSymbolChar('(');
@@ -2595,19 +2812,45 @@ begin
                                 begin
                                   NextToken();
                                   ExpectSymbolChar('(');
-                              NextToken();
+                                  NextToken();
                               ExpectKind(TOK_IDENT);
                               Write(current_text);
                               WriteLn(' PVAR@ __STR_SRC PVAR!');
                               Write('__STRLEN ');
                               NextToken();
                               ExpectSymbolChar(')');
-                              NextToken()
-                            end
+                                  NextToken()
+                                end
                               else
                                 begin
-                                  builtin_text := 'SourceAt';
-                                  if StrEqIgnoreCase(saved_text, builtin_text) then
+                                  is_sourceat_name := 0;
+                                  if saved_text[0] = 'S' then
+                                    begin
+                                      if saved_text[1] = 'o' then
+                                        begin
+                                          if saved_text[2] = 'u' then
+                                            begin
+                                              if saved_text[3] = 'r' then
+                                                begin
+                                                  if saved_text[4] = 'c' then
+                                                    begin
+                                                      if saved_text[5] = 'e' then
+                                                        begin
+                                                          if saved_text[6] = 'A' then
+                                                            begin
+                                                              if saved_text[7] = 't' then
+                                                                begin
+                                                                  if saved_text[8] = #0 then
+                                                                    is_sourceat_name := 1
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end;
+                                  if is_sourceat_name <> 0 then
                                     begin
                                       NextToken();
                                       ExpectSymbolChar('(');
@@ -2619,28 +2862,412 @@ begin
                                     end
                                   else
                                     begin
-                                      builtin_text := 'MatchPair';
-                                      if StrEqIgnoreCase(saved_text, builtin_text) then
+                                      is_matchpair_name := 0;
+                                      if saved_text[0] = 'M' then
+                                        begin
+                                          if saved_text[1] = 'a' then
+                                            begin
+                                              if saved_text[2] = 't' then
+                                                begin
+                                                  if saved_text[3] = 'c' then
+                                                    begin
+                                                      if saved_text[4] = 'h' then
+                                                        begin
+                                                          if saved_text[5] = 'P' then
+                                                            begin
+                                                              if saved_text[6] = 'a' then
+                                                                begin
+                                                                  if saved_text[7] = 'i' then
+                                                                    begin
+                                                                      if saved_text[8] = 'r' then
+                                                                        begin
+                                                                          if saved_text[9] = #0 then
+                                                                            is_matchpair_name := 1
+                                                                        end
+                                                                    end
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end;
+                                      if is_matchpair_name <> 0 then
                                         begin
                                           NextToken();
-                                          ExpectSymbolChar('(');
+                                          if current_kind <> TOK_SYMBOL then
+                                            FailParse();
+                                          if current_text[0] <> '(' then
+                                            FailParse();
                                           NextToken();
                                           ParseSimpleExpr();
-                                          ExpectSymbolChar(',');
+                                          if current_kind <> TOK_SYMBOL then
+                                            FailParse();
+                                          if current_text[0] <> ',' then
+                                            FailParse();
                                           NextToken();
                                           ParseSimpleExpr();
-                                          ExpectSymbolChar(')');
-                                          Write('MatchPair ');
+                                          if current_kind <> TOK_SYMBOL then
+                                            FailParse();
+                                          if current_text[0] <> ')' then
+                                            FailParse();
+                                          EmitMatchPairWord();
                                           NextToken()
                                         end
                                       else
                                         begin
-                              ResolveSavedEnumOrdinal();
-                              NextToken();
-                              if set_mask_value >= 0 then
-                                begin
-                                  EmitIntWord(set_mask_value)
-                            end
+                                          is_isstringvar_name := 0;
+                                          if saved_text[0] = 'I' then
+                                            begin
+                                              if saved_text[1] = 's' then
+                                                begin
+                                                  if saved_text[2] = 'S' then
+                                                    begin
+                                                      if saved_text[3] = 't' then
+                                                        begin
+                                                          if saved_text[4] = 'r' then
+                                                            begin
+                                                              if saved_text[5] = 'i' then
+                                                                begin
+                                                                  if saved_text[6] = 'n' then
+                                                                    begin
+                                                                      if saved_text[7] = 'g' then
+                                                                        begin
+                                                                          if saved_text[8] = 'V' then
+                                                                            begin
+                                                                              if saved_text[9] = 'a' then
+                                                                                begin
+                                                                                  if saved_text[10] = 'r' then
+                                                                                    begin
+                                                                                      if saved_text[11] = #0 then
+                                                                                        is_isstringvar_name := 1
+                                                                                    end
+                                                                                end
+                                                                            end
+                                                                        end
+                                                                    end
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                            end;
+                                          if is_isstringvar_name <> 0 then
+                                            begin
+                                              NextToken();
+                                              if current_kind <> TOK_SYMBOL then
+                                                FailParse();
+                                              if current_text[0] <> '(' then
+                                                FailParse();
+                                              NextToken();
+                                              ExpectKind(TOK_IDENT);
+                                              EmitCurrentWord();
+                                              EmitIsStringVarWord();
+                                              NextToken();
+                                              if current_kind <> TOK_SYMBOL then
+                                                FailParse();
+                                              if current_text[0] <> ')' then
+                                                FailParse();
+                                              NextToken()
+                                            end
+                                          else
+                                            begin
+                                              is_isintarrayvar_name := 0;
+                                              if saved_text[0] = 'I' then
+                                                begin
+                                                  if saved_text[1] = 's' then
+                                                    begin
+                                                      if saved_text[2] = 'I' then
+                                                        begin
+                                                          if saved_text[3] = 'n' then
+                                                            begin
+                                                              if saved_text[4] = 't' then
+                                                                begin
+                                                                  if saved_text[5] = 'A' then
+                                                                    begin
+                                                                      if saved_text[6] = 'r' then
+                                                                        begin
+                                                                          if saved_text[7] = 'r' then
+                                                                            begin
+                                                                              if saved_text[8] = 'a' then
+                                                                                begin
+                                                                                  if saved_text[9] = 'y' then
+                                                                                    begin
+                                                                                      if saved_text[10] = 'V' then
+                                                                                        begin
+                                                                                          if saved_text[11] = 'a' then
+                                                                                            begin
+                                                                                              if saved_text[12] = 'r' then
+                                                                                                begin
+                                                                                                  if saved_text[13] = #0 then
+                                                                                                    is_isintarrayvar_name := 1
+                                                                                                end
+                                                                                            end
+                                                                                        end
+                                                                                    end
+                                                                                end
+                                                                            end
+                                                                        end
+                                                                    end
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                end;
+                                              if is_isintarrayvar_name <> 0 then
+                                                begin
+                                                  NextToken();
+                                                  if current_kind <> TOK_SYMBOL then
+                                                    FailParse();
+                                                  if current_text[0] <> '(' then
+                                                    FailParse();
+                                                  NextToken();
+                                                  if current_kind <> 1 then
+                                                    FailParse();
+                                                  EmitCurrentWord();
+                                                  EmitIsIntArrayVarWord();
+                                                  NextToken();
+                                                  if current_kind <> TOK_SYMBOL then
+                                                    FailParse();
+                                                  if current_text[0] <> ')' then
+                                                    FailParse();
+                                                  NextToken()
+                                                end
+                                              else
+                                                begin
+                                                  is_hasrecordvarname_name := 0;
+                                                  if saved_text[0] = 'H' then
+                                                    begin
+                                                      if saved_text[1] = 'a' then
+                                                        begin
+                                                          if saved_text[2] = 's' then
+                                                            begin
+                                                              if saved_text[3] = 'R' then
+                                                                begin
+                                                                  if saved_text[4] = 'e' then
+                                                                    begin
+                                                                      if saved_text[5] = 'c' then
+                                                                        begin
+                                                                          if saved_text[6] = 'o' then
+                                                                            begin
+                                                                              if saved_text[7] = 'r' then
+                                                                                begin
+                                                                                  if saved_text[8] = 'd' then
+                                                                                    begin
+                                                                                      if saved_text[9] = 'V' then
+                                                                                        begin
+                                                                                          if saved_text[10] = 'a' then
+                                                                                            begin
+                                                                                              if saved_text[11] = 'r' then
+                                                                                                begin
+                                                                                                  if saved_text[12] = 'N' then
+                                                                                                    begin
+                                                                                                      if saved_text[13] = 'a' then
+                                                                                                        begin
+                                                                                                          if saved_text[14] = 'm' then
+                                                                                                            begin
+                                                                                                              if saved_text[15] = 'e' then
+                                                                                                                begin
+                                                                                                                  if saved_text[16] = #0 then
+                                                                                                                    is_hasrecordvarname_name := 1
+                                                                                                                end
+                                                                                                            end
+                                                                                                        end
+                                                                                                    end
+                                                                                                end
+                                                                                            end
+                                                                                        end
+                                                                                    end
+                                                                                end
+                                                                            end
+                                                                        end
+                                                                    end
+                                                                end
+                                                            end
+                                                        end
+                                                    end;
+                                                  if is_hasrecordvarname_name <> 0 then
+                                                    begin
+                                                      NextToken();
+                                                      if current_kind <> TOK_SYMBOL then
+                                                        FailParse();
+                                                      if current_text[0] <> '(' then
+                                                        FailParse();
+                                                      NextToken();
+                                                  if current_kind <> TOK_SYMBOL then
+                                                        FailParse();
+                                                      if current_text[0] <> ')' then
+                                                        FailParse();
+                                                      EmitHasRecordVarNameWord();
+                                                      NextToken()
+                                                    end
+                                                  else
+                                                    begin
+                                                      is_streqignorecase_name := 0;
+                                                      if saved_text[0] = 'S' then
+                                                        begin
+                                                          if saved_text[1] = 't' then
+                                                            begin
+                                                              if saved_text[2] = 'r' then
+                                                                begin
+                                                                  if saved_text[3] = 'E' then
+                                                                    begin
+                                                                      if saved_text[4] = 'q' then
+                                                                        begin
+                                                                          if saved_text[5] = 'I' then
+                                                                            begin
+                                                                              if saved_text[6] = 'g' then
+                                                                                begin
+                                                                                  if saved_text[7] = 'n' then
+                                                                                    begin
+                                                                                      if saved_text[8] = 'o' then
+                                                                                        begin
+                                                                                          if saved_text[9] = 'r' then
+                                                                                            begin
+                                                                                              if saved_text[10] = 'e' then
+                                                                                                begin
+                                                                                                  if saved_text[11] = 'C' then
+                                                                                                    begin
+                                                                                                      if saved_text[12] = 'a' then
+                                                                                                        begin
+                                                                                                          if saved_text[13] = 's' then
+                                                                                                            begin
+                                                                                                              if saved_text[14] = 'e' then
+                                                                                                                begin
+                                                                                                                  if saved_text[15] = #0 then
+                                                                                                                    is_streqignorecase_name := 1
+                                                                                                                end
+                                                                                                            end
+                                                                                                        end
+                                                                                                    end
+                                                                                                end
+                                                                                            end
+                                                                                        end
+                                                                                    end
+                                                                                end
+                                                                            end
+                                                                        end
+                                                                    end
+                                                                end
+                                                            end
+                                                        end;
+                                                  if is_streqignorecase_name <> 0 then
+                                                        begin
+                                                          NextToken();
+                                                          if current_kind <> TOK_SYMBOL then
+                                                            FailParse();
+                                                          if current_text[0] <> '(' then
+                                                            FailParse();
+                                                          NextToken();
+                                                          if current_kind <> 1 then
+                                                            FailParse();
+                                                          EmitCurrentWord();
+                                                          NextToken();
+                                                          if current_kind <> TOK_SYMBOL then
+                                                            FailParse();
+                                                          if current_text[0] <> ',' then
+                                                            FailParse();
+                                                          NextToken();
+                                                          if current_kind <> 1 then
+                                                            FailParse();
+                                                          EmitCurrentWord();
+                                                          NextToken();
+                                                          if current_kind <> TOK_SYMBOL then
+                                                            FailParse();
+                                                          if current_text[0] <> ')' then
+                                                            FailParse();
+                                                          EmitStrEqIgnoreCaseWord();
+                                                          NextToken()
+                                                        end
+                                                      else
+                                                        begin
+                                                          is_issavedrecordvarname_name := 0;
+                                                          if saved_text[0] = 'I' then
+                                                            begin
+                                                              if saved_text[1] = 's' then
+                                                                begin
+                                                                  if saved_text[2] = 'S' then
+                                                                    begin
+                                                                      if saved_text[3] = 'a' then
+                                                                        begin
+                                                                          if saved_text[4] = 'v' then
+                                                                            begin
+                                                                              if saved_text[5] = 'e' then
+                                                                                begin
+                                                                                  if saved_text[6] = 'd' then
+                                                                                    begin
+                                                                                      if saved_text[7] = 'R' then
+                                                                                        begin
+                                                                                          if saved_text[8] = 'e' then
+                                                                                            begin
+                                                                                              if saved_text[9] = 'c' then
+                                                                                                begin
+                                                                                                  if saved_text[10] = 'o' then
+                                                                                                    begin
+                                                                                                      if saved_text[11] = 'r' then
+                                                                                                        begin
+                                                                                                          if saved_text[12] = 'd' then
+                                                                                                            begin
+                                                                                                              if saved_text[13] = 'V' then
+                                                                                                                begin
+                                                                                                                  if saved_text[14] = 'a' then
+                                                                                                                    begin
+                                                                                                                      if saved_text[15] = 'r' then
+                                                                                                                        begin
+                                                                                                                          if saved_text[16] = 'N' then
+                                                                                                                            begin
+                                                                                                                              if saved_text[17] = 'a' then
+                                                                                                                                begin
+                                                                                                                                  if saved_text[18] = 'm' then
+                                                                                                                                    begin
+                                                                                                                                      if saved_text[19] = 'e' then
+                                                                                                                                        begin
+                                                                                                                                          if saved_text[20] = #0 then
+                                                                                                                                            is_issavedrecordvarname_name := 1
+                                                                                                                                        end
+                                                                                                                                    end
+                                                                                                                                end
+                                                                                                                            end
+                                                                                                                        end
+                                                                                                                    end
+                                                                                                                end
+                                                                                                            end
+                                                                                                        end
+                                                                                                    end
+                                                                                                end
+                                                                                            end
+                                                                                        end
+                                                                                    end
+                                                                                end
+                                                                            end
+                                                                        end
+                                                                    end
+                                                                end
+                                                            end;
+                                                          if is_issavedrecordvarname_name <> 0 then
+                                                            begin
+                                                              NextToken();
+                                                              if current_kind <> TOK_SYMBOL then
+                                                                FailParse();
+                                                              if current_text[0] <> '(' then
+                                                                FailParse();
+                                                              NextToken();
+                                                              if current_kind <> TOK_SYMBOL then
+                                                                FailParse();
+                                                              if current_text[0] <> ')' then
+                                                                FailParse();
+                                                              EmitIsSavedRecordVarNameWord();
+                                                              NextToken()
+                                                            end
+                                                          else
+                                                            begin
+                                                              ResolveSavedEnumOrdinal();
+                                                              NextToken();
+                                                              if set_mask_value >= 0 then
+                                                                begin
+                                                                  current_value := set_mask_value;
+                                                                  EmitCurrentWord()
+                                                                end
                           else if IsStringVar(saved_text) then
                             begin
                               if current_kind = TOK_SYMBOL then
@@ -2648,18 +3275,18 @@ begin
                                   if current_text[0] = '[' then
                                     begin
                                       ParseStringIndexAddress(saved_text);
-                                      Write('PVAR@ ')
+                                      EmitPVarReadWord()
                                     end
                                   else
                                     begin
                                       EmitSavedWord();
-                                      Write('PVAR@ ')
+                                      EmitPVarReadWord()
                                     end
                                 end
                               else
                                 begin
                                   EmitSavedWord();
-                                  Write('PVAR@ ')
+                                  EmitPVarReadWord()
                                 end
                             end
                           else if IsIntArrayVar(saved_text) then
@@ -2669,29 +3296,53 @@ begin
                                   if current_text[0] = '[' then
                                     begin
                                       ParseArrayIndexes(saved_text);
-                                      Write('PVAR@ ')
+                                      EmitPVarReadWord()
                                     end
                                   else
                                     begin
                                       EmitSavedWord();
-                                      Write('PVAR@ ')
+                                      EmitPVarReadWord()
                                     end
                                 end
                               else
                                 begin
                                   EmitSavedWord();
-                                  Write('PVAR@ ')
+                                  EmitPVarReadWord()
                                 end
                             end
-                          else if HasRecordVarName() and StrEqIgnoreCase(record_var_name, saved_text) then
+                          else if IsSavedRecordVarName() then
                             begin
                               if current_kind = TOK_SYMBOL then
                                 begin
                                   if current_text[0] = '.' then
                                     begin
                                       NextToken();
-                                      ExpectKind(TOK_IDENT);
-                                      EmitVariantTagCheck(ResolveVariantExpectedTag(current_text), record_var_name);
+                                      if current_kind <> 1 then
+                                        FailParse();
+                                      if StrEqIgnoreCase(current_text, variant_arm0_name) then
+                                        begin
+                                          Write(record_var_name);
+                                          WriteLn(' PVAR@ __VAR_TAG PVAR!');
+                                          WriteLn('__VAR_TAG PVAR@ 0 = 0= IF __VARIANT_MISMATCH THEN')
+                                        end
+                                      else
+                                        begin
+                                          if StrEqIgnoreCase(current_text, variant_arm1_name) then
+                                            begin
+                                              Write(record_var_name);
+                                              WriteLn(' PVAR@ __VAR_TAG PVAR!');
+                                              WriteLn('__VAR_TAG PVAR@ 1 = 0= IF __VARIANT_MISMATCH THEN')
+                                            end
+                                          else
+                                            begin
+                                              if StrEqIgnoreCase(current_text, variant_arm2_name) then
+                                                begin
+                                                  Write(record_var_name);
+                                                  WriteLn(' PVAR@ __VAR_TAG PVAR!');
+                                                  WriteLn('__VAR_TAG PVAR@ 1 = 0= IF __VARIANT_MISMATCH THEN')
+                                                end
+                                            end
+                                        end;
                                       EmitFieldRead(record_var_name, ResolveFieldOffset(current_text));
                                       NextToken()
                                     end
@@ -2807,11 +3458,6 @@ begin
                                       Write('PVAR@ ')
                                     end
                                 end
-                              else
-                                begin
-                                  EmitSavedWord();
-                                  Write('PVAR@ ')
-                                end
                             end
                           else if HasName(func_name) then
                             begin
@@ -2867,9 +3513,14 @@ begin
                                   EmitSavedWord();
                                   Write('PVAR@ ')
                                 end
-                                end
                             end
-                        end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
                     end
                 end
             end
@@ -2908,7 +3559,7 @@ begin
           else
             done := true
         end
-      else if current_kind = TOK_IDENT then
+      else if current_kind = 1 then
         begin
           if StrEqIgnoreCase(current_text, kw_div) then
             begin
@@ -4398,27 +5049,45 @@ begin
 			                                                                                end
 			                                                                              else
 			                                                                                begin
+				                                                                          builtin_text := 'EmitFieldRead';
+				                                                                          if StrEqIgnoreCase(current_text, builtin_text) then
+				                                                                                begin
+                                                                                  NextToken();
+                                                                                  ExpectSymbolChar('(');
+                                                                                  NextToken();
+                                                                                  ExpectKind(TOK_IDENT);
+                                                                                  Write(current_text);
+                                                                                  Write(' ');
+                                                                                  NextToken();
+                                                                                  ExpectSymbolChar(',');
+                                                                                  NextToken();
+                                                                                  ParseSimpleExpr();
+                                                                                  WriteLn(' EmitFieldRead');
+				                                                                                  ExpectSymbolChar(')');
+				                                                                                  NextToken()
+				                                                                                end
+				                                                                              else
+				                                                                                begin
 				                                                                              StrCopy(current_text, saved_text);
 				                                                                              NextToken();
-                                                                              if HasName(proc_name) then
+                                                                              if current_kind = TOK_SYMBOL then
                                                                                 begin
-                                                                                  if StrEqIgnoreCase(saved_text, proc_name) then
+                                                                                  if current_text[0] = '(' then
                                                                                     begin
-                                                                                      if current_kind = TOK_SYMBOL then
-                                                                                        begin
-                                                                                          if current_text[0] = '(' then
-                                                                                            ParseProcedureCallStmt()
-                                                                                          else
-                                                                                            ParseAssignmentStmt()
-                                                                                        end
+                                                                                      if HasName(proc_name) then
+                                                                                        StrCopy(proc_name, builtin_text)
                                                                                       else
-                                                                                        ParseAssignmentStmt()
+                                                                                        ClearStr(builtin_text);
+                                                                                      StrCopy(saved_text, proc_name);
+                                                                                      ParseProcedureCallStmt();
+                                                                                      StrCopy(builtin_text, proc_name)
                                                                                     end
                                                                                   else
                                                                                     ParseAssignmentStmt()
                                                                                 end
                                                                               else
                                                                                 ParseAssignmentStmt()
+				                                                                                end
                                                                                 end
                                                                             end
                                                                         end
@@ -6020,7 +6689,9 @@ end;
 procedure ParseFunctionDecl;
 var
   header_done: integer;
+  generic_param_is_lexeme: integer;
 begin
+  generic_param_is_lexeme := 0;
   NextToken();
   ExpectKind(TOK_IDENT);
   StrCopy(current_text, func_name);
@@ -6163,7 +6834,7 @@ begin
                                     end
                                   else
                                     begin
-                                      builtin_text := 'HasEnumVarName';
+                                      builtin_text := 'IsSavedRecordVarName';
                                       if StrEqIgnoreCase(func_name, builtin_text) then
                                         begin
                                           NextToken();
@@ -6172,12 +6843,12 @@ begin
                                           NextToken();
                                           ExpectSymbolChar(';');
                                           NextToken();
-                                          EmitRuntimeHasEnumVarNameRoutine();
+                                          EmitRuntimeIsSavedRecordVarNameRoutine();
                                           CompleteFunctionSpecialCase()
                                         end
                                       else
                                         begin
-                                          builtin_text := 'HasSubrangeVarName';
+                                          builtin_text := 'HasEnumVarName';
                                           if StrEqIgnoreCase(func_name, builtin_text) then
                                             begin
                                               NextToken();
@@ -6186,11 +6857,25 @@ begin
                                               NextToken();
                                               ExpectSymbolChar(';');
                                               NextToken();
-                                              EmitRuntimeHasSubrangeVarNameRoutine();
+                                              EmitRuntimeHasEnumVarNameRoutine();
                                               CompleteFunctionSpecialCase()
                                             end
                                           else
                                             begin
+                                              builtin_text := 'HasSubrangeVarName';
+                                              if StrEqIgnoreCase(func_name, builtin_text) then
+                                                begin
+                                                  NextToken();
+                                                  ExpectSymbolChar(':');
+                                                  NextToken();
+                                                  NextToken();
+                                                  ExpectSymbolChar(';');
+                                                  NextToken();
+                                                  EmitRuntimeHasSubrangeVarNameRoutine();
+                                                  CompleteFunctionSpecialCase()
+                                                end
+                                              else
+                                                begin
                                               builtin_text := 'HasRealVarName';
                                               if StrEqIgnoreCase(func_name, builtin_text) then
                                                 begin
@@ -6631,57 +7316,155 @@ begin
                               NextToken();
                               ExpectSymbolChar('(');
                               NextToken();
+                              if current_kind = TOK_KW_VAR then
+                                NextToken();
                               ExpectKind(TOK_IDENT);
                               StrCopy(current_text, func_param);
-                              Write('CREATE ');
-                              Write(func_param);
-                              WriteLn(' 0 ,');
-                              WriteLn('CREATE __FUNC_RET 0 ,');
-                              WriteLn('CREATE __CALL_RET 0 ,');
                               NextToken();
                               ExpectSymbolChar(':');
                               NextToken();
-                              ExpectKind(TOK_KW_INTEGER);
+                              if current_kind = TOK_KW_INTEGER then
+                                generic_param_is_lexeme := 0
+                              else
+                                begin
+                                  builtin_text := 'lexeme_buf';
+                                  if StrEqIgnoreCase(current_text, builtin_text) then
+                                    generic_param_is_lexeme := 1
+                                  else
+                                    FailParse()
+                                end;
+                              Write('CREATE ');
+                              Write(func_param);
+                              if generic_param_is_lexeme <> 0 then
+                                WriteLn(' 0 , 124 ALLOT')
+                              else
+                                WriteLn(' 0 ,');
+                              WriteLn('CREATE __FUNC_RET 0 ,');
+                              WriteLn('CREATE __CALL_RET 0 ,');
                               NextToken();
                               ExpectSymbolChar(')');
                               NextToken();
                               ExpectSymbolChar(':');
                               NextToken();
-                              ExpectKind(TOK_KW_INTEGER);
-                              NextToken();
-                              ExpectSymbolChar(';');
-                              NextToken();
-                              ExpectKind(TOK_KW_BEGIN);
-                              NextToken();
-                              ExpectKind(TOK_IDENT);
-                              if StrEqIgnoreCase(current_text, func_name) = false then
-                                FailParse();
-                              NextToken();
-                              ExpectAssignSymbol();
-                              NextToken();
-                              ExpectKind(TOK_IDENT);
-                              if StrEqIgnoreCase(current_text, func_param) = false then
-                                FailParse();
-                              NextToken();
-                              ExpectSymbolChar('+');
-                              NextToken();
-                              ExpectKind(TOK_IDENT);
-                              Write(': ');
-                              Write(func_name);
-                              WriteLn('');
-                              Write(func_param);
-                              Write(' PVAR! ');
-                              Write(func_param);
-                              Write(' PVAR@ ');
-                              Write(current_text);
-                              WriteLn(' PVAR@ + __FUNC_RET PVAR!');
-                              WriteLn('  __FUNC_RET PVAR@');
-                              WriteLn(';');
-                              NextToken();
-                              ExpectKind(TOK_KW_END);
-                              NextToken();
-                              ExpectSymbolChar(';');
-                              NextToken()
+                              if current_kind = TOK_KW_INTEGER then
+                                begin
+                                  NextToken();
+                                  ExpectSymbolChar(';');
+                                  NextToken();
+                                  ExpectKind(TOK_KW_BEGIN);
+                                  NextToken();
+                                  ExpectKind(TOK_IDENT);
+                                  if StrEqIgnoreCase(current_text, func_name) = false then
+                                    FailParse();
+                                  NextToken();
+                                  ExpectAssignSymbol();
+                                  NextToken();
+                                  if current_kind = TOK_INT then
+                                    begin
+                                      Write(': ');
+                                      Write(func_name);
+                                      WriteLn('');
+                                      Write(func_param);
+                                      Write(' PVAR! ');
+                                      Write(current_value);
+                                      WriteLn(' __FUNC_RET PVAR!');
+                                      WriteLn('  __FUNC_RET PVAR@');
+                                      WriteLn(';');
+                                      NextToken();
+                                      ExpectKind(TOK_KW_END);
+                                      NextToken();
+                                      ExpectSymbolChar(';');
+                                      NextToken()
+                                    end
+                                  else
+                                    begin
+                                      if generic_param_is_lexeme <> 0 then
+                                        FailParse();
+                                      ExpectKind(TOK_IDENT);
+                                      if StrEqIgnoreCase(current_text, func_param) = false then
+                                        FailParse();
+                                      NextToken();
+                                      ExpectSymbolChar('+');
+                                      NextToken();
+                                      ExpectKind(TOK_IDENT);
+                                      Write(': ');
+                                      Write(func_name);
+                                      WriteLn('');
+                                      Write(func_param);
+                                      Write(' PVAR! ');
+                                      Write(func_param);
+                                      Write(' PVAR@ ');
+                                      Write(current_text);
+                                      WriteLn(' PVAR@ + __FUNC_RET PVAR!');
+                                      WriteLn('  __FUNC_RET PVAR@');
+                                      WriteLn(';');
+                                      NextToken();
+                                      ExpectKind(TOK_KW_END);
+                                      NextToken();
+                                      ExpectSymbolChar(';');
+                                      NextToken()
+                                    end
+                                end
+                              else
+                                begin
+                                  builtin_text := 'boolean';
+                                  if StrEqIgnoreCase(current_text, builtin_text) = false then
+                                    FailParse();
+                                  NextToken();
+                                  ExpectSymbolChar(';');
+                                  NextToken();
+                                  ExpectKind(TOK_KW_BEGIN);
+                                  NextToken();
+                                  ExpectKind(TOK_IDENT);
+                                  if StrEqIgnoreCase(current_text, func_name) = false then
+                                    FailParse();
+                                  NextToken();
+                                  ExpectAssignSymbol();
+                                  NextToken();
+                                  if current_kind = TOK_INT then
+                                    begin
+                                      Write(': ');
+                                      Write(func_name);
+                                      WriteLn('');
+                                      Write(func_param);
+                                      Write(' PVAR! ');
+                                      Write(current_value);
+                                      WriteLn(' __FUNC_RET PVAR!');
+                                    end
+                                  else
+                                    begin
+                                      ExpectKind(TOK_IDENT);
+                                      builtin_text := 'false';
+                                      if StrEqIgnoreCase(current_text, builtin_text) then
+                                        begin
+                                          Write(': ');
+                                          Write(func_name);
+                                          WriteLn('');
+                                          Write(func_param);
+                                          WriteLn(' PVAR!');
+                                          WriteLn('0 __FUNC_RET PVAR!');
+                                        end
+                                      else
+                                        begin
+                                          builtin_text := 'true';
+                                          if StrEqIgnoreCase(current_text, builtin_text) = false then
+                                            FailParse();
+                                          Write(': ');
+                                          Write(func_name);
+                                          WriteLn('');
+                                          Write(func_param);
+                                          WriteLn(' PVAR!');
+                                          WriteLn('1 __FUNC_RET PVAR!');
+                                        end
+                                    end;
+                                  WriteLn('  __FUNC_RET PVAR@');
+                                  WriteLn(';');
+                                  NextToken();
+                                  ExpectKind(TOK_KW_END);
+                                  NextToken();
+                                  ExpectSymbolChar(';');
+                                  NextToken()
+                                end
                                                                                     end
                                                                                 end
                                                                               end
@@ -6721,6 +7504,7 @@ begin
                                                             end
                                                         end
                                                     end
+                                                end
                                                 end
                                             end
                                         end
@@ -6780,6 +7564,7 @@ begin
               NextToken();
               ExpectSymbolChar(':');
               NextToken();
+              builtin_text := 'boolean';
               if current_kind = TOK_KW_INTEGER then
                 begin
                   Write('CREATE ');
@@ -6788,6 +7573,13 @@ begin
                   NextToken()
                 end
               else if StrEqIgnoreCase(current_text, kw_char) then
+                begin
+                  Write('CREATE ');
+                  Write(saved_text);
+                  WriteLn(' 0 ,');
+                  NextToken()
+                end
+              else if StrEqIgnoreCase(current_text, builtin_text) then
                 begin
                   Write('CREATE ');
                   Write(saved_text);
@@ -7043,22 +7835,27 @@ begin
   done := false;
   while done = false do
     begin
-      ParseStmt();
-      if current_kind = TOK_SYMBOL then
+      if current_kind = TOK_KW_END then
+        done := true
+      else
         begin
-          if current_text[0] = ';' then
+          ParseStmt();
+          if current_kind = TOK_SYMBOL then
             begin
-              NextToken();
-              if current_kind = TOK_KW_END then
+              if current_text[0] = ';' then
+                begin
+                  NextToken();
+                  if current_kind = TOK_KW_END then
+                    done := true
+                end
+              else
                 done := true
             end
+          else if current_kind = TOK_KW_END then
+            done := true
           else
             done := true
         end
-      else if current_kind = TOK_KW_END then
-        done := true
-      else
-        done := true
     end
 end;
 
