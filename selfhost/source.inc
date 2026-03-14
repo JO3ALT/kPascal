@@ -15,6 +15,7 @@ begin
   kw_pos := 'pos';
   kw_div := 'div';
   kw_mod := 'mod';
+  kw_and := 'and';
   kw_for := 'for';
   kw_while := 'while';
   kw_to := 'to';

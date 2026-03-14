@@ -11,8 +11,6 @@ const
   TOK_KW_INTEGER = 14;
 
 type
-  source_buf = array[0..32767] of char;
-  source_buf_ptr = ^source_buf;
   lexeme_buf = array[32] of char;
 
 var
@@ -119,8 +117,3 @@ var
   kw_procedure: lexeme_buf;
   kw_function: lexeme_buf;
   conformant_proc_dims: integer;
-  source: source_buf;
-  source1: source_buf_ptr;
-  source2: source_buf_ptr;
-  source3: source_buf_ptr;
-  source4: source_buf_ptr;

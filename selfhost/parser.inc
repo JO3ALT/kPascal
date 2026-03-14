@@ -628,7 +628,7 @@ begin
   WriteLn('0 >R');
   WriteLn('BEGIN');
   Write('__WSTR_STOP PVAR@ 0= R@ ');
-  Write(char_array_len);
+  EmitIntWord(char_array_len);
   WriteLn(' < AND WHILE');
   Write('  ');
   Write(current_text);
@@ -879,24 +879,37 @@ procedure SkipRoutineBody;
 var
   depth: integer;
 begin
-  if current_kind = TOK_KW_VAR then
+  if current_kind = 11 then
     begin
       repeat
         NextToken()
-      until current_kind = TOK_KW_BEGIN
+      until current_kind = 12
     end;
-  ExpectKind(TOK_KW_BEGIN);
+  if current_kind <> 12 then
+    begin
+      WriteLn('PERR')
+    end;
   depth := 1;
   NextToken();
   while depth > 0 do
     begin
-      if current_kind = TOK_KW_BEGIN then
+      if current_kind = 12 then
         depth := depth + 1
-      else if current_kind = TOK_KW_END then
+      else if current_kind = 13 then
         depth := depth - 1;
       NextToken()
     end;
-  ExpectSymbolChar(';');
+  if current_kind <> TOK_SYMBOL then
+    begin
+      WriteLn('PERR')
+    end
+  else
+    begin
+      if current_text[0] <> ';' then
+        begin
+          WriteLn('PERR')
+        end
+    end;
   NextToken()
 end;
 
@@ -2078,9 +2091,7 @@ begin
   WriteLn('  0 __WSTR_STOP PVAR!');
   WriteLn('  0 >R');
   WriteLn('  BEGIN');
-  WriteLn('    __WSTR_STOP PVAR@ 0= R@');
-  Write(char_array_len);
-  WriteLn(' < AND WHILE');
+  WriteLn('    __WSTR_STOP PVAR@ 0= R@ char_array_len PVAR@ < AND WHILE');
   WriteLn('      current_text PVAR@ R@ 4 * + PVAR@ DUP 0= IF');
   WriteLn('        DROP');
   WriteLn('        1 __WSTR_STOP PVAR!');
@@ -2120,9 +2131,7 @@ begin
   WriteLn('  0 __DONE PVAR!');
   WriteLn('  BEGIN');
   WriteLn('    __DONE PVAR@ 0= WHILE');
-  WriteLn('      __STR_I PVAR@');
-  Write(char_array_len);
-  WriteLn(' >= IF');
+  WriteLn('      __STR_I PVAR@ char_array_len PVAR@ >= IF');
   WriteLn('        1 __DONE PVAR!');
   WriteLn('      ELSE');
   WriteLn('        __STR_I PVAR@ current_text PVAR@ __STR_AT DUP 0= IF');
@@ -2491,12 +2500,28 @@ end;
 
 procedure ParseFactor;
 begin
-  if current_kind = TOK_INT then
-    ParseFactorLiteral()
-  else if current_kind = TOK_STR then
-    ParseFactorLiteral()
-  else if current_kind = TOK_SYMBOL then
-    ParseFactorLiteral()
+  if current_kind = 2 then
+    begin
+      Write(current_text);
+      Write(' ');
+      NextToken()
+    end
+  else if current_kind = 4 then
+    begin
+      Write(Ord(current_text[0]));
+      Write(' ');
+      NextToken()
+    end
+  else if current_kind = 3 then
+    begin
+      if current_text[0] <> '#' then
+        FailParse();
+      NextToken();
+      ExpectKind(2);
+      Write(current_text);
+      Write(' ');
+      NextToken()
+    end
   else if current_kind = TOK_IDENT then
     begin
       StrCopy(current_text, saved_text);
@@ -3005,13 +3030,11 @@ end;
 procedure ParseAssignmentStmt;
 var
   field_offset: integer;
-  saved_source_pos_local: integer;
-  saved_kind_local: integer;
-  saved_value_local: integer;
-  saved_token_local: lexeme_buf;
+  assign_expr_ready: integer;
 begin
   StrCopy(saved_text, assign_text);
   field_offset := -1;
+  assign_expr_ready := 0;
   if IsIntArrayVar(assign_text) then
     begin
       if current_kind = TOK_SYMBOL then
@@ -3056,12 +3079,9 @@ begin
         begin
           if current_text[1] = '=' then
             begin
-              saved_source_pos_local := source_pos;
-              saved_kind_local := current_kind;
-              saved_value_local := current_value;
-              StrCopy(current_text, saved_token_local);
               ExpectAssignSymbol();
               NextToken();
+              assign_expr_ready := 1;
               if current_kind = TOK_STR then
                 begin
                   EmitStringStore();
@@ -3079,20 +3099,6 @@ begin
                       WriteLn(' PVAR!');
                       field_offset := -998
                     end
-                  else
-                    begin
-                      source_pos := saved_source_pos_local;
-                      current_kind := saved_kind_local;
-                      current_value := saved_value_local;
-                      StrCopy(saved_token_local, current_text)
-                    end
-                end
-              else
-                begin
-                  source_pos := saved_source_pos_local;
-                  current_kind := saved_kind_local;
-                  current_value := saved_value_local;
-                  StrCopy(saved_token_local, current_text)
                 end
             end
         end
@@ -3105,8 +3111,11 @@ begin
     end
   else if AssignTargetIsSetVar() then
     begin
-      ExpectAssignSymbol();
-      NextToken();
+      if assign_expr_ready = 0 then
+        begin
+          ExpectAssignSymbol();
+          NextToken()
+        end;
       if current_kind = TOK_SYMBOL then
         begin
           if current_text[0] = '[' then
@@ -3139,8 +3148,11 @@ begin
     end
   else if HasEnumVarName() and StrEqIgnoreCase(enum_var_name, assign_text) then
     begin
-      ExpectAssignSymbol();
-      NextToken();
+      if assign_expr_ready = 0 then
+        begin
+          ExpectAssignSymbol();
+          NextToken()
+        end;
       ExpectKind(TOK_IDENT);
       ResolveCurrentEnumOrdinal();
       field_offset := set_mask_value;
@@ -3154,8 +3166,11 @@ begin
     end
   else if HasSubrangeVarName() and StrEqIgnoreCase(subrange_var_name, assign_text) then
     begin
-      ExpectAssignSymbol();
-      NextToken();
+      if assign_expr_ready = 0 then
+        begin
+          ExpectAssignSymbol();
+          NextToken()
+        end;
       ExpectKind(TOK_INT);
       Write(current_value);
       Write(' DUP ');
@@ -3169,8 +3184,11 @@ begin
     end
   else if HasRealVarName() and StrEqIgnoreCase(real_var_name, assign_text) then
     begin
-      ExpectAssignSymbol();
-      NextToken();
+      if assign_expr_ready = 0 then
+        begin
+          ExpectAssignSymbol();
+          NextToken()
+        end;
       ParseRealExpr();
       Write(' ');
       Write(assign_text);
@@ -3182,8 +3200,11 @@ begin
         begin
           ParseStringIndexAddress(assign_text);
           WriteLn('>R');
-          ExpectAssignSymbol();
-          NextToken();
+          if assign_expr_ready = 0 then
+            begin
+              ExpectAssignSymbol();
+              NextToken()
+            end;
           if current_kind = TOK_STR then
             begin
               Write(Ord(current_text[0]));
@@ -3206,8 +3227,11 @@ begin
         end
       else
         begin
-          ExpectAssignSymbol();
-          NextToken();
+          if assign_expr_ready = 0 then
+            begin
+              ExpectAssignSymbol();
+              NextToken()
+            end;
           if current_kind <> TOK_STR then
             FailParse();
           EmitStringStore();
@@ -3216,8 +3240,11 @@ begin
     end
   else if HasName(proc_param) and StrEqIgnoreCase(proc_param, assign_text) then
     begin
-      ExpectAssignSymbol();
-      NextToken();
+      if assign_expr_ready = 0 then
+        begin
+          ExpectAssignSymbol();
+          NextToken()
+        end;
       ParseSimpleExpr();
       Write(proc_param);
       WriteLn(' PVAR@ PVAR!')
@@ -3226,8 +3253,11 @@ begin
     begin
       if field_offset = -995 then
         begin
-          ExpectAssignSymbol();
-          NextToken();
+          if assign_expr_ready = 0 then
+            begin
+              ExpectAssignSymbol();
+              NextToken()
+            end;
           ParseSimpleExpr();
           Write(assign_text);
           WriteLn(' PVAR@ 0 + PVAR!')
@@ -3242,8 +3272,11 @@ begin
           WriteLn(' 4 * + >R');
           ExpectSymbolChar(']');
           NextToken();
-          ExpectAssignSymbol();
-          NextToken();
+          if assign_expr_ready = 0 then
+            begin
+              ExpectAssignSymbol();
+              NextToken()
+            end;
           ParseSimpleExpr();
           WriteLn('R> PVAR!')
         end
@@ -3251,8 +3284,11 @@ begin
         begin
           ParseArrayIndexes(assign_text);
           WriteLn('>R');
-          ExpectAssignSymbol();
-          NextToken();
+          if assign_expr_ready = 0 then
+            begin
+              ExpectAssignSymbol();
+              NextToken()
+            end;
           ParseSimpleExpr();
           WriteLn('R> PVAR!')
         end
@@ -3280,8 +3316,11 @@ begin
           if field_offset >= 0 then
             StrCopy(with_base_text, assign_text)
         end;
-      ExpectAssignSymbol();
-      NextToken();
+      if assign_expr_ready = 0 then
+        begin
+          ExpectAssignSymbol();
+          NextToken()
+        end;
       ParseSimpleExpr();
       if field_offset < 0 then
         begin
@@ -5270,6 +5309,10 @@ begin
 		                                  NextToken();
 		                                  ExpectSymbolChar('(');
 		                                  NextToken();
+		                                  ExpectKind(TOK_IDENT);
+		                                  NextToken();
+		                                  ExpectSymbolChar(':');
+		                                  NextToken();
 		                                  if StrEqIgnoreCase(current_text, kw_char) = false then
 		                                    FailParse();
 		                                  NextToken();
@@ -5290,6 +5333,10 @@ begin
 		                                begin
 		                                  NextToken();
 	                                  ExpectSymbolChar('(');
+	                                  NextToken();
+	                                  ExpectKind(TOK_IDENT);
+	                                  NextToken();
+	                                  ExpectSymbolChar(':');
 	                                  NextToken();
 	                                  ExpectKind(TOK_KW_INTEGER);
 	                                  NextToken();
@@ -5649,6 +5696,10 @@ begin
                                                           NextToken();
                                                           ExpectSymbolChar('(');
                                                           NextToken();
+                                                          ExpectKind(TOK_IDENT);
+                                                          NextToken();
+                                                          ExpectSymbolChar(':');
+                                                          NextToken();
                                                           ExpectKind(TOK_KW_INTEGER);
                                                           NextToken();
                                                           ExpectSymbolChar(')');
@@ -5832,6 +5883,10 @@ begin
                                                                                             begin
                                                                                               NextToken();
                                                                                               ExpectSymbolChar('(');
+                                                                                              NextToken();
+                                                                                              ExpectKind(TOK_IDENT);
+                                                                                              NextToken();
+                                                                                              ExpectSymbolChar(':');
                                                                                               NextToken();
                                                                                               if StrEqIgnoreCase(current_text, kw_char) = false then
                                                                                                 FailParse();
@@ -6486,6 +6541,10 @@ begin
                                                                                                                                                                                           NextToken();
                                                                                                                                                                                           ExpectSymbolChar('(');
                                                                                                                                                                                           NextToken();
+                                                                                                                                                                                          ExpectKind(TOK_IDENT);
+                                                                                                                                                                                          NextToken();
+                                                                                                                                                                                          ExpectSymbolChar(':');
+                                                                                                                                                                                          NextToken();
                                                                                                                                                                                           ExpectKind(TOK_KW_INTEGER);
                                                                                                                                                                                           NextToken();
                                                                                                                                                                                           ExpectSymbolChar(')');
@@ -6507,6 +6566,10 @@ begin
                                                                                                                                                                                               NextToken();
                                                                                                                                                                                               ExpectSymbolChar('(');
                                                                                                                                                                                               NextToken();
+                                                                                                                                                                                              ExpectKind(TOK_IDENT);
+                                                                                                                                                                                              NextToken();
+                                                                                                                                                                                              ExpectSymbolChar(':');
+                                                                                                                                                                                              NextToken();
                                                                                                                                                                                               ExpectKind(TOK_KW_INTEGER);
                                                                                                                                                                                               NextToken();
                                                                                                                                                                                               ExpectSymbolChar(')');
@@ -6527,6 +6590,10 @@ begin
                                                                                                                                                                                                 begin
                                                                                                                                                                                                   NextToken();
                                                                                                                                                                                                   ExpectSymbolChar('(');
+                                                                                                                                                                                                  NextToken();
+                                                                                                                                                                                                  ExpectKind(TOK_IDENT);
+                                                                                                                                                                                                  NextToken();
+                                                                                                                                                                                                  ExpectSymbolChar(':');
                                                                                                                                                                                                   NextToken();
                                                                                                                                                                                                   ExpectKind(TOK_KW_INTEGER);
                                                                                                                                                                                                   NextToken();
@@ -6714,6 +6781,13 @@ begin
               ExpectSymbolChar(':');
               NextToken();
               if current_kind = TOK_KW_INTEGER then
+                begin
+                  Write('CREATE ');
+                  Write(saved_text);
+                  WriteLn(' 0 ,');
+                  NextToken()
+                end
+              else if StrEqIgnoreCase(current_text, kw_char) then
                 begin
                   Write('CREATE ');
                   Write(saved_text);

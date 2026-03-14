@@ -1,5 +1,5 @@
 program kpsc_main;
-(* $I selfhost/types.inc *)
+(* $I selfhost/types_streaming.inc *)
 (* $I selfhost/mini_string.inc *)
 (* $I selfhost/source_runtime.inc *)
 (* $I selfhost/lexer.inc *)
