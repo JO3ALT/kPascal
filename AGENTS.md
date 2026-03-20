@@ -33,10 +33,21 @@ Run `cargo fmt` and `cargo clippy -- -D warnings` before opening a PR.
 - `if` follows `if <expr> then <stmt> (else <stmt>)?`.
 - If either branch contains multiple statements, write it as a compound statement with `begin ... end`.
 - Preferred forms:
-  - `if cond then begin ... end;`
-  - `if cond then begin ... end else begin ... end;`
+- `if cond then begin ... end;`
+- `if cond then begin ... end else begin ... end;`
 - Do not write `end; else ...`. If there is an `else`, it must come immediately after the `end` that closes the `then` branch.
 - Be careful in `selfhost/parser.inc`: deep nested `if/else` chains should use explicit `begin/end` blocks so the flattened Pascal still matches the Pest grammar.
+
+## Selfhost Implementation Policy
+- For `selfhost/`, [expanded.rs](/home/kamitani/kPascal/expanded.rs) is the operational reference, not just `src/kpascal.pest`.
+- Keep the Pascal selfhost source as close as possible to the Rust processing units in `expanded.rs`, especially `build_type_spec`, `build_stmt`, `build_expr`, and `build_lvalue`.
+- Do not start from an ad hoc evaluator and later “drift” toward Rust. Prefer a direct 1:1 translation of Rust control flow, helper boundaries, and data flow from the beginning.
+- When Pascal lacks a direct language feature needed to mirror Rust structure, add helper functions/procedures instead of collapsing multiple Rust steps into one Pascal routine.
+- Before extending selfhost behavior, check not only feature-level compatibility but also whether the Pascal code still matches the Rust source at the level of processing steps and call structure.
+- String behavior must not be reimplemented piecemeal in parser/codegen files. Centralize string comparison, copy, normalization, and literal-transfer helpers in [string_utils.pas](/home/kamitani/kPascal/string_utils.pas).
+- Avoid adding narrow one-off string helpers that duplicate existing string operations. If Rust-aligned string behavior is missing, add or fix the general helper in [string_utils.pas](/home/kamitani/kPascal/string_utils.pas) first, then use it from `selfhost/`.
+- Treat string literal to `char`-array assignment as a supported language operation in selfhost, matching Rust behavior. Implement it as assignment semantics, not as an unrelated ad hoc builtin rewrite.
+- For `char`-array assignment from a string literal, preserve array-copy semantics on the Pascal side: copy characters into the destination array storage and handle terminating `#0` consistently through shared helpers in [string_utils.pas](/home/kamitani/kPascal/string_utils.pas).
 
 ## Testing Guidelines
 No tests are currently committed; new features should include tests.

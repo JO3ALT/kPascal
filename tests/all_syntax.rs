@@ -221,6 +221,23 @@ fn compiles_selfhost_kpsc_scalar() {
 }
 
 #[test]
+fn parses_parenthesized_and_unary_minus_exprs() {
+    let src = r#"
+program P;
+var n: integer;
+begin
+  n := (1 + 2) * -3;
+  WriteLn(n)
+end.
+"#;
+    let forth = run_compiler(src);
+
+    assert!(forth.contains(": MAIN"));
+    assert!(forth.contains("NEGATE"));
+    assert!(forth.contains("* "));
+}
+
+#[test]
 fn compiles_selfhost_kpsc_array2d() {
     let src = include_str!("../selfhost/kpsc_array2d.pas");
     let forth = run_compiler(src);

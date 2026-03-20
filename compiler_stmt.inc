@@ -1,2 +1,2 @@
 (* bootstrap include referring to selfhost version *)
-(*  selfhost/string_utils.pas *)
+(*  selfhost/compiler_stmt.inc *)

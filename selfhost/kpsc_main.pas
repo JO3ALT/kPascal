@@ -1,10 +1,16 @@
 program kpsc_main;
-(* $I selfhost/types_streaming.inc *)
-(* $I selfhost/mini_string.inc *)
-(* $I selfhost/source_runtime.inc *)
-(* $I selfhost/lexer.inc *)
-(* $I selfhost/parser.inc *)
+(* $I string_utils.pas *)
+(* $I types.inc *)
+(* $I compiler_lexer.inc *)
+(* $I compiler_expr.inc *)
+(* $I compiler_stmt.inc *)
+(* $I compiler_decl.inc *)
+(* $I compiler_codegen.inc *)
+(* $I source_runtime.inc *)
 begin
   ReadSourceFromStdin();
-  ParseProgram()
+  ParseProgram();
+  EmitHeader();
+  EmitIntLine(0);
+  EmitFooter();
 end.
