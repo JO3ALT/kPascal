@@ -99,6 +99,7 @@ begin
     end
 end;
 
+
 function HasEnumVarName: boolean;
 begin
   HasEnumVarName := enum_var_name[0] <> #0
@@ -602,9 +603,15 @@ begin
   Write('IsSavedRecordVarName ')
 end;
 
+
 procedure EmitStringIndexScaleWord;
 begin
   Write(' 4 * + ')
+end;
+
+procedure EmitAndWord;
+begin
+  Write(' AND ')
 end;
 
 procedure EmitMinusWord;
@@ -1328,6 +1335,7 @@ begin
   WriteLn('  THEN');
   WriteLn(';');
 end;
+
 
 procedure EmitRuntimeHasEnumVarNameRoutine;
 begin
@@ -2631,6 +2639,7 @@ var
   is_hasrecordvarname_name: integer;
   is_streqignorecase_name: integer;
   is_issavedrecordvarname_name: integer;
+  field_offset: integer;
 begin
   if current_kind = 2 then
     begin
@@ -3321,7 +3330,8 @@ begin
                                         FailParse();
                                       if StrEqIgnoreCase(current_text, variant_arm0_name) then
                                         begin
-                                          Write(record_var_name);
+                                          StrCopy(record_var_name, saved_text);
+                                          EmitSavedWord();
                                           WriteLn(' PVAR@ __VAR_TAG PVAR!');
                                           WriteLn('__VAR_TAG PVAR@ 0 = 0= IF __VARIANT_MISMATCH THEN')
                                         end
@@ -3329,7 +3339,8 @@ begin
                                         begin
                                           if StrEqIgnoreCase(current_text, variant_arm1_name) then
                                             begin
-                                              Write(record_var_name);
+                                              StrCopy(record_var_name, saved_text);
+                                              EmitSavedWord();
                                               WriteLn(' PVAR@ __VAR_TAG PVAR!');
                                               WriteLn('__VAR_TAG PVAR@ 1 = 0= IF __VARIANT_MISMATCH THEN')
                                             end
@@ -3337,25 +3348,51 @@ begin
                                             begin
                                               if StrEqIgnoreCase(current_text, variant_arm2_name) then
                                                 begin
-                                                  Write(record_var_name);
+                                                  StrCopy(record_var_name, saved_text);
+                                                  EmitSavedWord();
                                                   WriteLn(' PVAR@ __VAR_TAG PVAR!');
                                                   WriteLn('__VAR_TAG PVAR@ 1 = 0= IF __VARIANT_MISMATCH THEN')
                                                 end
                                             end
                                         end;
-                                      EmitFieldRead(record_var_name, ResolveFieldOffset(current_text));
+                                      if variant_active <> 0 then
+                                        begin
+                                          if StrEqIgnoreCase(variant_tag_name, current_text) then
+                                            field_offset := 0
+                                          else if StrEqIgnoreCase(variant_arm0_name, current_text) then
+                                            field_offset := 4
+                                          else if StrEqIgnoreCase(variant_arm1_name, current_text) then
+                                            field_offset := 4
+                                          else if StrEqIgnoreCase(variant_arm2_name, current_text) then
+                                            field_offset := 8
+                                          else
+                                            begin
+                                              field_offset := 0;
+                                              field_offset := field_offset - 1
+                                            end
+                                        end
+                                      else if StrEqIgnoreCase(field1_name, current_text) then
+                                        field_offset := 0
+                                      else if StrEqIgnoreCase(field2_name, current_text) then
+                                        field_offset := 4
+                                      else
+                                        begin
+                                          field_offset := 0;
+                                          field_offset := field_offset - 1
+                                        end;
+                                      EmitFieldRead(record_var_name, field_offset);
                                       NextToken()
                                     end
                                   else
                                     begin
                                       EmitSavedWord();
-                                      Write('PVAR@ ')
+                                      EmitPVarReadWord()
                                     end
                                 end
                               else
                                 begin
                                   EmitSavedWord();
-                                  Write('PVAR@ ')
+                                  EmitPVarReadWord()
                                 end
                             end
                           else if IsPointerVar(saved_text) then
@@ -4490,7 +4527,7 @@ begin
           NextToken();
           ParseSetLiteral();
           Write(set_mask_value);
-          Write(' AND ');
+          EmitAndWord();
           ExpectSymbolChar(')');
           NextToken();
           ExpectSymbolChar('=');
@@ -4514,51 +4551,76 @@ begin
           builtin_text := 'in';
           if StrEqIgnoreCase(current_text, builtin_text) = false then
             FailParse();
-          Write('1 ');
-          Write(saved_text);
-          Write(' PVAR@ LSHIFT ');
+          EmitIntWord(1);
+          EmitSavedWord();
+          WriteLn(' PVAR@ LSHIFT');
           NextToken();
-          ExpectKind(TOK_IDENT);
-          Write(current_text);
+          if current_kind <> TOK_IDENT then
+            FailParse();
+          EmitCurrentWord();
           WriteLn(' PVAR@ AND 0= 0= PWRITE-BOOL');
           NextToken()
         end
       else if IsExactRoundName() then
         begin
           NextToken();
-          ExpectSymbolChar('(');
+          if current_kind <> TOK_SYMBOL then
+            FailParse();
+          if current_text[0] <> '(' then
+            FailParse();
           NextToken();
-          ExpectKind(TOK_IDENT);
-          Write(current_text);
+          if current_kind <> TOK_IDENT then
+            FailParse();
+          EmitCurrentWord();
           WriteLn(' PVAR@ FROUND-I32 PWRITE-I32');
           NextToken();
-          ExpectSymbolChar(')');
+          if current_kind <> TOK_SYMBOL then
+            FailParse();
+          if current_text[0] <> ')' then
+            FailParse();
           NextToken()
         end
       else if IsExactAbsName() then
         begin
           NextToken();
-          ExpectSymbolChar('(');
+          if current_kind <> TOK_SYMBOL then
+            FailParse();
+          if current_text[0] <> '(' then
+            FailParse();
           NextToken();
-          ExpectSymbolChar('-');
+          if current_kind <> TOK_SYMBOL then
+            FailParse();
+          if current_text[0] <> '-' then
+            FailParse();
           NextToken();
-          ExpectKind(TOK_INT);
-          Write(current_value);
+          if current_kind <> TOK_INT then
+            FailParse();
+          EmitIntWord(current_value);
           WriteLn(' NEGATE DUP 0< IF NEGATE THEN PWRITE-I32');
           NextToken();
-          ExpectSymbolChar(')');
+          if current_kind <> TOK_SYMBOL then
+            FailParse();
+          if current_text[0] <> ')' then
+            FailParse();
           NextToken()
         end
       else if IsExactSqrName() then
         begin
           NextToken();
-          ExpectSymbolChar('(');
+          if current_kind <> TOK_SYMBOL then
+            FailParse();
+          if current_text[0] <> '(' then
+            FailParse();
           NextToken();
-          ExpectKind(TOK_INT);
-          Write(current_value);
+          if current_kind <> TOK_INT then
+            FailParse();
+          EmitIntWord(current_value);
           WriteLn(' DUP * PWRITE-I32');
           NextToken();
-          ExpectSymbolChar(')');
+          if current_kind <> TOK_SYMBOL then
+            FailParse();
+          if current_text[0] <> ')' then
+            FailParse();
           NextToken()
         end
       else if IsExactOddName() then
