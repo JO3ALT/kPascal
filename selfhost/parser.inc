@@ -100,6 +100,7 @@ begin
 end;
 
 
+
 function HasEnumVarName: boolean;
 begin
   HasEnumVarName := enum_var_name[0] <> #0
@@ -588,6 +589,7 @@ begin
   Write('IsIntArrayVar ')
 end;
 
+
 procedure EmitHasRecordVarNameWord;
 begin
   Write('HasRecordVarName ')
@@ -601,6 +603,28 @@ end;
 procedure EmitIsSavedRecordVarNameWord;
 begin
   Write('IsSavedRecordVarName ')
+end;
+
+procedure EmitFuncNameWord;
+begin
+  Write(func_name);
+  Write(' ')
+end;
+
+procedure EmitFuncParamWord;
+begin
+  Write(func_param);
+  Write(' ')
+end;
+
+procedure EmitReturnStackWord;
+begin
+  Write('R> ')
+end;
+
+procedure EmitCallRetReadWord;
+begin
+  Write('__CALL_RET PVAR@ ')
 end;
 
 
@@ -2624,6 +2648,271 @@ begin
     end
 end;
 
+procedure ParseSavedRecordFactor;
+var
+  field_offset: integer;
+begin
+  if current_kind = TOK_SYMBOL then
+    begin
+      if current_text[0] = '.' then
+        begin
+          NextToken();
+          if current_kind <> 1 then
+            FailParse();
+          if StrEqIgnoreCase(current_text, variant_arm0_name) then
+            begin
+              StrCopy(record_var_name, saved_text);
+              EmitSavedWord();
+              WriteLn(' PVAR@ __VAR_TAG PVAR!');
+              WriteLn('__VAR_TAG PVAR@ 0 = 0= IF __VARIANT_MISMATCH THEN')
+            end
+          else
+            begin
+              if StrEqIgnoreCase(current_text, variant_arm1_name) then
+                begin
+                  StrCopy(record_var_name, saved_text);
+                  EmitSavedWord();
+                  WriteLn(' PVAR@ __VAR_TAG PVAR!');
+                  WriteLn('__VAR_TAG PVAR@ 1 = 0= IF __VARIANT_MISMATCH THEN')
+                end
+              else
+                begin
+                  if StrEqIgnoreCase(current_text, variant_arm2_name) then
+                    begin
+                      StrCopy(record_var_name, saved_text);
+                      EmitSavedWord();
+                      WriteLn(' PVAR@ __VAR_TAG PVAR!');
+                      WriteLn('__VAR_TAG PVAR@ 1 = 0= IF __VARIANT_MISMATCH THEN')
+                    end
+                end
+            end;
+          if variant_active <> 0 then
+            begin
+              if StrEqIgnoreCase(variant_tag_name, current_text) then
+                field_offset := 0
+              else if StrEqIgnoreCase(variant_arm0_name, current_text) then
+                field_offset := 4
+              else if StrEqIgnoreCase(variant_arm1_name, current_text) then
+                field_offset := 4
+              else if StrEqIgnoreCase(variant_arm2_name, current_text) then
+                field_offset := 8
+              else
+                begin
+                  field_offset := 0;
+                  field_offset := field_offset - 1
+                end
+            end
+          else if StrEqIgnoreCase(field1_name, current_text) then
+            field_offset := 0
+          else if StrEqIgnoreCase(field2_name, current_text) then
+            field_offset := 4
+          else
+            begin
+              field_offset := 0;
+              field_offset := field_offset - 1
+            end;
+          EmitFieldRead(record_var_name, field_offset);
+          NextToken()
+        end
+      else
+        begin
+          EmitSavedWord();
+          EmitPVarReadWord()
+        end
+    end
+  else
+    begin
+      EmitSavedWord();
+      EmitPVarReadWord()
+    end
+end;
+
+procedure ParseSavedPointerFactor;
+begin
+  if current_kind = TOK_SYMBOL then
+    begin
+      if current_text[0] = '^' then
+        begin
+          NextToken();
+          if current_kind = TOK_SYMBOL then
+            begin
+              if current_text[0] = '[' then
+                begin
+                  if current_kind <> TOK_SYMBOL then
+                    FailParse();
+                  if current_text[0] <> '[' then
+                    FailParse();
+                  NextToken();
+                  EmitSavedWord();
+                  EmitPVarReadWord();
+                  ParseSimpleExpr();
+                  EmitStringIndexScaleWord();
+                  EmitPVarReadWord();
+                  if current_kind <> TOK_SYMBOL then
+                    FailParse();
+                  if current_text[0] <> ']' then
+                    FailParse();
+                  NextToken()
+                end
+              else if current_text[0] = '.' then
+                begin
+                  NextToken();
+                  if current_kind <> TOK_IDENT then
+                    FailParse();
+                  EmitSavedWord();
+                  WriteLn(' PVAR@ 0 + PVAR@');
+                  NextToken()
+                end
+              else
+                begin
+                  EmitSavedWord();
+                  WriteLn(' PVAR@ PVAR@')
+                end;
+            end
+          else
+            begin
+              EmitSavedWord();
+              WriteLn(' PVAR@ PVAR@')
+            end
+        end
+      else
+        begin
+          EmitSavedWord();
+          EmitPVarReadWord()
+        end
+    end
+  else
+    begin
+      EmitSavedWord();
+      EmitPVarReadWord()
+    end
+end;
+
+procedure ParseSavedFallbackFactor;
+var
+  field_offset: integer;
+begin
+  if with_active <> 0 then
+    begin
+      if variant_active <> 0 then
+        begin
+          if StrEqIgnoreCase(variant_tag_name, saved_text) then
+            field_offset := 0
+          else if StrEqIgnoreCase(variant_arm0_name, saved_text) then
+            field_offset := 4
+          else if StrEqIgnoreCase(variant_arm1_name, saved_text) then
+            field_offset := 4
+          else if StrEqIgnoreCase(variant_arm2_name, saved_text) then
+            field_offset := 8
+          else
+            begin
+              field_offset := 0;
+              field_offset := field_offset - 1
+            end
+        end
+      else if StrEqIgnoreCase(field1_name, saved_text) then
+        field_offset := 0
+      else if StrEqIgnoreCase(field2_name, saved_text) then
+        field_offset := 4
+      else
+        begin
+          field_offset := 0;
+          field_offset := field_offset - 1
+        end;
+      if field_offset >= 0 then
+        EmitFieldRead(with_base_text, field_offset)
+      else if StrEqIgnoreCase(saved_text, func_name) then
+        begin
+          if current_kind = TOK_SYMBOL then
+            begin
+              if current_text[0] = '(' then
+                begin
+                  NextToken();
+                  EmitFuncParamWord();
+                  WriteLn(' PVAR@ >R');
+                  WriteLn('__FUNC_RET PVAR@ >R');
+                  if current_kind <> TOK_INT then
+                    FailParse();
+                  EmitIntWord(current_value);
+                  NextToken();
+                  if current_kind <> TOK_SYMBOL then
+                    FailParse();
+                  if current_text[0] <> ')' then
+                    FailParse();
+                  EmitFuncNameWord();
+                  WriteLn(' __CALL_RET PVAR!');
+                  WriteLn('R> __FUNC_RET PVAR!');
+                  EmitReturnStackWord();
+                  EmitFuncParamWord();
+                  WriteLn(' PVAR!');
+                  EmitCallRetReadWord();
+                  NextToken()
+                end
+              else
+                begin
+                  EmitSavedWord();
+                  EmitPVarReadWord()
+                end
+            end
+          else
+            begin
+              EmitSavedWord();
+              EmitPVarReadWord()
+            end
+        end
+    end
+  else if StrEqIgnoreCase(saved_text, func_name) then
+    begin
+      if current_kind = TOK_SYMBOL then
+        begin
+          if current_text[0] = '(' then
+            begin
+              NextToken();
+	              EmitFuncParamWord();
+	              WriteLn(' PVAR@ >R');
+              WriteLn('__FUNC_RET PVAR@ >R');
+              if current_kind <> TOK_INT then
+                FailParse();
+              EmitIntWord(current_value);
+              NextToken();
+              if current_kind <> TOK_SYMBOL then
+                FailParse();
+              if current_text[0] <> ')' then
+                FailParse();
+	              EmitFuncNameWord();
+	              WriteLn(' __CALL_RET PVAR!');
+	              WriteLn('R> __FUNC_RET PVAR!');
+	              EmitReturnStackWord();
+	              EmitFuncParamWord();
+	              WriteLn(' PVAR!');
+	              EmitCallRetReadWord();
+	              NextToken()
+            end
+          else
+            begin
+              EmitSavedWord();
+              EmitPVarReadWord()
+            end
+        end
+      else
+        begin
+          EmitSavedWord();
+          EmitPVarReadWord()
+        end
+    end
+  else if StrEqIgnoreCase(saved_text, proc_param) then
+    begin
+      Write(proc_param);
+      Write(' PVAR@ PVAR@ ')
+    end
+  else
+    begin
+      EmitSavedWord();
+      EmitPVarReadWord()
+    end
+end;
+
+
 procedure ParseFactor;
 var
   is_true_name: integer;
@@ -2639,7 +2928,6 @@ var
   is_hasrecordvarname_name: integer;
   is_streqignorecase_name: integer;
   is_issavedrecordvarname_name: integer;
-  field_offset: integer;
 begin
   if current_kind = 2 then
     begin
@@ -3094,7 +3382,7 @@ begin
                                                                 end
                                                             end
                                                         end
-                                                    end;
+                                                            end;
                                                   if is_hasrecordvarname_name <> 0 then
                                                     begin
                                                       NextToken();
@@ -3321,235 +3609,16 @@ begin
                             end
                           else if IsSavedRecordVarName() then
                             begin
-                              if current_kind = TOK_SYMBOL then
-                                begin
-                                  if current_text[0] = '.' then
-                                    begin
-                                      NextToken();
-                                      if current_kind <> 1 then
-                                        FailParse();
-                                      if StrEqIgnoreCase(current_text, variant_arm0_name) then
-                                        begin
-                                          StrCopy(record_var_name, saved_text);
-                                          EmitSavedWord();
-                                          WriteLn(' PVAR@ __VAR_TAG PVAR!');
-                                          WriteLn('__VAR_TAG PVAR@ 0 = 0= IF __VARIANT_MISMATCH THEN')
-                                        end
-                                      else
-                                        begin
-                                          if StrEqIgnoreCase(current_text, variant_arm1_name) then
-                                            begin
-                                              StrCopy(record_var_name, saved_text);
-                                              EmitSavedWord();
-                                              WriteLn(' PVAR@ __VAR_TAG PVAR!');
-                                              WriteLn('__VAR_TAG PVAR@ 1 = 0= IF __VARIANT_MISMATCH THEN')
-                                            end
-                                          else
-                                            begin
-                                              if StrEqIgnoreCase(current_text, variant_arm2_name) then
-                                                begin
-                                                  StrCopy(record_var_name, saved_text);
-                                                  EmitSavedWord();
-                                                  WriteLn(' PVAR@ __VAR_TAG PVAR!');
-                                                  WriteLn('__VAR_TAG PVAR@ 1 = 0= IF __VARIANT_MISMATCH THEN')
-                                                end
-                                            end
-                                        end;
-                                      if variant_active <> 0 then
-                                        begin
-                                          if StrEqIgnoreCase(variant_tag_name, current_text) then
-                                            field_offset := 0
-                                          else if StrEqIgnoreCase(variant_arm0_name, current_text) then
-                                            field_offset := 4
-                                          else if StrEqIgnoreCase(variant_arm1_name, current_text) then
-                                            field_offset := 4
-                                          else if StrEqIgnoreCase(variant_arm2_name, current_text) then
-                                            field_offset := 8
-                                          else
-                                            begin
-                                              field_offset := 0;
-                                              field_offset := field_offset - 1
-                                            end
-                                        end
-                                      else if StrEqIgnoreCase(field1_name, current_text) then
-                                        field_offset := 0
-                                      else if StrEqIgnoreCase(field2_name, current_text) then
-                                        field_offset := 4
-                                      else
-                                        begin
-                                          field_offset := 0;
-                                          field_offset := field_offset - 1
-                                        end;
-                                      EmitFieldRead(record_var_name, field_offset);
-                                      NextToken()
-                                    end
-                                  else
-                                    begin
-                                      EmitSavedWord();
-                                      EmitPVarReadWord()
-                                    end
-                                end
-                              else
-                                begin
-                                  EmitSavedWord();
-                                  EmitPVarReadWord()
-                                end
+                              ParseSavedRecordFactor()
                             end
                           else if IsPointerVar(saved_text) then
                             begin
-                              if current_kind = TOK_SYMBOL then
-                                begin
-                                  if current_text[0] = '^' then
-                                    begin
-                                      NextToken();
-                                      if current_kind = TOK_SYMBOL then
-                                        begin
-                                          if current_text[0] = '[' then
-                                            begin
-                                              ExpectSymbolChar('[');
-                                              NextToken();
-                                              Write(saved_text);
-                                              Write(' PVAR@ ');
-                                              ParseSimpleExpr();
-                                              Write(' 4 * + PVAR@ ');
-                                              ExpectSymbolChar(']');
-                                              NextToken()
-                                            end
-                                          else if current_text[0] = '.' then
-                                            begin
-                                              NextToken();
-                                              ExpectKind(TOK_IDENT);
-                                              Write(saved_text);
-                                              WriteLn(' PVAR@ 0 + PVAR@');
-                                              NextToken()
-                                            end
-                                          else
-                                            begin
-                                              Write(saved_text);
-                                              WriteLn(' PVAR@ PVAR@')
-                                            end;
-                                        end
-                                      else
-                                        begin
-                                          Write(saved_text);
-                                          WriteLn(' PVAR@ PVAR@')
-                                        end
-                                    end
-                                  else
-                                    begin
-                                      EmitSavedWord();
-                                      Write('PVAR@ ')
-                                    end
-                                end
-                              else
-                                begin
-                                  EmitSavedWord();
-                                  Write('PVAR@ ')
-                                end
+                              ParseSavedPointerFactor()
                             end
-                          else if with_active <> 0 then
+                          else
                             begin
-                              if ResolveFieldOffset(saved_text) >= 0 then
-                                EmitFieldRead(with_base_text, ResolveFieldOffset(saved_text))
-                              else if HasName(func_name) then
-                                begin
-                                  if StrEqIgnoreCase(saved_text, func_name) then
-                                    begin
-                                      if current_kind = TOK_SYMBOL then
-                                        begin
-                                          if current_text[0] = '(' then
-                                            begin
-                                              NextToken();
-                                              Write(func_param);
-                                              WriteLn(' PVAR@ >R');
-                                              WriteLn('__FUNC_RET PVAR@ >R');
-                                              ExpectKind(TOK_INT);
-                                              Write(current_value);
-                                              Write(' ');
-                                              NextToken();
-                                              ExpectSymbolChar(')');
-                                              Write(func_name);
-                                              WriteLn(' __CALL_RET PVAR!');
-                                              WriteLn('R> __FUNC_RET PVAR!');
-                                              Write('R> ');
-                                              Write(func_param);
-                                              WriteLn(' PVAR!');
-                                              Write('__CALL_RET PVAR@ ');
-                                              NextToken()
-                                            end
-                                          else
-                                            begin
-                                              EmitSavedWord();
-                                              Write('PVAR@ ')
-                                            end
-                                        end
-                                      else
-                                        begin
-                                          EmitSavedWord();
-                                          Write('PVAR@ ')
-                                        end
-                                    end
-                                  else
-                                    begin
-                                      EmitSavedWord();
-                                      Write('PVAR@ ')
-                                    end
-                                end
+                              ParseSavedFallbackFactor()
                             end
-                          else if HasName(func_name) then
-                            begin
-                              if StrEqIgnoreCase(saved_text, func_name) then
-                                begin
-                                  if current_kind = TOK_SYMBOL then
-                                    begin
-                                      if current_text[0] = '(' then
-                                        begin
-                                          NextToken();
-                                          Write(func_param);
-                                          WriteLn(' PVAR@ >R');
-                                          WriteLn('__FUNC_RET PVAR@ >R');
-                                          ExpectKind(TOK_INT);
-                                          Write(current_value);
-                                          Write(' ');
-                                          NextToken();
-                                          ExpectSymbolChar(')');
-                                          Write(func_name);
-                                          WriteLn(' __CALL_RET PVAR!');
-                                          WriteLn('R> __FUNC_RET PVAR!');
-                                          Write('R> ');
-                                          Write(func_param);
-                                          WriteLn(' PVAR!');
-                                          Write('__CALL_RET PVAR@ ');
-                                          NextToken()
-                                        end
-                                      else
-                                        begin
-                                          EmitSavedWord();
-                                          Write('PVAR@ ')
-                                        end
-                                    end
-                                  else
-                                    begin
-                                      EmitSavedWord();
-                                      Write('PVAR@ ')
-                                    end
-                                end
-                              else
-                                begin
-                                  EmitSavedWord();
-                                  Write('PVAR@ ')
-                                end
-                            end
-                          else if HasName(proc_param) and StrEqIgnoreCase(saved_text, proc_param) then
-                            begin
-                              Write(proc_param);
-                              Write(' PVAR@ PVAR@ ')
-                            end
-                              else
-                                begin
-                                  EmitSavedWord();
-                                  Write('PVAR@ ')
-                                end
                             end
                                                             end
                                                         end
