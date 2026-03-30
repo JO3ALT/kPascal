@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use crate::ast::*;
 use crate::sema::*;
 
+const KFORTHC_RUNTIME_DATA_BYTES: u32 = 524_288 * 4;
+
 #[derive(Clone)]
 struct VarAccess {
     slot: String,
@@ -16,6 +18,7 @@ struct Ctx {
     vars: HashMap<String, VarAccess>,
     // simple name -> scoped key (program::Outer::Inner)
     routines: HashMap<String, String>,
+    current_frame_slots: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -37,6 +40,7 @@ pub struct ForthGen<'a> {
     env: &'a Env,
     out: String,
     indent: usize,
+    static_data_bytes: u32,
     routine_frames: HashMap<String, Vec<String>>,
     string_literals: Vec<(String, String)>,
     sum_case_bind_sp: usize,
@@ -48,6 +52,7 @@ impl<'a> ForthGen<'a> {
             env,
             out: String::new(),
             indent: 0,
+            static_data_bytes: 0,
             routine_frames: HashMap::new(),
             string_literals: Vec::new(),
             sum_case_bind_sp: 0,
@@ -97,50 +102,50 @@ impl<'a> ForthGen<'a> {
             self.emit_storage_decl(&v.name, t)?;
         }
         self.emit_string_literal_storage()?;
-        self.wln("CREATE __CASE_MATCH 0 ,");
-        self.wln("CREATE __WSTR_STOP 0 ,");
-        self.wln("CREATE __CP_SRC 0 ,");
-        self.wln("CREATE __CP_DST 0 ,");
-        self.wln("CREATE __CP_N 0 ,");
-        self.wln("CREATE __CP_I 0 ,");
-        self.wln("CREATE __CALL_RET 0 ,");
-        self.wln("CREATE __EQ_A 0 ,");
-        self.wln("CREATE __EQ_B 0 ,");
-        self.wln("CREATE __EQ_N 0 ,");
-        self.wln("CREATE __EQ_I 0 ,");
-        self.wln("CREATE __EQ_OK 0 ,");
-        self.wln("CREATE __CRS 0 ,");
-        self.emit_storage_bytes_decl("__CRA", max_agg_ret_bytes.max(4));
+        self.emit_storage_bytes_decl("__CASE_MATCH", 4)?;
+        self.emit_storage_bytes_decl("__WSTR_STOP", 4)?;
+        self.emit_storage_bytes_decl("__CP_SRC", 4)?;
+        self.emit_storage_bytes_decl("__CP_DST", 4)?;
+        self.emit_storage_bytes_decl("__CP_N", 4)?;
+        self.emit_storage_bytes_decl("__CP_I", 4)?;
+        self.emit_storage_bytes_decl("__CALL_RET", 4)?;
+        self.emit_storage_bytes_decl("__EQ_A", 4)?;
+        self.emit_storage_bytes_decl("__EQ_B", 4)?;
+        self.emit_storage_bytes_decl("__EQ_N", 4)?;
+        self.emit_storage_bytes_decl("__EQ_I", 4)?;
+        self.emit_storage_bytes_decl("__EQ_OK", 4)?;
+        self.emit_storage_bytes_decl("__CRS", 4)?;
+        self.emit_storage_bytes_decl("__CRA", max_agg_ret_bytes.max(4))?;
         for i in 0..32 {
-            self.wln(&format!("CREATE __SCB{i} 0 ,"));
+            self.emit_storage_bytes_decl(&format!("__SCB{i}"), 4)?;
         }
-        self.wln("CREATE __NEWP 0 ,");
-        self.wln("CREATE __HEX_PTR 0 ,");
-        self.wln("CREATE __HEX_LEN 0 ,");
-        self.wln("CREATE __HEX_ACC 0 ,");
-        self.wln("CREATE __HEX_I 0 ,");
-        self.wln("CREATE __HEX_STOP 0 ,");
-        self.wln("CREATE __I2H_VAL 0 ,");
-        self.wln("CREATE __I2H_PTR 0 ,");
-        self.wln("CREATE __I2H_MAX 0 ,");
-        self.wln("CREATE __I2H_FILL 0 ,");
-        self.wln("CREATE __I2H_REQ 0 ,");
-        self.wln("CREATE __I2H_WIDTH 0 ,");
-        self.wln("CREATE __I2H_I 0 ,");
-        self.wln("CREATE __I2H_SRC 0 ,");
-        self.wln("CREATE __STR_SRC 0 ,");
-        self.wln("CREATE __STR_DST 0 ,");
-        self.wln("CREATE __STR_A 0 ,");
-        self.wln("CREATE __STR_B 0 ,");
-        self.wln("CREATE __STR_I 0 ,");
-        self.wln("CREATE __STR_J 0 ,");
-        self.wln("CREATE __STR_K 0 ,");
-        self.wln("CREATE __STR_LEN 0 ,");
-        self.wln("CREATE __STR_IDX 0 ,");
-        self.wln("CREATE __STR_CNT 0 ,");
-        self.wln("CREATE __STR_POS 0 ,");
-        self.wln("CREATE __STR_MATCH 0 ,");
-        self.wln("CREATE __VAR_TAG 0 ,");
+        self.emit_storage_bytes_decl("__NEWP", 4)?;
+        self.emit_storage_bytes_decl("__HEX_PTR", 4)?;
+        self.emit_storage_bytes_decl("__HEX_LEN", 4)?;
+        self.emit_storage_bytes_decl("__HEX_ACC", 4)?;
+        self.emit_storage_bytes_decl("__HEX_I", 4)?;
+        self.emit_storage_bytes_decl("__HEX_STOP", 4)?;
+        self.emit_storage_bytes_decl("__I2H_VAL", 4)?;
+        self.emit_storage_bytes_decl("__I2H_PTR", 4)?;
+        self.emit_storage_bytes_decl("__I2H_MAX", 4)?;
+        self.emit_storage_bytes_decl("__I2H_FILL", 4)?;
+        self.emit_storage_bytes_decl("__I2H_REQ", 4)?;
+        self.emit_storage_bytes_decl("__I2H_WIDTH", 4)?;
+        self.emit_storage_bytes_decl("__I2H_I", 4)?;
+        self.emit_storage_bytes_decl("__I2H_SRC", 4)?;
+        self.emit_storage_bytes_decl("__STR_SRC", 4)?;
+        self.emit_storage_bytes_decl("__STR_DST", 4)?;
+        self.emit_storage_bytes_decl("__STR_A", 4)?;
+        self.emit_storage_bytes_decl("__STR_B", 4)?;
+        self.emit_storage_bytes_decl("__STR_I", 4)?;
+        self.emit_storage_bytes_decl("__STR_J", 4)?;
+        self.emit_storage_bytes_decl("__STR_K", 4)?;
+        self.emit_storage_bytes_decl("__STR_LEN", 4)?;
+        self.emit_storage_bytes_decl("__STR_IDX", 4)?;
+        self.emit_storage_bytes_decl("__STR_CNT", 4)?;
+        self.emit_storage_bytes_decl("__STR_POS", 4)?;
+        self.emit_storage_bytes_decl("__STR_MATCH", 4)?;
+        self.emit_storage_bytes_decl("__VAR_TAG", 4)?;
         self.wln(": PAGG-EQ");
         self.indent += 1;
         self.wln("__EQ_N PVAR!");
@@ -596,7 +601,11 @@ impl<'a> ForthGen<'a> {
                     )?;
                     continue;
                 }
-                let ty = self.ty_of_typeref(&prm.ty)?;
+                let ty = if prm.by_ref {
+                    TypeInfo::Pointer("__byref_param".into())
+                } else {
+                    self.ty_of_typeref(&prm.ty)?
+                };
                 self.emit_storage_decl(&self.slot_name(&scoped, &prm.name), &ty)?;
             }
             for lv in &block.vars {
@@ -632,6 +641,7 @@ impl<'a> ForthGen<'a> {
             let mut routine_ctx = Ctx {
                 vars: parent_ctx.vars.clone(),
                 routines: visible.clone(),
+                current_frame_slots: parent_ctx.current_frame_slots.clone(),
             };
             self.extend_vars_for_routine(r, &scoped, &mut routine_ctx)?;
             let body_routines =
@@ -639,6 +649,11 @@ impl<'a> ForthGen<'a> {
             let body_ctx = Ctx {
                 vars: routine_ctx.vars.clone(),
                 routines: body_routines,
+                current_frame_slots: self
+                    .routine_frames
+                    .get(&scoped)
+                    .cloned()
+                    .unwrap_or_default(),
             };
 
             self.emit_routines_recursive(&block.routines, &scoped, &routine_ctx)?;
@@ -668,7 +683,12 @@ impl<'a> ForthGen<'a> {
                             && !prm.by_ref
                             && prm.conformant.is_none()
                         {
-                            self.emit_param_store(slot, &self.ty_of_typeref(&prm.ty)?);
+                            let prm_ty = self.ty_of_typeref(&prm.ty)?;
+                            if self.is_aggregate_type(&prm_ty) {
+                                self.emit_aggregate_param_store(slot, &prm_ty)?;
+                            } else {
+                                self.emit_param_store(slot, &prm_ty);
+                            }
                         } else {
                             self.wln(&format!("{slot} PVAR!"));
                         }
@@ -681,6 +701,7 @@ impl<'a> ForthGen<'a> {
             RoutineDecl::Function(f) => {
                 self.wln(&format!(": {}", self.routine_word(scoped)));
                 self.indent += 1;
+                let ret_ty = self.ty_of_typeref(&f.ret_ty)?;
                 for prm in f.params.iter().rev() {
                     for slot in self
                         .runtime_param_slots(scoped, std::slice::from_ref(prm))
@@ -691,19 +712,35 @@ impl<'a> ForthGen<'a> {
                             && !prm.by_ref
                             && prm.conformant.is_none()
                         {
-                            self.emit_param_store(slot, &self.ty_of_typeref(&prm.ty)?);
+                            let prm_ty = self.ty_of_typeref(&prm.ty)?;
+                            if self.is_aggregate_type(&prm_ty) {
+                                self.emit_aggregate_param_store(slot, &prm_ty)?;
+                            } else {
+                                self.emit_param_store(slot, &prm_ty);
+                            }
                         } else {
                             self.wln(&format!("{slot} PVAR!"));
                         }
                     }
                 }
                 self.gen_stmt_with_ctx(&f.block.body, ctx)?;
-                self.wln(&format!("{} PVAR@", self.slot_name(scoped, &f.name)));
+                if self.is_aggregate_type(&ret_ty) {
+                    self.wln(&self.slot_name(scoped, &f.name));
+                } else {
+                    self.wln(&format!("{} PVAR@", self.slot_name(scoped, &f.name)));
+                }
                 self.indent -= 1;
                 self.wln(";");
             }
         }
         Ok(())
+    }
+
+    fn is_aggregate_type(&self, ty: &TypeInfo) -> bool {
+        matches!(
+            ty,
+            TypeInfo::Record(_) | TypeInfo::Sum(_) | TypeInfo::Array(_)
+        )
     }
 
     fn gen_stmt_with_ctx(&mut self, s: &Stmt, ctx: &Ctx) -> Result<(), String> {
@@ -995,6 +1032,18 @@ impl<'a> ForthGen<'a> {
             TypeInfo::Array(_) => {
                 if let Expr::ArrayLit(elems) = rhs {
                     return self.emit_array_literal_into(dst, elems, ctx);
+                }
+                if let Expr::SetLit(items) = rhs {
+                    let mut elems = Vec::with_capacity(items.len());
+                    for item in items {
+                        match item {
+                            SetItem::Single(e) => elems.push(e.clone()),
+                            SetItem::Range(_, _) => {
+                                return Err("array literal does not allow ranges".into());
+                            }
+                        }
+                    }
+                    return self.emit_array_literal_into(dst, &elems, ctx);
                 }
                 if let Expr::ArrayUpdate(base, updates) = rhs {
                     return self.emit_array_update_into(dst, base, updates, ctx);
@@ -1875,6 +1924,12 @@ impl<'a> ForthGen<'a> {
                     .ok_or_else(|| format!("by-ref argument must be lvalue in call to {name}"))?;
                 let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
                 out.push(self.emit_addr_inline(&a));
+            } else if self.is_aggregate_type(&p.ty) {
+                let lv = expr_to_lvalue(arg).ok_or_else(|| {
+                    format!("aggregate by-value argument must be lvalue in call to {name}")
+                })?;
+                let a = self.resolve_lvalue_addr_ctx(&lv, ctx)?;
+                out.push(self.emit_addr_inline(&a));
             } else {
                 out.push(self.gen_expr_inline_ctx(arg, ctx)?);
             }
@@ -1883,14 +1938,12 @@ impl<'a> ForthGen<'a> {
     }
 
     fn gen_call_inline_ctx(&self, name: &str, args: &[Expr], ctx: &Ctx) -> Result<String, String> {
-        let key = ctx
-            .routines
+        ctx.routines
             .get(name)
             .ok_or_else(|| format!("unknown routine in scope: {name}"))?;
         let (word, sig) = self.resolve_call_target(ctx, name)?;
         let mut parts = vec![];
-        let frame_slots = self.routine_frames.get(key).cloned().unwrap_or_default();
-        for slot in &frame_slots {
+        for slot in &ctx.current_frame_slots {
             parts.push(format!("{slot} PVAR@ >R"));
         }
         let argc = self.gen_call_args_inline(name, args, ctx)?;
@@ -1901,7 +1954,7 @@ impl<'a> ForthGen<'a> {
         if sig.ret.is_some() {
             parts.push("__CALL_RET PVAR!".into());
         }
-        for slot in frame_slots.iter().rev() {
+        for slot in ctx.current_frame_slots.iter().rev() {
             parts.push(format!("R> {slot} PVAR!"));
         }
         if sig.ret.is_some() {
@@ -1917,8 +1970,7 @@ impl<'a> ForthGen<'a> {
         dst: &AddrRef,
         ctx: &Ctx,
     ) -> Result<(), String> {
-        let key = ctx
-            .routines
+        ctx.routines
             .get(name)
             .ok_or_else(|| format!("unknown routine in scope: {name}"))?;
         let (word, sig) = self.resolve_call_target(ctx, name)?;
@@ -1938,8 +1990,7 @@ impl<'a> ForthGen<'a> {
             return Err("internal: scalar function routed to aggregate assignment path".into());
         }
 
-        let frame_slots = self.routine_frames.get(key).cloned().unwrap_or_default();
-        for slot in &frame_slots {
+        for slot in &ctx.current_frame_slots {
             self.wln(&format!("{slot} PVAR@ >R"));
         }
         let argc = self.gen_call_args_inline(name, args, ctx)?;
@@ -1966,7 +2017,7 @@ impl<'a> ForthGen<'a> {
         };
         self.emit_aggregate_copy(&src_tmp, &dst_tmp, size);
 
-        for slot in frame_slots.iter().rev() {
+        for slot in ctx.current_frame_slots.iter().rev() {
             self.wln(&format!("R> {slot} PVAR!"));
         }
 
@@ -1992,7 +2043,7 @@ impl<'a> ForthGen<'a> {
     fn emit_load_inline(&self, src: &AddrRef) -> String {
         let checks = self.variant_check_prefix(src);
         if let Some(addr) = &src.dynamic_addr_expr {
-            format!("{checks}{addr} PVAR@")
+            format!("{checks}{addr} __SCB0 PVAR! __SCB0 PVAR@ PVAR@")
         } else if src.offset == 0 {
             format!("{checks}{} PVAR@", src.base_expr)
         } else {
@@ -2060,19 +2111,38 @@ impl<'a> ForthGen<'a> {
         }
     }
 
+    fn emit_aggregate_param_store(&mut self, slot: &str, ty: &TypeInfo) -> Result<(), String> {
+        let size = self.type_size_bytes(ty)?;
+        self.wln("__CP_SRC PVAR!");
+        self.wln(&format!("{slot} __CP_DST PVAR!"));
+        self.wln(&format!("{size} __CP_N PVAR!"));
+        self.wln("0 __CP_I PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__CP_I PVAR@ __CP_N PVAR@ < WHILE");
+        self.indent += 1;
+        self.wln("__CP_SRC PVAR@ __CP_I PVAR@ + PVAR@");
+        self.wln("__CP_DST PVAR@ __CP_I PVAR@ + PVAR!");
+        self.wln("__CP_I PVAR@ 4 + __CP_I PVAR!");
+        self.indent -= 1;
+        self.indent -= 1;
+        self.wln("REPEAT");
+        Ok(())
+    }
+
     fn resolve_lvalue_addr_ctx(&self, lv: &LValue, ctx: &Ctx) -> Result<AddrRef, String> {
         let v = ctx
             .vars
             .get(&lv.base)
             .ok_or_else(|| format!("unknown var: {}", lv.base))?;
-        let base_expr = if v.by_ref {
-            format!("{} PVAR@", v.slot)
-        } else {
-            v.slot.clone()
-        };
+        let base_expr = v.slot.clone();
         let mut t = v.ty.clone();
         let mut offset = 0u32;
-        let mut dynamic_addr_expr: Option<String> = None;
+        let mut dynamic_addr_expr: Option<String> = if v.by_ref {
+            Some(format!("{} PVAR@", v.slot))
+        } else {
+            None
+        };
         let mut conformant_bounds = v.conformant_bounds.clone();
         let mut variant_checks = Vec::new();
         for sel in &lv.sels {
@@ -2264,9 +2334,9 @@ impl<'a> ForthGen<'a> {
     fn emit_load_at(&self, src: &AddrRef, add_ofs: u32) -> String {
         if let Some(addr) = &src.dynamic_addr_expr {
             if add_ofs == 0 {
-                format!("{addr} PVAR@")
+                format!("{addr} __SCB0 PVAR! __SCB0 PVAR@ PVAR@")
             } else {
-                format!("{addr} {add_ofs} + PVAR@")
+                format!("{addr} {add_ofs} + __SCB0 PVAR! __SCB0 PVAR@ PVAR@")
             }
         } else {
             let total = src.offset + add_ofs;
@@ -2281,9 +2351,11 @@ impl<'a> ForthGen<'a> {
     fn emit_store_at(&mut self, rhs: &str, dst: &AddrRef, add_ofs: u32) {
         if let Some(addr) = &dst.dynamic_addr_expr {
             if add_ofs == 0 {
-                self.wln(&format!("{rhs} {addr} PVAR!"));
+                self.wln(&format!("{addr} __SCB0 PVAR! {rhs} __SCB0 PVAR@ PVAR!"));
             } else {
-                self.wln(&format!("{rhs} {addr} {add_ofs} + PVAR!"));
+                self.wln(&format!(
+                    "{addr} {add_ofs} + __SCB0 PVAR! {rhs} __SCB0 PVAR@ PVAR!"
+                ));
             }
         } else {
             let total = dst.offset + add_ofs;
@@ -2416,16 +2488,28 @@ impl<'a> ForthGen<'a> {
 
     fn emit_storage_decl(&mut self, name: &str, ty: &TypeInfo) -> Result<(), String> {
         let sz = self.type_size_bytes(ty)?;
-        self.emit_storage_bytes_decl(name, sz);
+        self.emit_storage_bytes_decl(name, sz)?;
         Ok(())
     }
 
-    fn emit_storage_bytes_decl(&mut self, name: &str, sz: u32) {
+    fn emit_storage_bytes_decl(&mut self, name: &str, sz: u32) -> Result<(), String> {
+        let next = self
+            .static_data_bytes
+            .checked_add(sz)
+            .ok_or_else(|| format!("static data layout overflow while allocating {name}"))?;
+        if next > KFORTHC_RUNTIME_DATA_BYTES {
+            return Err(format!(
+                "static data {} bytes exceeds kforthc runtime limit {} bytes while allocating {name}; shrink global storage or add packed-char/runtime-frame support",
+                next, KFORTHC_RUNTIME_DATA_BYTES
+            ));
+        }
         if sz <= 4 {
             self.wln(&format!("CREATE {name} 0 ,"));
         } else {
             self.wln(&format!("CREATE {name} 0 , {} ALLOT", sz - 4));
         }
+        self.static_data_bytes = next;
+        Ok(())
     }
 
     fn max_aggregate_return_bytes(&self, prog: &Program) -> Result<u32, String> {
@@ -2548,7 +2632,11 @@ impl<'a> ForthGen<'a> {
             );
         }
         let routines = self.extend_routine_visibility(&HashMap::new(), top_routines, scope);
-        Ctx { vars, routines }
+        Ctx {
+            vars,
+            routines,
+            current_frame_slots: Vec::new(),
+        }
     }
 
     fn extend_vars_for_routine(

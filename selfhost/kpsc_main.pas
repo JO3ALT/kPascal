@@ -1,16 +1,17 @@
 program kpsc_main;
-(* $I string_utils.pas *)
-(* $I types.inc *)
-(* $I compiler_lexer.inc *)
-(* $I compiler_expr.inc *)
-(* $I compiler_stmt.inc *)
-(* $I compiler_decl.inc *)
-(* $I compiler_codegen.inc *)
-(* $I source_runtime.inc *)
+(* $I selfhost/string_utils.pas *)
+(* $I selfhost/types.inc *)
+(* $I selfhost/source_runtime.inc *)
+(* $I selfhost/compiler_lexer.inc *)
+(* $I selfhost/compiler_expr.inc *)
+(* $I selfhost/compiler_stmt.inc *)
+(* $I selfhost/compiler_decl.inc *)
+(* $I selfhost/compiler_codegen.inc *)
 begin
+  InitStringUtils();
+  InitCompilerState();
   ReadSourceFromStdin();
+  ReadToken();
   ParseProgram();
-  EmitHeader();
-  EmitIntLine(0);
-  EmitFooter();
+  EmitProgram();
 end.

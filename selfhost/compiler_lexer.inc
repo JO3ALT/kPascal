@@ -1,64 +1,534 @@
+procedure FailParse;
+begin
+  Write('p');
+  Write('a');
+  Write('r');
+  Write('s');
+  Write('e');
+  Write(' ');
+  Write('e');
+  Write('r');
+  Write('r');
+  Write('o');
+  Write('r');
+  WriteLn()
+end;
+
+function IsLetter(ch: char): boolean;
+begin
+  if ch >= 'a' then
+    begin
+      if ch <= 'z' then
+        IsLetter := true
+      else
+        IsLetter := false
+    end
+  else if ch >= 'A' then
+    begin
+      if ch <= 'Z' then
+        IsLetter := true
+      else
+        IsLetter := false
+    end
+  else if ch = '_' then
+    begin
+      IsLetter := true
+    end
+  else
+    begin
+      IsLetter := false
+    end
+end;
+
+function IsDigit(ch: char): boolean;
+begin
+  if ch >= '0' then
+    begin
+      if ch <= '9' then
+        IsDigit := true
+      else
+        IsDigit := false
+    end
+  else
+    begin
+      IsDigit := false
+    end
+end;
+
+function IsIdentChar(ch: char): boolean;
+begin
+  if IsLetter(ch) then
+    begin
+      IsIdentChar := true
+    end
+  else if IsDigit(ch) then
+    begin
+      IsIdentChar := true
+    end
+  else
+    begin
+      IsIdentChar := false
+    end
+end;
+
+procedure ClearToken;
+begin
+  token_value := 0;
+  ClearText(token_text)
+end;
+
 procedure SkipWhitespace;
 begin
-  while (source_pos < source_len) and (source_text[source_pos] <= ' ') do
-    source_pos := source_pos + 1
+  PrimeSourceStream();
+  if not stream_eof then
+    begin
+      if stream_current_char <= ' ' then
+        begin
+          AdvanceSourceStream();
+          SkipWhitespace()
+        end
+    end
 end;
 
-procedure ClearTokenText;
-var i: integer;
+procedure ClassifyIdentifierToken;
 begin
-  for i := 0 to MAX_TOKEN_LEN do
-    current_text[i] := #0
+  if StrCmp(token_text, kw_program) = 0 then
+    token_kind := TOK_KW_PROGRAM
+  else if StrCmp(token_text, kw_const) = 0 then
+    token_kind := TOK_KW_CONST
+  else if StrCmp(token_text, kw_type) = 0 then
+    token_kind := TOK_KW_TYPE
+  else if StrCmp(token_text, kw_var) = 0 then
+    token_kind := TOK_KW_VAR
+  else if StrCmp(token_text, kw_procedure) = 0 then
+    token_kind := TOK_KW_PROCEDURE
+  else if StrCmp(token_text, kw_function) = 0 then
+    token_kind := TOK_KW_FUNCTION
+  else if StrCmp(token_text, kw_begin) = 0 then
+    token_kind := TOK_KW_BEGIN
+  else if StrCmp(token_text, kw_end) = 0 then
+    token_kind := TOK_KW_END
+  else if StrCmp(token_text, kw_read) = 0 then
+    token_kind := TOK_KW_READ
+  else if StrCmp(token_text, kw_readln) = 0 then
+    token_kind := TOK_KW_READLN
+  else if StrCmp(token_text, kw_write) = 0 then
+    token_kind := TOK_KW_WRITE
+  else if StrCmp(token_text, kw_writeln) = 0 then
+    token_kind := TOK_KW_WRITELN
+  else if StrCmp(token_text, kw_for) = 0 then
+    token_kind := TOK_KW_FOR
+  else if StrCmp(token_text, kw_to) = 0 then
+    token_kind := TOK_KW_TO
+  else if StrCmp(token_text, kw_downto) = 0 then
+    token_kind := TOK_KW_DOWNTO
+  else if StrCmp(token_text, kw_do) = 0 then
+    token_kind := TOK_KW_DO
+  else if StrCmp(token_text, kw_case) = 0 then
+    token_kind := TOK_KW_CASE
+  else if StrCmp(token_text, kw_of) = 0 then
+    token_kind := TOK_KW_OF
+  else if StrCmp(token_text, kw_else) = 0 then
+    token_kind := TOK_KW_ELSE
+  else if StrCmp(token_text, kw_if) = 0 then
+    token_kind := TOK_KW_IF
+  else if StrCmp(token_text, kw_then) = 0 then
+    token_kind := TOK_KW_THEN
+  else if StrCmp(token_text, kw_with) = 0 then
+    token_kind := TOK_KW_WITH
+  else if StrCmp(token_text, kw_while) = 0 then
+    token_kind := TOK_KW_WHILE
+  else if StrCmp(token_text, kw_repeat) = 0 then
+    token_kind := TOK_KW_REPEAT
+  else if StrCmp(token_text, kw_until) = 0 then
+    token_kind := TOK_KW_UNTIL
+  else if StrCmp(token_text, kw_record) = 0 then
+    token_kind := TOK_KW_RECORD
+  else if StrCmp(token_text, kw_array) = 0 then
+    token_kind := TOK_KW_ARRAY
+  else if StrCmp(token_text, kw_set) = 0 then
+    token_kind := TOK_KW_SET
+  else if StrCmp(token_text, kw_true) = 0 then
+    token_kind := TOK_KW_TRUE
+  else if StrCmp(token_text, kw_false) = 0 then
+    token_kind := TOK_KW_FALSE
+  else if StrCmp(token_text, kw_nil) = 0 then
+    token_kind := TOK_KW_NIL
+  else if StrCmp(token_text, kw_in) = 0 then
+    token_kind := TOK_KW_IN
+  else if StrCmp(token_text, kw_div) = 0 then
+    token_kind := TOK_KW_DIV
+  else if StrCmp(token_text, kw_mod) = 0 then
+    token_kind := TOK_KW_MOD
+  else if StrCmp(token_text, kw_and) = 0 then
+    token_kind := TOK_KW_AND
+  else if StrCmp(token_text, kw_or) = 0 then
+    token_kind := TOK_KW_OR
+  else if StrCmp(token_text, kw_xor) = 0 then
+    token_kind := TOK_KW_XOR
+  else if StrCmp(token_text, kw_not) = 0 then
+    token_kind := TOK_KW_NOT
+  else if StrCmp(token_text, kw_integer) = 0 then
+    token_kind := TOK_KW_INTEGER
+  else if StrCmp(token_text, kw_boolean) = 0 then
+    token_kind := TOK_KW_BOOLEAN
+  else if StrCmp(token_text, kw_char) = 0 then
+    token_kind := TOK_KW_CHAR
+  else if StrCmp(token_text, kw_real) = 0 then
+    token_kind := TOK_KW_REAL
+  else
+    token_kind := TOK_IDENT
 end;
 
-procedure ReadIdentOrKeyword;
+procedure ReadIdentifierToken;
 var i: integer;
 begin
-  ClearTokenText();
+  ClearToken();
   i := 0;
-  while (source_pos < source_len) and ((source_text[source_pos] >= 'a') and (source_text[source_pos] <= 'z') or (source_text[source_pos] >= 'A') and (source_text[source_pos] <= 'Z')) do
+  while i < 100000 do
     begin
-      if i <= MAX_TOKEN_LEN then
-        current_text[i] := source_text[source_pos];
-      i := i + 1;
-      source_pos := source_pos + 1
+      if stream_eof then
+        begin
+          i := 100000
+        end
+      else if stream_current_char = '_' then
+        begin
+          if i <= 255 then
+            token_text[i] := stream_current_char;
+          i := i + 1;
+          AdvanceSourceStream()
+        end
+      else if stream_current_char < '0' then
+        begin
+          i := 100000
+        end
+      else if stream_current_char <= '9' then
+        begin
+          if i <= 255 then
+            token_text[i] := stream_current_char;
+          i := i + 1;
+          AdvanceSourceStream()
+        end
+      else if stream_current_char < 'A' then
+        begin
+          i := 100000
+        end
+      else if stream_current_char <= 'Z' then
+        begin
+          if i <= 255 then
+            token_text[i] := Chr(Ord(stream_current_char) + 32);
+          i := i + 1;
+          AdvanceSourceStream()
+        end
+      else if stream_current_char < 'a' then
+        begin
+          i := 100000
+        end
+      else if stream_current_char <= 'z' then
+        begin
+          if i <= 255 then
+            token_text[i] := stream_current_char;
+          i := i + 1;
+          AdvanceSourceStream()
+        end
+      else
+        begin
+          i := 100000
+        end
     end;
-  current_kind := TOK_IDENT
+  ClassifyIdentifierToken()
 end;
 
-procedure ReadNumber;
+procedure ReadNumberToken;
+var i: integer;
 begin
-  current_value := 0;
-  while (source_pos < source_len) and (source_text[source_pos] >= '0') and (source_text[source_pos] <= '9') do
+  ClearToken();
+  i := 0;
+  while i < 100000 do
     begin
-      current_value := current_value * 10 + Ord(source_text[source_pos]) - Ord('0');
-      source_pos := source_pos + 1
+      if stream_eof then
+        begin
+          i := 100000
+        end
+      else if IsDigit(stream_current_char) then
+        begin
+          token_value := token_value * 10 + Ord(stream_current_char) - Ord('0');
+          i := i + 1;
+          AdvanceSourceStream()
+        end
+      else
+        begin
+          i := 100000
+        end
     end;
-  current_kind := TOK_INT
+  token_kind := TOK_INT
 end;
 
-procedure ReadSymbol;
+procedure ReadStringToken;
+var i: integer;
 begin
-  ClearTokenText();
-  current_text[0] := source_text[source_pos];
-  current_text[1] := #0;
-  current_kind := TOK_SYMBOL;
-  source_pos := source_pos + 1
+  ClearToken();
+  i := 0;
+  AdvanceSourceStream();
+  while i < 100000 do
+    begin
+      if stream_eof then
+        begin
+          i := 100000
+        end
+      else if stream_current_char = '''' then
+        begin
+          AdvanceSourceStream();
+          if stream_current_char = '''' then
+            begin
+              if i <= 255 then
+                token_text[i] := '''';
+              i := i + 1;
+              AdvanceSourceStream()
+            end
+          else
+            begin
+              i := 100000
+            end
+        end
+      else
+        begin
+          if i <= 255 then
+            token_text[i] := stream_current_char;
+          i := i + 1;
+          AdvanceSourceStream()
+        end
+    end;
+  token_kind := TOK_STR
+end;
+
+procedure ReadSymbolToken;
+begin
+  ClearToken();
+  if stream_current_char = '(' then
+    begin
+      token_kind := TOK_LPAREN;
+      AdvanceSourceStream()
+    end
+  else if stream_current_char = ')' then
+    begin
+      token_kind := TOK_RPAREN;
+      AdvanceSourceStream()
+    end
+  else if stream_current_char = '[' then
+    begin
+      token_kind := TOK_LBRACK;
+      AdvanceSourceStream()
+    end
+  else if stream_current_char = ']' then
+    begin
+      token_kind := TOK_RBRACK;
+      AdvanceSourceStream()
+    end
+  else if stream_current_char = ';' then
+    begin
+      token_kind := TOK_SEMI;
+      AdvanceSourceStream()
+    end
+  else if stream_current_char = ':' then
+    begin
+      AdvanceSourceStream();
+      if stream_current_char = '=' then
+        begin
+          token_kind := TOK_ASSIGN;
+          AdvanceSourceStream()
+        end
+      else
+        begin
+          token_kind := TOK_COLON
+        end
+    end
+  else if stream_current_char = ',' then
+    begin
+      token_kind := TOK_COMMA;
+      AdvanceSourceStream()
+    end
+  else if stream_current_char = '.' then
+    begin
+      AdvanceSourceStream();
+      if stream_current_char = '.' then
+        begin
+          token_kind := TOK_DOTDOT;
+          AdvanceSourceStream()
+        end
+      else
+        begin
+          token_kind := TOK_DOT
+        end
+    end
+  else if stream_current_char = '^' then
+    begin
+      token_kind := TOK_CARET;
+      AdvanceSourceStream()
+    end
+  else if stream_current_char = '=' then
+    begin
+      token_kind := TOK_EQ;
+      AdvanceSourceStream()
+    end
+  else if stream_current_char = '<' then
+    begin
+      AdvanceSourceStream();
+      if stream_current_char = '=' then
+        begin
+          token_kind := TOK_LE;
+          AdvanceSourceStream()
+        end
+      else if stream_current_char = '>' then
+        begin
+          token_kind := TOK_NE;
+          AdvanceSourceStream()
+        end
+      else
+        begin
+          token_kind := TOK_LT
+        end
+    end
+  else if stream_current_char = '>' then
+    begin
+      AdvanceSourceStream();
+      if stream_current_char = '=' then
+        begin
+          token_kind := TOK_GE;
+          AdvanceSourceStream()
+        end
+      else
+        begin
+          token_kind := TOK_GT
+        end
+    end
+  else if stream_current_char = '+' then
+    begin
+      token_kind := TOK_PLUS;
+      AdvanceSourceStream()
+    end
+  else if stream_current_char = '-' then
+    begin
+      token_kind := TOK_MINUS;
+      AdvanceSourceStream()
+    end
+  else if stream_current_char = '*' then
+    begin
+      token_kind := TOK_STAR;
+      AdvanceSourceStream()
+    end
+  else if stream_current_char = '/' then
+    begin
+      token_kind := TOK_SLASH;
+      AdvanceSourceStream()
+    end
+  else
+    begin
+      FailParse()
+    end
+end;
+
+procedure ReadToken;
+begin
+  SkipWhitespace();
+  if stream_eof then
+    begin
+      token_kind := TOK_EOF;
+      ClearToken()
+    end
+  else if stream_current_char = '_' then
+    begin
+      ReadIdentifierToken()
+    end
+  else if stream_current_char = '''' then
+    begin
+      ReadStringToken()
+    end
+  else if stream_current_char < '0' then
+    begin
+      ReadSymbolToken()
+    end
+  else if stream_current_char <= '9' then
+    begin
+      ReadNumberToken()
+    end
+  else if stream_current_char < 'A' then
+    begin
+      ReadSymbolToken()
+    end
+  else if stream_current_char <= 'Z' then
+    begin
+      ReadIdentifierToken()
+    end
+  else if stream_current_char < 'a' then
+    begin
+      ReadSymbolToken()
+    end
+  else if stream_current_char <= 'z' then
+    begin
+      ReadIdentifierToken()
+    end
+  else
+    begin
+      ReadSymbolToken()
+    end
+end;
+
+procedure ExpectToken(kind: integer);
+begin
+  if token_kind <> kind then
+    begin
+      FailParse()
+    end;
+  ReadToken()
+end;
+
+procedure ExpectIdent(var dst: text_buf);
+begin
+  if token_kind <> TOK_IDENT then
+    begin
+      FailParse()
+    end;
+  StrCopy(token_text, dst);
+  ReadToken()
 end;
 
 procedure NextToken;
 begin
-  SkipWhitespace();
-  ClearTokenText();
-  if source_pos >= source_len then
-    begin
-      current_kind := TOK_EOF;
-      exit
-    end;
-  if (source_text[source_pos] >= '0') and (source_text[source_pos] <= '9') then
-    ReadNumber()
-  else if ((source_text[source_pos] >= 'a') and (source_text[source_pos] <= 'z')) or ((source_text[source_pos] >= 'A') and (source_text[source_pos] <= 'Z')) then
-    ReadIdentOrKeyword()
-  else
-    ReadSymbol()
+  ReadToken()
+end;
+
+procedure ReadString;
+begin
+  ReadStringToken()
+end;
+
+procedure ReadNumber;
+begin
+  ReadNumberToken()
+end;
+
+procedure ReadSymbol;
+begin
+  ReadSymbolToken()
+end;
+
+procedure WriteToken;
+begin
+  WriteLn(token_kind)
+end;
+
+procedure ExpectKind(kind: integer);
+begin
+  ExpectToken(kind)
+end;
+
+procedure ExpectAssignSymbol;
+begin
+  ExpectToken(TOK_ASSIGN)
+end;
+
+procedure ExpectSymbolChar(kind: integer);
+begin
+  ExpectToken(kind)
 end;
