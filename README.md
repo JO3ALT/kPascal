@@ -99,9 +99,20 @@ Run generated Forth with kforth (from this repository root):
   `WriteLn(StrEqIgnoreCaseLit(name, lit));`
   `WriteLn(HasNameEqIgnoreCase(name, lit));`
 - For an initial self-hosting compiler, the current language surface is broadly sufficient if you stay within a single-process, stdin/stdout, fixed-buffer design. What is still intentionally missing is mainly `forward`, true deallocation in `dispose`, and Pascal file I/O.
+- Additional selfhost implementation rules: string literal to `array[...] of char` must stay as normal `:=` assignment semantics, ordinary text copying should use `StrCopy`, duplicate wrappers should not be added, and source handling should stay stdin-streaming oriented.
+- Selfhost parser work must remain in 1:1 correspondence with `expanded.rs`; if Pascal lacks a direct construct, add helper procedures/functions instead of inventing a differently-shaped parser.
+- In selfhost Pascal, every `if ... then` branch and every `else` branch must use `begin ... end`, even for a single statement. The same rule applies to `else if`.
 - The test suite currently covers compiler, kforth end-to-end, and restored Standard Pascal sample regressions on `main`.
-- Self-hosting work also covers an external preprocessing path: `prekpascal` can flatten `selfhost/kpsc_main.pas` into a single source file, and that preprocessed `kpsc_main` has been validated as a direct compiler path for the sample set `01_hello` through `20_scalar_builtins`.
+- In this repository, self-hosting should be considered complete for the Standard Pascal-oriented core. Concretely, the completion claim means the selfhost compiler path can compile and run the restored Standard Pascal sample set; the integrated kPascal extensions are outside that completion claim unless a document explicitly says otherwise.
+- Self-hosting work also covers an external preprocessing path: `scripts/prekpascal` uses `sed + m4` to flatten `selfhost/kpsc_main.pas` into a single source file without relying on Pascal file I/O. `scripts/preprocess_selfhost.sh` remains as a compatibility wrapper to `prekpascal`.
 
 ## License
 
 MIT License. See `LICENSE`.
+
+## kforthc Output Contract
+- The intended backend contract is the bootstrap-style runtime supported by `kforthc`.
+- Prefer `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `PWRITE-STR`, `PWRITELN`, and `PWRITE-HEX` in generated Forth.
+- `.` and `EMIT` are only aliases for integer and char output.
+- `S" ..."` is only assumed to be supported when immediately followed by `PWRITE-STR`, `READ-F32`, or `FNUMBER?`.
+- Do not generate `TYPE` for string output. Use `S" ..." PWRITE-STR`.

@@ -99,9 +99,20 @@ cargo run -q < tests/fixtures/all_features.pas
   `WriteLn(StrEqIgnoreCaseLit(name, lit));`
   `WriteLn(HasNameEqIgnoreCase(name, lit));`
 - セルフホスティング初期版という前提なら、現行の言語機能は概ね足りています。前提は 1 プロセス・stdin/stdout・固定長バッファ設計です。引き続き意図的に未実装なのは主に `forward`、本当の `dispose` 解放、Pascal の file I/O です。
+- selfhost 実装上の追加ルールとして、文字列リテラルから `array[...] of char` への転送は通常の `:=` 代入セマンティクスで扱い、通常の文字列コピーは `StrCopy` を使い、`CopyCharArray` のような重複 helper は追加しません。入力処理も全読込ではなく stdin の逐次処理を基準にします。
+- selfhost のパーサ実装は `expanded.rs` と 1 対 1 対応を維持し、Pascal 側に足りない表現力は手続き・関数の追加で補います。形の違うアドホックなパーサへ崩してはいけません。
+- selfhost Pascal では `if ... then` 側も `else` 側も、1 文だけでも必ず `begin ... end` を付けます。`else if` も同じです。
 - テストはコンパイラ単体、kforth end-to-end、復元した Standard Pascal sample regression を含めて `main` で通る状態です。
-- セルフホスティング系では、外部プリプロセッサ `prekpascal` で `selfhost/kpsc_main.pas` を単一ソース化した経路も検証済みです。前処理済み `kpsc_main` は、少なくとも sample 群の `01_hello` から `20_scalar_builtins` までを direct にコンパイルできることを確認しています。
+- このリポジトリで「セルフホスティング完成」と呼ぶ範囲は Standard Pascal 寄りコアまでです。具体的には、selfhost compiler path で復元した Standard Pascal sample 群をコンパイル・実行できることを完了条件とし、kPascal 独自拡張はドキュメントで明示しない限りこの完了宣言には含めません。
+- セルフホスティング系では、`scripts/prekpascal` による `sed + m4` 前処理で `selfhost/kpsc_main.pas` を単一ソース化する経路を使います。Pascal 側の file I/O には依存しません。`scripts/preprocess_selfhost.sh` は `prekpascal` への互換ラッパとして残しています。
 
 ## ライセンス
 
 MIT License（`LICENSE` を参照）。
+
+## kforthc 出力契約
+- 想定する backend 契約は、`kforthc` が実装している bootstrap 互換 runtime surface です。
+- 生成 Forth では `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `PWRITE-STR`, `PWRITELN`, `PWRITE-HEX` を優先してください。
+- `.` と `EMIT` は整数出力と文字出力の alias にすぎません。
+- `S" ..."` は、現状では直後が `PWRITE-STR`, `READ-F32`, `FNUMBER?` の場合だけを前提にしてください。
+- 文字列出力に `TYPE` を使わないでください。`S" ..." PWRITE-STR` を使ってください。

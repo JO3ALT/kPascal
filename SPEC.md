@@ -13,6 +13,10 @@ This document records compatibility-preserving, Rust-friendly extensions added o
 - Existing `if ... then ... else` remains a statement and is unchanged.
 - Existing `record`, `array`, `case` (constant labels), `procedure`, `function` behavior remains.
 - New features are additive: `record of`, `option of`, `cond(...)`, `imut`, and sum-deconstruction `case`.
+- For selfhost work on top of this language surface, keep these operational constraints in mind: `forward` is unavailable, string literal to char-array transfer stays in normal `:=` assignment semantics, ordinary text copying should use `StrCopy`, duplicate wrappers should be avoided, and stdin-streaming compilation is preferred over full-source preload.
+- Selfhost parser code should remain in 1:1 correspondence with `expanded.rs`; when direct transcription is awkward in Pascal, add helper procedures/functions instead of redesigning the parser shape.
+- Selfhost coding style for `if` is mandatory-block: both `then` and `else` branches use `begin ... end` even for one statement, and `else if` chains follow the same rule.
+- Any self-hosting completion claim in this repository is scoped to the Standard Pascal-oriented core unless a document explicitly says that an extension surface is also covered.
 
 ## 1. Conditional Record (`record of`)
 
@@ -308,3 +312,10 @@ Covered by integration test `e2e_cond_short_circuits_side_effects_on_kforth`.
 - `cond(...)` code generation is implemented for assignment contexts (including function-result assignment).
 - Sum-case codegen currently supports scalar bindings (e.g. `some(v)` where `v` is scalar).
 - `typed const` is currently scalar-only (aggregate typed constants are not yet implemented).
+
+## kforthc Output Compatibility
+- The generated Forth target is `kforthc`'s bootstrap-style runtime surface.
+- Prefer `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `PWRITE-STR`, `PWRITELN`, and `PWRITE-HEX`.
+- `.` and `EMIT` are aliases, not the primary codegen contract.
+- `S" ..."` should only be used in the `kforthc`-supported forms `S" ..." PWRITE-STR`, `S" ..." READ-F32`, and `S" ..." FNUMBER?`.
+- Do not depend on `TYPE` for string output.

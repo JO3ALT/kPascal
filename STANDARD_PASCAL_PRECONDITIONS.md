@@ -25,6 +25,9 @@ Current language policy:
 - `dispose(p)` does not reclaim memory; it simply stores `nil` back into `p`.
 - The final runtime target does not provide a filesystem, so Pascal file I/O is intentionally not implemented.
 - For self-hosting, the current language surface is considered sufficient for an initial compiler that uses stdin/stdout, include files, and fixed-size buffers rather than filesystem-driven compilation units.
+- Selfhost implementation should follow the same constraints operationally: declarations must be ordered without `forward`, string literal to char-array transfer belongs to normal `:=` assignment semantics, ordinary text copying should go through `StrCopy`, duplicate wrappers should not be introduced, and stdin streaming is preferred over full-source preload.
+- The selfhost parser is expected to stay in 1:1 correspondence with `expanded.rs`; where Pascal is too weak to mirror a Rust step directly, add helper procedures/functions rather than reshaping the parser logic.
+- Selfhost coding style for conditionals is stricter than the general grammar: every `then` branch and every `else` branch must be an explicit `begin ... end` block, including single-statement branches and `else if` chains.
 
 End-to-end testing assumes this native backend pipeline:
 
@@ -50,4 +53,13 @@ cargo clippy -- -D warnings
 
 At the time of this document, all of the commands above pass in this worktree. The active `main` test set covers compiler checks, kforth end-to-end execution, error-message regressions, enum semantics, and the restored Standard Pascal sample regressions.
 
-Self-hosting validation also includes a preprocessed single-source path. Using `prekpascal` to flatten `selfhost/kpsc_main.pas`, the resulting single-source compiler has been checked as a direct compilation path for the sample set `01_hello` through `20_scalar_builtins`.
+In this repository, "self-hosting complete" is scoped to the Standard Pascal-oriented core. Concretely, that means the selfhost compiler path can compile and run the restored Standard Pascal sample set; it does not, by itself, claim selfhost completion for the integrated kPascal extensions.
+
+Self-hosting validation also includes a preprocessed single-source path. `scripts/prekpascal` uses `sed + m4` to flatten `selfhost/kpsc_main.pas` without requiring Pascal-side file I/O, and `scripts/preprocess_selfhost.sh` remains as a compatibility wrapper to that entry point.
+
+## kforthc Output Contract
+- The Forth backend contract is `kforthc`'s bootstrap-style runtime surface.
+- Output generation should prefer `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `PWRITE-STR`, `PWRITELN`, and `PWRITE-HEX`.
+- `.` and `EMIT` may exist as aliases, but they are not the primary output contract for generated code.
+- `S" ..."` is assumed to be valid only when immediately followed by `PWRITE-STR`, `READ-F32`, or `FNUMBER?`.
+- `TYPE` must not be assumed for string-output compatibility.
