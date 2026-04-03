@@ -112,7 +112,8 @@ MIT License. See `LICENSE`.
 
 ## kforthc Output Contract
 - The intended backend contract is the bootstrap-style runtime supported by `kforthc`.
-- Prefer `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `PWRITE-STR`, `PWRITELN`, and `PWRITE-HEX` in generated Forth.
+- Prefer `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `TYPE`, `PWRITELN`, and `PWRITE-HEX` in generated Forth.
 - `.` and `EMIT` are only aliases for integer and char output.
-- `S" ..."` is only assumed to be supported when immediately followed by `PWRITE-STR`, `READ-F32`, or `FNUMBER?`.
-- Do not generate `TYPE` for string output. Use `S" ..." PWRITE-STR`.
+- `S" ..."` is only assumed to be supported when immediately followed by `TYPE`, `READ-F32`, or `FNUMBER?`.
+- Generate `TYPE` for string output: use `S" ..." TYPE`.
+- `PWRITE-HEX` is expected to emit uppercase 8-digit hexadecimal text such as `000000FF`.

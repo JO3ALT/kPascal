@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -29,39 +28,31 @@ fn run_compiler(src: &str) -> String {
 }
 
 fn preprocess_pascal_file(src_path: &str) -> String {
-    let prekpasc = Path::new("../prekpascal/target/debug/prekpascal");
+    let preprocessor = Path::new("scripts/preprocess_selfhost.sh");
     assert!(
-        prekpasc.exists(),
-        "missing prekpascal binary at {}",
-        prekpasc.display()
+        preprocessor.exists(),
+        "missing selfhost preprocessor script at {}",
+        preprocessor.display()
     );
-    let src = fs::read_to_string(src_path).expect("failed to read Pascal source for preprocessing");
-    let mut child = Command::new(prekpasc)
+    let child = Command::new("bash")
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .stdin(Stdio::piped())
+        .arg(preprocessor)
+        .arg(src_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("failed to spawn prekpascal");
-
-    {
-        use std::io::Write;
-        let stdin = child.stdin.as_mut().expect("stdin not available");
-        stdin
-            .write_all(src.as_bytes())
-            .expect("failed to write source to prekpascal stdin");
-    }
+        .expect("failed to spawn selfhost preprocessor");
 
     let out = child
         .wait_with_output()
-        .expect("failed to wait on prekpascal");
+        .expect("failed to wait on selfhost preprocessor");
     assert!(
         out.status.success(),
-        "prekpascal failed.\nstdout:\n{}\nstderr:\n{}",
+        "selfhost preprocessor failed.\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
-    String::from_utf8(out.stdout).expect("prekpascal output is not valid utf-8")
+    String::from_utf8(out.stdout).expect("preprocessor output is not valid utf-8")
 }
 
 #[test]

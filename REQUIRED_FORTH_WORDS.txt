@@ -1,0 +1,54 @@
+# Required Forth words for kpascal output
+# Source: src/codegen.rs (directly emitted tokens)
+
+# Runtime helper words expected from bootstrap/runtime
+PVAR!
+PVAR@
+PFIELD!
+PFIELD@
+PREAD-I32
+PREAD-BOOL
+PREAD-CHAR
+PREADLN
+PWRITE-I32
+PWRITE-BOOL
+PWRITE-CHAR
+TYPE
+PWRITELN
+PWRITE-HEX
+PBOOL
+
+# Core words used by generated code
+:
+;
+(
+S"
+CONSTANT
+CREATE
+,
+ALLOT
+IF
+ELSE
+THEN
+BEGIN
+WHILE
+REPEAT
+UNTIL
+>R
+R>
+R@
+DUP
+DROP
+AND
+NEGATE
+0=
+0<
+=
+<>
+<
+<=
+>
+>=
++
+-
+*

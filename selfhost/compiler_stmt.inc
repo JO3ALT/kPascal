@@ -69,7 +69,6 @@ begin
     end
   else
     begin
-      bootstrap_capture_failed := true
     end
 end;
 
@@ -83,7 +82,6 @@ begin
     end
   else
     begin
-      bootstrap_capture_failed := true
     end
 end;
 
@@ -97,7 +95,6 @@ begin
     end
   else
     begin
-      bootstrap_capture_failed := true
     end
 end;
 
@@ -110,8 +107,8 @@ begin
   expr_idx := NewAstExpr(AST_EXPR_IDENT);
   ClearText(temp_text);
   StrCopy(first_name, temp_text);
-  ast_expr_int[expr_idx] := FindAstVar(temp_text);
-  StrCopy(temp_text, ast_expr_text[expr_idx]);
+  ast_expr_int[expr_idx] := FindScopedAstVar(temp_text);
+  ast_expr_text_ref[expr_idx] := NewAstIdent(temp_text);
   while IsSelectorToken() do
     begin
       if token_kind = TOK_DOT then
@@ -123,7 +120,7 @@ begin
             end;
           next_idx := NewAstExpr(AST_EXPR_FIELD);
           ast_expr_left[next_idx] := expr_idx;
-          StrCopy(token_text, ast_expr_text[next_idx]);
+          ast_expr_text_ref[next_idx] := NewAstIdent(token_text);
           expr_idx := next_idx;
           NextToken()
         end
@@ -138,9 +135,10 @@ begin
         end
       else
         begin
-          bootstrap_capture_failed := true;
           ParseDerefSelector();
-          expr_idx := -1
+          next_idx := NewAstExpr(AST_EXPR_DEREF);
+          ast_expr_left[next_idx] := expr_idx;
+          expr_idx := next_idx
         end
     end;
   BuildAstTargetExprFromFirstName := expr_idx
@@ -212,7 +210,11 @@ begin
         begin
           if ast_capture_enabled then
             begin
-              bootstrap_capture_failed := true
+              bootstrap_capture_failed := true;
+              if parse_error_reason = 0 then
+                begin
+                  parse_error_reason := 325
+                end
             end;
           ParseExpr()
         end
@@ -285,10 +287,10 @@ end;
 procedure ResetAstStmtSlot(stmt_idx: integer);
 begin
   ast_stmt_kind[stmt_idx] := AST_STMT_NONE;
-  ClearText(ast_stmt_name[stmt_idx]);
+  ClearIdent(ast_stmt_name[stmt_idx]);
   ast_stmt_value_kind[stmt_idx] := AST_ARG_NONE;
   ast_stmt_value_int[stmt_idx] := 0;
-  ClearText(ast_stmt_value_text[stmt_idx]);
+  ast_stmt_value_text_ref[stmt_idx] := -1;
   ast_stmt_expr[stmt_idx] := -1;
   ast_stmt_aux_expr[stmt_idx] := -1;
   ast_stmt_arg_start[stmt_idx] := 0;
@@ -352,18 +354,32 @@ begin
   ParseExpr()
 end;
 
+procedure CaptureAstProcCall(stmt_idx: integer);
+begin
+  ExpectKind(TOK_LPAREN);
+  if token_kind <> TOK_RPAREN then
+    begin
+      AppendAstExprArg(stmt_idx, BuildAstExpr());
+      while token_kind = TOK_COMMA do
+        begin
+          NextToken();
+          AppendAstExprArg(stmt_idx, BuildAstExpr())
+        end
+    end;
+  ExpectKind(TOK_RPAREN)
+end;
+
 procedure ParseProcCallStmt;
 begin
   NoteNonWriteLnStatement();
   if ast_capture_enabled then
     begin
-      bootstrap_capture_failed := true
+      bootstrap_capture_failed := true;
+      if parse_error_reason = 0 then
+        begin
+          parse_error_reason := 326
+        end
     end;
-  if token_kind <> TOK_IDENT then
-    begin
-      FailParse()
-    end;
-  NextToken();
   if token_kind = TOK_LPAREN then
     begin
       ParseCallSuffix()
@@ -376,14 +392,17 @@ var saw_selector: boolean;
     expected_name: text_buf;
     stmt_idx: integer;
     expr_idx: integer;
+    call_routine_idx: integer;
     captured_simple_assign: boolean;
 begin
   if token_kind <> TOK_IDENT then
     begin
+      parse_error_reason := 301;
       FailParse()
     end;
   ClearText(first_name);
   StrCopy(token_text, first_name);
+  call_routine_idx := FindAstRoutineByName(token_text);
   ClearText(expected_name);
   expected_name := 'step';
   if StrCmpIgnoreCase(first_name, expected_name) = 0 then
@@ -427,18 +446,40 @@ begin
           else
             begin
               expr_idx := NewAstExpr(AST_EXPR_IDENT);
-              ast_expr_int[expr_idx] := FindAstVar(first_name);
-              StrCopy(first_name, ast_expr_text[expr_idx]);
+              ast_expr_int[expr_idx] := FindScopedAstVar(first_name);
+              ast_expr_text_ref[expr_idx] := NewAstIdent(first_name);
               ast_stmt_expr[stmt_idx] := expr_idx
             end;
-          StrCopy(first_name, ast_stmt_name[stmt_idx]);
-          expr_idx := BuildAstExpr();
-          ast_stmt_value_int[stmt_idx] := expr_idx;
+          CopyTextToIdent(first_name, ast_stmt_name[stmt_idx]);
+          if token_kind = TOK_STR then
+            begin
+                  if token_text[1] <> #0 then
+                    begin
+                      ast_stmt_value_kind[stmt_idx] := AST_ARG_TEXT;
+                      ast_stmt_value_text_ref[stmt_idx] := NewAstTextLit(token_text);
+                      NextToken();
+                      expr_idx := -1
+                    end
+              else
+                begin
+                  expr_idx := BuildAstExpr();
+                  ast_stmt_value_int[stmt_idx] := expr_idx
+                end
+            end
+          else
+            begin
+              expr_idx := BuildAstExpr();
+              ast_stmt_value_int[stmt_idx] := expr_idx
+            end;
           if not bootstrap_capture_failed then
             begin
               if ast_stmt_expr[stmt_idx] >= 0 then
                 begin
-                  if expr_idx >= 0 then
+                  if ast_stmt_value_kind[stmt_idx] = AST_ARG_TEXT then
+                    begin
+                      captured_simple_assign := true
+                    end
+                  else if expr_idx >= 0 then
                     begin
                       captured_simple_assign := true
                     end
@@ -458,34 +499,74 @@ begin
         begin
           if not captured_simple_assign then
             begin
-              bootstrap_capture_failed := true
+              bootstrap_capture_failed := true;
+              if parse_error_reason = 0 then
+                begin
+                  parse_error_reason := 327
+                end
             end
         end
     end
   else if token_kind = TOK_LPAREN then
     begin
-      ParseProcCallStmt()
+      NoteNonWriteLnStatement();
+      stmt_idx := -1;
+      if ast_capture_enabled then
+        begin
+          stmt_idx := NewAstStmt(AST_STMT_CALL);
+          ast_stmt_value_int[stmt_idx] := call_routine_idx;
+          CopyTextToIdent(first_name, ast_stmt_name[stmt_idx])
+        end;
+      if stmt_idx >= 0 then
+        begin
+          CaptureAstProcCall(stmt_idx)
+        end
+      else
+        begin
+          ParseProcCallStmt()
+        end
     end
   else if saw_selector then
     begin
       if ast_capture_enabled then
         begin
-          bootstrap_capture_failed := true
+          bootstrap_capture_failed := true;
+          if parse_error_reason = 0 then
+            begin
+              parse_error_reason := 328
+            end
         end;
       FailParse()
     end
 end;
 
 procedure ParseReadStmt;
+var stmt_idx: integer;
 begin
   NoteNonWriteLnStatement();
+  stmt_idx := -1;
   if ast_capture_enabled then
     begin
-      bootstrap_capture_failed := true
+      stmt_idx := NewAstStmt(AST_STMT_READ)
     end;
   ExpectKind(TOK_KW_READ);
   ExpectKind(TOK_LPAREN);
-  ParseExprList();
+  if token_kind <> TOK_RPAREN then
+    begin
+      if stmt_idx >= 0 then
+        begin
+          AppendAstExprArg(stmt_idx, BuildAstExpr());
+          while token_kind = TOK_COMMA do
+            begin
+              NextToken();
+              AppendAstExprArg(stmt_idx, BuildAstExpr())
+            end
+        end
+      else
+        begin
+          ParseExprList()
+        end
+    end;
   ExpectKind(TOK_RPAREN)
 end;
 
@@ -494,7 +575,11 @@ begin
   NoteNonWriteLnStatement();
   if ast_capture_enabled then
     begin
-      bootstrap_capture_failed := true
+      bootstrap_capture_failed := true;
+      if parse_error_reason = 0 then
+        begin
+          parse_error_reason := 329
+        end
     end;
   ExpectKind(TOK_KW_READLN);
   if token_kind = TOK_LPAREN then
@@ -526,7 +611,7 @@ begin
     end;
   if stmt_idx >= 0 then
     begin
-      StrCopy(token_text, ast_stmt_name[stmt_idx])
+      CopyTextToIdent(token_text, ast_stmt_name[stmt_idx])
     end;
   NextToken();
   ExpectAssignSymbol();
@@ -570,15 +655,25 @@ begin
 end;
 
 procedure ParseWriteStmt;
+var stmt_idx: integer;
 begin
   NoteNonWriteLnStatement();
+  stmt_idx := -1;
   if ast_capture_enabled then
     begin
-      bootstrap_capture_failed := true
+      stmt_idx := NewAstStmt(AST_STMT_WRITE)
     end;
   ExpectKind(TOK_KW_WRITE);
   ExpectKind(TOK_LPAREN);
-  ParseExprList();
+  if token_kind <> TOK_RPAREN then
+    begin
+      ParseCapturedWriteLnArg(stmt_idx);
+      while token_kind = TOK_COMMA do
+        begin
+          NextToken();
+          ParseCapturedWriteLnArg(stmt_idx)
+        end
+    end;
   ExpectKind(TOK_RPAREN)
 end;
 
@@ -612,7 +707,11 @@ begin
   NoteNonWriteLnStatement();
   if ast_capture_enabled then
     begin
-      bootstrap_capture_failed := true
+      bootstrap_capture_failed := true;
+      if parse_error_reason = 0 then
+        begin
+          parse_error_reason := 330
+        end
     end;
   ExpectKind(TOK_KW_CASE);
   ParseExpr();

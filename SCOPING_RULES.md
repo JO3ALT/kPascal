@@ -27,3 +27,18 @@ Semantic errors include scope context, for example:
 
 ## Note
 This is an intentional simplification to keep code generation predictable. If needed, this can be relaxed later to Pascal-style lexical shadowing.
+
+## Selfhost Constraints
+- Selfhost declarations must still obey top-to-bottom ordering because `forward` is not implemented.
+- String literal to char-array transfer is treated as normal `:=` assignment semantics; ordinary text copying should use `StrCopy`.
+- Duplicate string-copy wrappers should not be introduced.
+- Selfhost input handling is intended to be stdin-streaming oriented rather than based on full-source preload.
+- Selfhost parser work should still track `expanded.rs` 1:1; missing expression power on the Pascal side should be handled with helper procedures/functions, not parser drift.
+- In selfhost Pascal conditionals, every `then` and `else` branch must be written as `begin ... end`, even for single statements.
+
+## kforthc Backend Note
+- Backend-facing output must follow `kforthc`'s bootstrap-style surface.
+- Prefer `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `TYPE`, `PWRITELN`, and `PWRITE-HEX`.
+- Use `TYPE` for string output compatibility: `S" ..." TYPE`.
+- Treat `S" ..."` as valid only for the `kforthc`-supported consumers `TYPE`, `READ-F32`, and `FNUMBER?`.
+- Treat `PWRITE-HEX` output as uppercase 8-digit hexadecimal text.

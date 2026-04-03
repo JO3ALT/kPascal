@@ -31,15 +31,17 @@ Run `cargo fmt` and `cargo clippy -- -D warnings` before opening a PR.
 ## Selfhost Pascal Grammar Notes
 - When editing Pascal under `selfhost/`, treat [src/kpascal.pest](/home/kamitani/kPascal/src/kpascal.pest) as the source of truth.
 - `if` follows `if <expr> then <stmt> (else <stmt>)?`.
-- If either branch contains multiple statements, write it as a compound statement with `begin ... end`.
+- In selfhost code, every `then` branch and every `else` branch must be written as `begin ... end`, even when the branch contains only one statement.
 - Preferred forms:
 - `if cond then begin ... end;`
 - `if cond then begin ... end else begin ... end;`
+- `else if ...` must also be written as `else begin if ... then begin ... end else begin ... end end;`
 - Do not write `end; else ...`. If there is an `else`, it must come immediately after the `end` that closes the `then` branch.
 - Be careful in `selfhost/parser.inc`: deep nested `if/else` chains should use explicit `begin/end` blocks so the flattened Pascal still matches the Pest grammar.
 
 ## Selfhost Implementation Policy
 - For `selfhost/`, [expanded.rs](/home/kamitani/kPascal/expanded.rs) is the operational reference, not just `src/kpascal.pest`.
+- The parser must stay in 1:1 correspondence with `expanded.rs`. Do not compress multiple Rust parser/code-building steps into one ad hoc Pascal routine.
 - Keep the Pascal selfhost source as close as possible to the Rust processing units in `expanded.rs`, especially `build_type_spec`, `build_stmt`, `build_expr`, and `build_lvalue`.
 - Do not start from an ad hoc evaluator and later “drift” toward Rust. Prefer a direct 1:1 translation of Rust control flow, helper boundaries, and data flow from the beginning.
 - When Pascal lacks a direct language feature needed to mirror Rust structure, add helper functions/procedures instead of collapsing multiple Rust steps into one Pascal routine.
@@ -48,6 +50,9 @@ Run `cargo fmt` and `cargo clippy -- -D warnings` before opening a PR.
 - Avoid adding narrow one-off string helpers that duplicate existing string operations. If Rust-aligned string behavior is missing, add or fix the general helper in [string_utils.pas](/home/kamitani/kPascal/string_utils.pas) first, then use it from `selfhost/`.
 - Treat string literal to `char`-array assignment as a supported language operation in selfhost, matching Rust behavior. Implement it as assignment semantics, not as an unrelated ad hoc builtin rewrite.
 - For `char`-array assignment from a string literal, preserve array-copy semantics on the Pascal side: copy characters into the destination array storage and handle terminating `#0` consistently through shared helpers in [string_utils.pas](/home/kamitani/kPascal/string_utils.pas).
+- `forward` is not available in this Pascal subset. Order includes and declarations so the source is valid when processed strictly top-to-bottom.
+- Use `StrCopy` for ordinary char-array text copying, and do not add duplicate wrappers such as `CopyCharArray`.
+- Keep selfhost input handling streaming-oriented: read from stdin incrementally instead of treating full-source preload as the design baseline.
 
 ## Testing Guidelines
 No tests are currently committed; new features should include tests.
@@ -69,3 +74,11 @@ PRs should include:
 - linked issue (if available),
 - test evidence (`cargo test`, `cargo clippy`, or sample `cargo run` output),
 - notes on grammar or codegen behavior changes.
+
+## kforthc Output Contract
+- Treat the target as the bootstrap-style runtime surface implemented by `kforthc`, not as a generic `kforth` environment.
+- Prefer `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `TYPE`, `PWRITELN`, and `PWRITE-HEX` for generated output.
+- `.` and `EMIT` are only aliases for integer and char output; they are not the primary backend contract.
+- For string literals, `kforthc` currently supports `S" ..."` only when immediately followed by `TYPE`, `READ-F32`, or `FNUMBER?`.
+- Use `TYPE` for string output compatibility: `S" ..." TYPE`.
+- Treat `PWRITE-HEX` as uppercase 8-digit hexadecimal output.

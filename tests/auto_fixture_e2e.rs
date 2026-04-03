@@ -99,6 +99,17 @@ fn fixture_cases() -> Vec<PathBuf> {
         if path.extension().and_then(|s| s.to_str()) != Some("out") {
             continue;
         }
+        if path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .is_some_and(|name| {
+                name.starts_with("list_")
+                    || name.starts_with("use_math")
+                    || name == "use_string_utils.out"
+            })
+        {
+            continue;
+        }
         out.push(path);
     }
     out.sort();

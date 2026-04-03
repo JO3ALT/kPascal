@@ -1222,6 +1222,67 @@ fn check_expr_matches_type_scoped(
             }
             _ => Err("array literal requires array target type".into()),
         },
+        Expr::SetLit(items) => match expected {
+            TypeInfo::Array(arr) => {
+                if items.len() != arr.len as usize {
+                    return Err(format!(
+                        "array literal length mismatch: expected {}, got {}",
+                        arr.len,
+                        items.len()
+                    ));
+                }
+                for item in items {
+                    match item {
+                        SetItem::Single(e) => {
+                            check_expr_matches_type_scoped(
+                                env,
+                                vars,
+                                visible_routines,
+                                e,
+                                &arr.elem_ty,
+                            )?;
+                        }
+                        SetItem::Range(_, _) => {
+                            return Err("array literal does not allow ranges".into());
+                        }
+                    }
+                }
+                Ok(())
+            }
+            TypeInfo::Set(set) => {
+                for item in items {
+                    match item {
+                        SetItem::Single(e) => {
+                            check_expr_matches_type_scoped(
+                                env,
+                                vars,
+                                visible_routines,
+                                e,
+                                &set.elem_ty,
+                            )?;
+                        }
+                        SetItem::Range(lo, hi) => {
+                            check_expr_matches_type_scoped(
+                                env,
+                                vars,
+                                visible_routines,
+                                lo,
+                                &set.elem_ty,
+                            )?;
+                            check_expr_matches_type_scoped(
+                                env,
+                                vars,
+                                visible_routines,
+                                hi,
+                                &set.elem_ty,
+                            )?;
+                        }
+                    }
+                }
+                Ok(())
+            }
+            _ => Err("set literal requires set target type".into()),
+        },
         Expr::RecordUpdate(base, updates) => match expected {
             TypeInfo::Record(rec) => {
                 let bt = type_of_expr_scoped(env, vars, visible_routines, base)?;
@@ -1765,11 +1826,13 @@ fn check_stmt_with_vars(
             check_expr_matches_type_scoped(env, vars, visible_routines, rhs, &lt)
                 .map_err(|e| format!("type mismatch in assignment: {e}"))?;
             let rt = type_of_expr_scoped(env, vars, visible_routines, rhs).ok();
+            let is_array_lit_via_set = matches!((&lt, rhs), (TypeInfo::Array(_), Expr::SetLit(_)));
             let is_aggregate_call_result = matches!(rhs, Expr::Call(_, _) | Expr::Ctor(_, _))
                 || matches!(rhs, Expr::ArrayLit(_))
                 || matches!(rhs, Expr::RecordUpdate(_, _) | Expr::ArrayUpdate(_, _))
                 || matches!(rhs, Expr::OptionNone | Expr::OptionSome(_))
-                || matches!(rhs, Expr::Cond { .. });
+                || matches!(rhs, Expr::Cond { .. })
+                || is_array_lit_via_set;
             if !is_scalar_like(&lt)
                 && expr_to_lvalue(rhs).is_none()
                 && !matches!(rhs, Expr::SetLit(_))
@@ -2710,7 +2773,12 @@ fn is_ordinal_type(t: &TypeInfo) -> bool {
 fn is_scalar_like(t: &TypeInfo) -> bool {
     matches!(
         t,
-        TypeInfo::Basic(_) | TypeInfo::Enum(_) | TypeInfo::Subrange(_) | TypeInfo::Set(_)
+        TypeInfo::Basic(_)
+            | TypeInfo::Enum(_)
+            | TypeInfo::Subrange(_)
+            | TypeInfo::Set(_)
+            | TypeInfo::Pointer(_)
+            | TypeInfo::Nil
     )
 }
 

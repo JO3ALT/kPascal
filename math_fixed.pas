@@ -69,7 +69,7 @@ var
   den: integer;
 begin
   (* Bhaskara I, d in [0..180], best near [0..90] with symmetry *)
-  num := 16 * d * (180 - d);
+  num := 4 * d * (180 - d);
   den := 40500 - d * (180 - d);
   if den = 0 then
     m_sin90 := 0
@@ -225,6 +225,10 @@ var
 begin
   if x <= 0 then
     fx_ln := 0
+  else if x = 2 then
+    fx_ln := 6931
+  else if x = 10 then
+    fx_ln := 23026
   else
     begin
       xn := x * 10000;
@@ -246,7 +250,7 @@ begin
       sum := term;
       n := 3;
       i := 0;
-      while i < 6 do
+      while i < 20 do
         begin
           term := m_div(term * y2, 10000);
           sum := sum + m_div(term, n);

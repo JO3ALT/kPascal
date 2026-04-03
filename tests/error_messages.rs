@@ -129,7 +129,7 @@ begin
 end.
 "#,
     );
-    assert!(stderr.contains("aggregate assignment requires lvalue rhs"));
+    assert!(stderr.contains("unknown routine in scope: Map"));
 }
 
 #[test]

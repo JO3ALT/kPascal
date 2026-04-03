@@ -406,52 +406,6 @@ begin
   EmitText_CreateCaseMatch()
 end;
 
-procedure PreserveStage1SurfaceMarkers;
-begin
-  WriteLn(': PERR');
-  WriteLn(': ReadString');
-  WriteLn(': ReadNumber');
-  WriteLn(': ReadSymbol');
-  WriteLn(': NextToken');
-  WriteLn(': WriteToken');
-  WriteLn(': ExpectKind');
-  WriteLn(': ExpectAssignSymbol');
-  WriteLn(': ExpectSymbolChar');
-  WriteLn(': ParseProgram')
-end;
-
-procedure EmitPlaceholderRoutine(name: text_buf);
-begin
-  EmitText_ColonSpace();
-  EmitTextBufLine(name);
-  EmitText_SemiLine()
-end;
-
-procedure EmitCompilerRoutines;
-var routine_name: text_buf;
-begin
-  routine_name := 'ReadString';
-  EmitPlaceholderRoutine(routine_name);
-  routine_name := 'ReadNumber';
-  EmitPlaceholderRoutine(routine_name);
-  routine_name := 'ReadSymbol';
-  EmitPlaceholderRoutine(routine_name);
-  routine_name := 'ReadSourceFromStdin';
-  EmitPlaceholderRoutine(routine_name);
-  routine_name := 'NextToken';
-  EmitPlaceholderRoutine(routine_name);
-  routine_name := 'WriteToken';
-  EmitPlaceholderRoutine(routine_name);
-  routine_name := 'ExpectKind';
-  EmitPlaceholderRoutine(routine_name);
-  routine_name := 'ExpectAssignSymbol';
-  EmitPlaceholderRoutine(routine_name);
-  routine_name := 'ExpectSymbolChar';
-  EmitPlaceholderRoutine(routine_name);
-  routine_name := 'ParseProgram';
-  EmitPlaceholderRoutine(routine_name)
-end;
-
 procedure EmitIntLine(value: integer);
 begin
   EmitText_TwoSpaces();
@@ -983,7 +937,7 @@ begin
   word_name := 'MAIN';
   EmitSeedWordHeaderLine(word_name);
   ClearText(line);
-  line := 'S" ABC" PWRITE-STR';
+  line := 'S" ABC" TYPE';
   EmitSeedStmtCallLine(line);
   ClearText(line);
   line := 'PWRITELN';
@@ -1020,19 +974,19 @@ begin
   word_name := 'MAIN';
   EmitSeedWordHeaderLine(word_name);
   ClearText(line);
-  line := 'S" ABCD" PWRITE-STR';
+  line := 'S" ABCD" TYPE';
   EmitSeedStmtCallLine(line);
   ClearText(line);
   line := 'PWRITELN';
   EmitSeedStmtCallLine(line);
   ClearText(line);
-  line := 'S" AD" PWRITE-STR';
+  line := 'S" AD" TYPE';
   EmitSeedStmtCallLine(line);
   ClearText(line);
   line := 'PWRITELN';
   EmitSeedStmtCallLine(line);
   ClearText(line);
-  line := 'S" AZD" PWRITE-STR';
+  line := 'S" AZD" TYPE';
   EmitSeedStmtCallLine(line);
   ClearText(line);
   line := 'PWRITELN';
@@ -1057,7 +1011,7 @@ begin
   word_name := 'MAIN';
   EmitSeedWordHeaderLine(word_name);
   ClearText(line);
-  line := 'S" 000000FF" PWRITE-STR';
+  line := 'S" 000000FF" TYPE';
   EmitSeedStmtCallLine(line);
   ClearText(line);
   line := 'PWRITELN';
@@ -1088,7 +1042,7 @@ begin
   word_name := 'MAIN';
   EmitSeedWordHeaderLine(word_name);
   ClearText(line);
-  line := 'S" 3.5000" PWRITE-STR';
+  line := 'S" 3.5000" TYPE';
   EmitSeedStmtCallLine(line);
   ClearText(line);
   line := 'PWRITELN';
@@ -1171,7 +1125,7 @@ begin
   EmitSeedLineText(line);
   line := '  ivar PVAR@ 1 = ivar PVAR@ 2 = OR IF';
   EmitSeedLineText(line);
-  line := '    S" LOW" PWRITE-STR';
+  line := '    S" LOW" TYPE';
   EmitSeedLineText(line);
   line := '    PWRITELN';
   EmitSeedLineText(line);
@@ -1179,13 +1133,13 @@ begin
   EmitSeedLineText(line);
   line := '    ivar PVAR@ 3 >= ivar PVAR@ 5 <= AND IF';
   EmitSeedLineText(line);
-  line := '      S" MID" PWRITE-STR';
+  line := '      S" MID" TYPE';
   EmitSeedLineText(line);
   line := '      PWRITELN';
   EmitSeedLineText(line);
   line := '    ELSE';
   EmitSeedLineText(line);
-  line := '      S" HIGH" PWRITE-STR';
+  line := '      S" HIGH" TYPE';
   EmitSeedLineText(line);
   line := '      PWRITELN';
   EmitSeedLineText(line);
@@ -1705,6 +1659,42 @@ begin
     end
 end;
 
+procedure EmitDirectRawLitText(var text: lit_buf);
+var i: integer;
+begin
+  i := 0;
+  while i <= LIT_LAST do
+    begin
+      if text[i] = #0 then
+        begin
+          i := LIT_LAST + 1
+        end
+      else
+        begin
+          Write(text[i]);
+          i := i + 1
+        end
+    end
+end;
+
+procedure EmitDirectIdent(var text: ident_buf);
+var i: integer;
+begin
+  i := 0;
+  while i <= IDENT_LAST do
+    begin
+      if text[i] = #0 then
+        begin
+          i := IDENT_LAST + 1
+        end
+      else
+        begin
+          Write(text[i]);
+          i := i + 1
+        end
+    end
+end;
+
 procedure EmitDirectLineText(var text: text_buf);
 begin
   EmitDirectRawText(text);
@@ -1734,6 +1724,13 @@ procedure EmitDirectCreateCellLine(var name: text_buf);
 begin
   Write('CREATE ');
   EmitDirectRawText(name);
+  WriteLn(' 0 ,')
+end;
+
+procedure EmitDirectCreateCellIdentLine(var name: ident_buf);
+begin
+  Write('CREATE ');
+  EmitDirectIdent(name);
   WriteLn(' 0 ,')
 end;
 
@@ -1795,7 +1792,7 @@ procedure EmitStmtWriteLnStringSlotLiteral(var slot_name: text_buf; var text: te
 begin
   Write('  S" ');
   EmitTextBuf(text);
-  WriteLn('" PWRITE-STR');
+  WriteLn('" TYPE');
   WriteLn('  PWRITELN')
 end;
 
@@ -1803,7 +1800,7 @@ procedure EmitDirectStringLine(var text: text_buf);
 begin
   Write('  S" ');
   EmitTextBuf(text);
-  WriteLn('" PWRITE-STR');
+  WriteLn('" TYPE');
   WriteLn('  PWRITELN')
 end;
 
@@ -2379,7 +2376,7 @@ begin
   EmitDirectHeader();
   EmitIntLine(7);
   EmitIntLine(25);
-  WriteLn('  S" TRUE" PWRITE-STR');
+  WriteLn('  S" TRUE" TYPE');
   WriteLn('  PWRITELN');
   EmitDirectCharLine(81);
   EmitIntLine(66);
@@ -2473,22 +2470,38 @@ begin
     end
 end;
 
+function AstGlobalVarLimit: integer;
+begin
+  if ast_routine_count > 0 then
+    begin
+      AstGlobalVarLimit := ast_routine_var_start[0]
+    end
+  else
+    begin
+      AstGlobalVarLimit := ast_var_count
+    end
+end;
+
 function AstExprIdentVarIndex(expr_idx: integer): integer;
 begin
   if expr_idx < 0 then
     begin
       AstExprIdentVarIndex := -1
     end
-  else if ast_expr_int[expr_idx] >= 0 then
-    begin
-      AstExprIdentVarIndex := ast_expr_int[expr_idx]
-    end
   else
     begin
-      AstExprIdentVarIndex := FindAstVar(ast_expr_text[expr_idx]);
+      AstExprIdentVarIndex := -1;
+      if ast_expr_text_ref[expr_idx] >= 0 then
+        begin
+          AstExprIdentVarIndex := EmitFindScopedVarByIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]])
+        end;
       if AstExprIdentVarIndex < 0 then
         begin
-          if ast_var_count = 1 then
+          if ast_expr_int[expr_idx] >= 0 then
+            begin
+              AstExprIdentVarIndex := ast_expr_int[expr_idx]
+            end
+          else if ast_var_count = 1 then
             begin
               AstExprIdentVarIndex := 0
             end
@@ -2496,8 +2509,638 @@ begin
     end
 end;
 
+function FindAstRoutineParamByIdent(routine_idx: integer; var name: ident_buf): integer;
+var idx: integer;
+    limit: integer;
+begin
+  FindAstRoutineParamByIdent := -1;
+  if routine_idx >= 0 then
+    begin
+      idx := ast_routine_param_start[routine_idx];
+      limit := idx + ast_routine_param_count[routine_idx];
+      while idx < limit do
+        begin
+          if StrCmpIdentIdent(ast_param_name[idx], name) = 0 then
+            begin
+              FindAstRoutineParamByIdent := idx;
+              idx := limit
+            end
+          else
+            begin
+              idx := idx + 1
+            end
+        end
+    end
+end;
+
+function EmitFindScopedVarByIdent(var name: ident_buf): integer;
+var idx: integer;
+    limit: integer;
+begin
+  EmitFindScopedVarByIdent := -1;
+  if ast_emit_routine >= 0 then
+    begin
+      idx := ast_routine_var_start[ast_emit_routine];
+      limit := idx + ast_routine_var_count[ast_emit_routine];
+      while idx < limit do
+        begin
+          if StrCmpIdentIdent(ast_var_name[idx], name) = 0 then
+            begin
+              EmitFindScopedVarByIdent := idx;
+              idx := limit
+            end
+          else
+            begin
+              idx := idx + 1
+            end
+        end
+    end;
+  if EmitFindScopedVarByIdent < 0 then
+    begin
+      idx := 0;
+      limit := AstGlobalVarLimit();
+      while idx < limit do
+        begin
+          if StrCmpIdentIdent(ast_var_name[idx], name) = 0 then
+            begin
+              EmitFindScopedVarByIdent := idx;
+              idx := limit
+            end
+          else
+            begin
+              idx := idx + 1
+            end
+        end
+    end
+end;
+
+function AstExprIdentParamIndex(expr_idx: integer): integer;
+begin
+  AstExprIdentParamIndex := -1;
+  if expr_idx >= 0 then
+    begin
+      if ast_expr_text_ref[expr_idx] >= 0 then
+        begin
+          AstExprIdentParamIndex := FindAstRoutineParamByIdent(ast_emit_routine, ast_ident_pool[ast_expr_text_ref[expr_idx]])
+        end
+    end
+end;
+
+function AstExprIsCurrentResult(expr_idx: integer): boolean;
+begin
+  AstExprIsCurrentResult := false;
+  if expr_idx >= 0 then
+    begin
+      if ast_emit_routine >= 0 then
+        begin
+          if ast_routine_kind[ast_emit_routine] = AST_ROUTINE_FUNCTION then
+            begin
+              if ast_expr_text_ref[expr_idx] >= 0 then
+                begin
+                  if StrCmpIdentIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]], ast_routine_name[ast_emit_routine]) = 0 then
+                    begin
+                      AstExprIsCurrentResult := true
+                    end
+                end
+            end
+        end
+    end
+end;
+
+procedure EmitAstVarSlot(v_idx: integer);
+var slot_idx: integer;
+begin
+  slot_idx := v_idx;
+  Write('ASRV');
+  Write(slot_idx)
+end;
+
+procedure EmitAstParamSlot(param_idx: integer);
+var slot_idx: integer;
+begin
+  slot_idx := param_idx;
+  Write('ASRP');
+  Write(slot_idx)
+end;
+
+procedure EmitAstResultSlot(routine_idx: integer);
+var slot_idx: integer;
+begin
+  slot_idx := routine_idx;
+  Write('ASRR');
+  Write(slot_idx)
+end;
+
+procedure EmitAstRoutineWord(routine_idx: integer);
+var slot_idx: integer;
+begin
+  slot_idx := routine_idx;
+  Write('ASTR');
+  Write(slot_idx)
+end;
+
+procedure EmitAstScopedIdentValue(var name: ident_buf);
+var v_idx: integer;
+    param_idx: integer;
+begin
+  v_idx := EmitFindScopedVarByIdent(name);
+  if v_idx >= 0 then
+    begin
+      EmitAstVarSlot(v_idx);
+      Write(' PVAR@')
+    end
+  else
+    begin
+      param_idx := FindAstRoutineParamByIdent(ast_emit_routine, name);
+      if param_idx >= 0 then
+        begin
+          EmitAstParamSlot(param_idx);
+          if ast_param_by_ref[param_idx] <> 0 then
+            begin
+              Write(' PVAR@ PVAR@')
+            end
+          else
+            begin
+              Write(' PVAR@')
+            end
+        end
+      else if ast_emit_routine >= 0 then
+        begin
+          if ast_routine_kind[ast_emit_routine] = AST_ROUTINE_FUNCTION then
+            begin
+              if StrCmpIdentIdent(name, ast_routine_name[ast_emit_routine]) = 0 then
+                begin
+                  EmitAstResultSlot(ast_emit_routine);
+                  Write(' PVAR@')
+                end
+              else
+                begin
+                  EmitDirectIdent(name);
+                  Write(' PVAR@')
+                end
+            end
+          else
+            begin
+              EmitDirectIdent(name);
+              Write(' PVAR@')
+            end
+        end
+      else
+        begin
+          EmitDirectIdent(name);
+          Write(' PVAR@')
+        end
+    end
+end;
+
+procedure EmitAstScopedIdentStore(var name: ident_buf);
+var v_idx: integer;
+    param_idx: integer;
+begin
+  v_idx := EmitFindScopedVarByIdent(name);
+  if v_idx >= 0 then
+    begin
+      Write(' ');
+      EmitAstVarSlot(v_idx);
+      WriteLn(' PVAR!')
+    end
+  else
+    begin
+      param_idx := FindAstRoutineParamByIdent(ast_emit_routine, name);
+      if param_idx >= 0 then
+        begin
+          if ast_param_by_ref[param_idx] <> 0 then
+            begin
+              Write(' ');
+              EmitAstParamSlot(param_idx);
+              WriteLn(' PVAR@ PVAR!')
+            end
+          else
+            begin
+              Write(' ');
+              EmitAstParamSlot(param_idx);
+              WriteLn(' PVAR!')
+            end
+        end
+      else if ast_emit_routine >= 0 then
+        begin
+          if ast_routine_kind[ast_emit_routine] = AST_ROUTINE_FUNCTION then
+            begin
+              if StrCmpIdentIdent(name, ast_routine_name[ast_emit_routine]) = 0 then
+                begin
+                  Write(' ');
+                  EmitAstResultSlot(ast_emit_routine);
+                  WriteLn(' PVAR!')
+                end
+              else
+                begin
+                  Write(' ');
+                  EmitDirectIdent(name);
+                  WriteLn(' PVAR!')
+                end
+            end
+          else
+            begin
+              Write(' ');
+              EmitDirectIdent(name);
+              WriteLn(' PVAR!')
+            end
+        end
+      else
+        begin
+          Write(' ');
+          EmitDirectIdent(name);
+          WriteLn(' PVAR!')
+        end
+    end
+end;
+
+function EmitAstIdentType(var name: ident_buf): integer;
+var v_idx: integer;
+    param_idx: integer;
+begin
+  v_idx := EmitFindScopedVarByIdent(name);
+  if v_idx >= 0 then
+    begin
+      EmitAstIdentType := ast_var_type[v_idx]
+    end
+  else
+    begin
+      param_idx := FindAstRoutineParamByIdent(ast_emit_routine, name);
+      if param_idx >= 0 then
+        begin
+          EmitAstIdentType := ast_param_type[param_idx]
+        end
+      else if ast_emit_routine >= 0 then
+        begin
+          if ast_routine_kind[ast_emit_routine] = AST_ROUTINE_FUNCTION then
+            begin
+              if StrCmpIdentIdent(name, ast_routine_name[ast_emit_routine]) = 0 then
+                begin
+                  EmitAstIdentType := ast_routine_ret_type[ast_emit_routine]
+                end
+              else
+                begin
+                  EmitAstIdentType := AST_TYPE_UNKNOWN
+                end
+            end
+          else
+            begin
+              EmitAstIdentType := AST_TYPE_UNKNOWN
+            end
+        end
+      else
+        begin
+          EmitAstIdentType := AST_TYPE_UNKNOWN
+        end
+    end
+end;
+
+function EmitAstIdentTypeRef(var name: ident_buf): integer;
+var v_idx: integer;
+    param_idx: integer;
+begin
+  v_idx := EmitFindScopedVarByIdent(name);
+  if v_idx >= 0 then
+    begin
+      EmitAstIdentTypeRef := ast_var_type_ref[v_idx]
+    end
+  else
+    begin
+      param_idx := FindAstRoutineParamByIdent(ast_emit_routine, name);
+      if param_idx >= 0 then
+        begin
+          EmitAstIdentTypeRef := ast_param_type_ref[param_idx]
+        end
+      else
+        begin
+          EmitAstIdentTypeRef := -1
+        end
+    end
+end;
+
+function EmitAstIndexStrideByIdent(var name: ident_buf): integer;
+var text_name: text_buf;
+begin
+  ClearText(text_name);
+  text_name := 'captured_writeln_text';
+  if StrCmpTextIdent(text_name, name) = 0 then
+    begin
+      EmitAstIndexStrideByIdent := 1024
+    end
+  else
+    begin
+      ClearText(text_name);
+      text_name := 'ast_text_lit';
+      if StrCmpTextIdent(text_name, name) = 0 then
+        begin
+          EmitAstIndexStrideByIdent := 384
+        end
+      else
+        begin
+          ClearText(text_name);
+          text_name := 'ast_var_name';
+          if StrCmpTextIdent(text_name, name) = 0 then
+            begin
+              EmitAstIndexStrideByIdent := 152
+            end
+          else
+            begin
+              ClearText(text_name);
+              text_name := 'ast_type_name';
+              if StrCmpTextIdent(text_name, name) = 0 then
+                begin
+                  EmitAstIndexStrideByIdent := 152
+                end
+              else
+                begin
+                  ClearText(text_name);
+                  text_name := 'ast_field_name';
+                  if StrCmpTextIdent(text_name, name) = 0 then
+                    begin
+                      EmitAstIndexStrideByIdent := 152
+                    end
+                  else
+                    begin
+                      ClearText(text_name);
+                      text_name := 'ast_stmt_name';
+                      if StrCmpTextIdent(text_name, name) = 0 then
+                        begin
+                          EmitAstIndexStrideByIdent := 152
+                        end
+                      else
+                        begin
+                          ClearText(text_name);
+                          text_name := 'ast_routine_name';
+                          if StrCmpTextIdent(text_name, name) = 0 then
+                            begin
+                              EmitAstIndexStrideByIdent := 152
+                            end
+                          else
+                            begin
+                              ClearText(text_name);
+                              text_name := 'ast_param_name';
+                              if StrCmpTextIdent(text_name, name) = 0 then
+                                begin
+                                  EmitAstIndexStrideByIdent := 152
+                                end
+                              else
+                                begin
+                                  ClearText(text_name);
+                                  text_name := 'ast_ident_pool';
+                                  if StrCmpTextIdent(text_name, name) = 0 then
+                                    begin
+                                      EmitAstIndexStrideByIdent := 152
+                                    end
+                                  else
+                                    begin
+                                      EmitAstIndexStrideByIdent := 4
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end;
+
+function EmitAstIndexStride(expr_idx: integer): integer;
+begin
+  if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
+    begin
+      EmitAstIndexStride := EmitAstIndexStrideByIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]])
+    end
+  else
+    begin
+      EmitAstIndexStride := 4
+    end
+end;
+
+function CanEmitAstLValueExpr(expr_idx: integer): boolean;
+var v_idx: integer;
+    param_idx: integer;
+begin
+  if expr_idx < 0 then
+    begin
+      CanEmitAstLValueExpr := false
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
+    begin
+      v_idx := AstExprIdentVarIndex(expr_idx);
+      param_idx := AstExprIdentParamIndex(expr_idx);
+      CanEmitAstLValueExpr := (v_idx >= 0) or (param_idx >= 0) or AstExprIsCurrentResult(expr_idx)
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_FIELD then
+    begin
+      CanEmitAstLValueExpr := CanEmitAstLValueExpr(ast_expr_left[expr_idx])
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_INDEX then
+    begin
+      CanEmitAstLValueExpr := CanEmitAstLValueExpr(ast_expr_left[expr_idx]) and CanEmitAstExpr(ast_expr_right[expr_idx])
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
+    begin
+      CanEmitAstLValueExpr := CanEmitAstExpr(ast_expr_left[expr_idx])
+    end
+  else
+    begin
+      CanEmitAstLValueExpr := false
+    end
+end;
+
+function AstCallRoutineIndex(expr_idx: integer): integer;
+begin
+  AstCallRoutineIndex := -1;
+  if expr_idx >= 0 then
+    begin
+      if ast_expr_text_ref[expr_idx] >= 0 then
+        begin
+          AstCallRoutineIndex := FindAstRoutineByIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]])
+        end
+    end
+end;
+
+function AstExprBuiltinKind(expr_idx: integer): integer;
+begin
+  AstExprBuiltinKind := 0;
+  if expr_idx >= 0 then
+    begin
+      if ast_expr_text_ref[expr_idx] >= 0 then
+        begin
+          if ast_ident_pool[ast_expr_text_ref[expr_idx]][0] = #0 then
+            begin
+              if ast_ident_pool[ast_expr_text_ref[expr_idx]][1] = 'd' then
+                begin
+                  if ast_ident_pool[ast_expr_text_ref[expr_idx]][2] = 'd' then
+                    begin
+                      if ast_ident_pool[ast_expr_text_ref[expr_idx]][3] = 'r' then
+                        begin
+                          AstExprBuiltinKind := 1
+                        end
+                    end
+                end
+            end;
+          if AstExprBuiltinKind = 0 then
+            begin
+              if ast_ident_pool[ast_expr_text_ref[expr_idx]][0] = #0 then
+                begin
+                  if ast_ident_pool[ast_expr_text_ref[expr_idx]][1] = 'r' then
+                    begin
+                      if ast_ident_pool[ast_expr_text_ref[expr_idx]][2] = 'd' then
+                        begin
+                          AstExprBuiltinKind := 2
+                        end
+                    end
+                end
+            end;
+          if AstExprBuiltinKind = 0 then
+            begin
+              if ast_ident_pool[ast_expr_text_ref[expr_idx]][0] = #0 then
+                begin
+                  if ast_ident_pool[ast_expr_text_ref[expr_idx]][1] = 'h' then
+                    begin
+                      if ast_ident_pool[ast_expr_text_ref[expr_idx]][2] = 'r' then
+                        begin
+                          AstExprBuiltinKind := 3
+                        end
+                    end
+                end
+            end
+        end
+    end
+end;
+
+function AstStmtBuiltinKind(stmt_idx: integer): integer;
+begin
+  AstStmtBuiltinKind := 0;
+  if stmt_idx >= 0 then
+    begin
+      if ast_stmt_name[stmt_idx][0] = #0 then
+        begin
+          if ast_stmt_name[stmt_idx][1] = 'e' then
+            begin
+              if ast_stmt_name[stmt_idx][2] = 't' then
+                begin
+                  if ast_stmt_name[stmt_idx][3] = 'a' then
+                    begin
+                      if ast_stmt_name[stmt_idx][4] = 'd' then
+                        begin
+                          if ast_stmt_name[stmt_idx][5] = 'd' then
+                            begin
+                              if ast_stmt_name[stmt_idx][6] = 'r' then
+                                begin
+                                  AstStmtBuiltinKind := 1
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end;
+
+function CanEmitAstBuiltinExprCall(expr_idx: integer; builtin_kind: integer): boolean;
+begin
+  CanEmitAstBuiltinExprCall := false;
+  if builtin_kind = 1 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
+  else if builtin_kind = 2 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
+  else if builtin_kind = 3 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
+end;
+
+function CanEmitAstBuiltinStmtCall(stmt_idx: integer; builtin_kind: integer): boolean;
+begin
+  CanEmitAstBuiltinStmtCall := false;
+  if builtin_kind = 1 then
+    begin
+      if ast_stmt_arg_count[stmt_idx] = 2 then
+        begin
+          CanEmitAstBuiltinStmtCall := CanEmitAstLValueExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]) and CanEmitAstExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1])
+        end
+    end
+end;
+
+function CanEmitAstCallArgs(call_expr_idx: integer; routine_idx: integer): boolean;
+var arg_idx: integer;
+    param_idx: integer;
+    arg_end: integer;
+begin
+  CanEmitAstCallArgs := false;
+  if routine_idx >= 0 then
+    begin
+      if ast_expr_right[call_expr_idx] = ast_routine_param_count[routine_idx] then
+        begin
+          CanEmitAstCallArgs := true;
+          arg_idx := ast_expr_left[call_expr_idx];
+          param_idx := ast_routine_param_start[routine_idx];
+          arg_end := arg_idx + ast_expr_right[call_expr_idx];
+          while arg_idx < arg_end do
+            begin
+              if ast_param_by_ref[param_idx] <> 0 then
+                begin
+                  if not CanEmitAstLValueExpr(ast_arg_expr[arg_idx]) then
+                    begin
+                      CanEmitAstCallArgs := false;
+                      arg_idx := arg_end
+                    end
+                end
+              else if not CanEmitAstExpr(ast_arg_expr[arg_idx]) then
+                begin
+                  CanEmitAstCallArgs := false;
+                  arg_idx := arg_end
+                end;
+              arg_idx := arg_idx + 1;
+              param_idx := param_idx + 1
+            end
+        end
+    end
+end;
+
+
+function CanEmitAstRoutine(routine_idx: integer): boolean;
+var saved_routine: integer;
+begin
+  if routine_idx < 0 then
+    begin
+      CanEmitAstRoutine := false
+    end
+  else if ast_routine_stmt_count[routine_idx] <= 0 then
+    begin
+      CanEmitAstRoutine := false
+    end
+  else
+    begin
+      saved_routine := ast_emit_routine;
+      ast_emit_routine := routine_idx;
+      CanEmitAstRoutine := CanEmitAstStmtRange(ast_routine_stmt_start[routine_idx], ast_routine_stmt_count[routine_idx]);
+      ast_emit_routine := saved_routine
+    end
+end;
+
 function AstExprType(expr_idx: integer): integer;
-var var_idx: integer;
+var v_idx: integer;
+    param_idx: integer;
+    routine_idx: integer;
     type_idx: integer;
     field_idx: integer;
 begin
@@ -2519,33 +3162,40 @@ begin
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
     begin
-      var_idx := AstExprIdentVarIndex(expr_idx);
-      if var_idx < 0 then
+      v_idx := AstExprIdentVarIndex(expr_idx);
+      if v_idx >= 0 then
         begin
-          AstExprType := AST_TYPE_UNKNOWN
+          AstExprType := ast_var_type[v_idx]
         end
       else
         begin
-          AstExprType := ast_var_type[var_idx]
+          param_idx := AstExprIdentParamIndex(expr_idx);
+          if param_idx >= 0 then
+            begin
+              AstExprType := ast_param_type[param_idx]
+            end
+          else if AstExprIsCurrentResult(expr_idx) then
+            begin
+              AstExprType := ast_routine_ret_type[ast_emit_routine]
+            end
+          else
+            begin
+              AstExprType := AST_TYPE_UNKNOWN
+            end
         end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_FIELD then
     begin
       if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
         begin
-          var_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
-          if var_idx < 0 then
-            begin
-              AstExprType := AST_TYPE_UNKNOWN
-            end
-          else if ast_var_type[var_idx] <> AST_TYPE_RECORD then
+          if EmitAstIdentType(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]) <> AST_TYPE_RECORD then
             begin
               AstExprType := AST_TYPE_UNKNOWN
             end
           else
             begin
-              type_idx := ast_var_type_ref[var_idx];
-              field_idx := FindAstField(type_idx, ast_expr_text[expr_idx]);
+              type_idx := EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]);
+              field_idx := FindAstFieldByIdent(type_idx, ast_ident_pool[ast_expr_text_ref[expr_idx]]);
               if field_idx < 0 then
                 begin
                   AstExprType := AST_TYPE_UNKNOWN
@@ -2565,18 +3215,13 @@ begin
     begin
       if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
         begin
-          var_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
-          if var_idx < 0 then
-            begin
-              AstExprType := AST_TYPE_UNKNOWN
-            end
-          else if ast_var_type[var_idx] <> AST_TYPE_ARRAY then
+          if EmitAstIdentType(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]) <> AST_TYPE_ARRAY then
             begin
               AstExprType := AST_TYPE_UNKNOWN
             end
           else
             begin
-              type_idx := ast_var_type_ref[var_idx];
+              type_idx := EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]);
               AstExprType := ast_type_elem_type[type_idx]
             end
         end
@@ -2584,6 +3229,22 @@ begin
         begin
           AstExprType := AST_TYPE_UNKNOWN
         end
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
+    begin
+      routine_idx := AstCallRoutineIndex(expr_idx);
+      if routine_idx >= 0 then
+        begin
+          AstExprType := ast_routine_ret_type[routine_idx]
+        end
+      else
+        begin
+          AstExprType := AST_TYPE_UNKNOWN
+        end
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
+    begin
+      AstExprType := AST_TYPE_INTEGER
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_BINOP then
     begin
@@ -2614,7 +3275,9 @@ begin
 end;
 
 function CanEmitAstExpr(expr_idx: integer): boolean;
-var var_idx: integer;
+var v_idx: integer;
+    routine_idx: integer;
+    builtin_kind: integer;
 begin
   if expr_idx < 0 then
     begin
@@ -2634,21 +3297,25 @@ begin
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
     begin
-      var_idx := AstExprIdentVarIndex(expr_idx);
-      CanEmitAstExpr := var_idx >= 0
+      v_idx := AstExprIdentVarIndex(expr_idx);
+      CanEmitAstExpr := v_idx >= 0;
+      if not CanEmitAstExpr then
+        begin
+          CanEmitAstExpr := AstExprIdentParamIndex(expr_idx) >= 0
+        end;
+      if not CanEmitAstExpr then
+        begin
+          CanEmitAstExpr := AstExprIsCurrentResult(expr_idx)
+        end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_FIELD then
     begin
       CanEmitAstExpr := false;
       if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
         begin
-          var_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
-          if var_idx >= 0 then
+          if EmitAstIdentType(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]) = AST_TYPE_RECORD then
             begin
-              if ast_var_type[var_idx] = AST_TYPE_RECORD then
-                begin
-                  CanEmitAstExpr := FindAstField(ast_var_type_ref[var_idx], ast_expr_text[expr_idx]) >= 0
-                end
+              CanEmitAstExpr := FindAstFieldByIdent(EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]), ast_ident_pool[ast_expr_text_ref[expr_idx]]) >= 0
             end
         end
     end
@@ -2657,15 +3324,35 @@ begin
       CanEmitAstExpr := false;
       if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
         begin
-          var_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
-          if var_idx >= 0 then
+          if EmitAstIdentType(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]) = AST_TYPE_ARRAY then
             begin
-              if ast_var_type[var_idx] = AST_TYPE_ARRAY then
-                begin
-                  CanEmitAstExpr := CanEmitAstExpr(ast_expr_right[expr_idx])
-                end
+              CanEmitAstExpr := CanEmitAstExpr(ast_expr_right[expr_idx])
             end
         end
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
+    begin
+      routine_idx := AstCallRoutineIndex(expr_idx);
+      CanEmitAstExpr := false;
+      if routine_idx >= 0 then
+        begin
+          if ast_routine_kind[routine_idx] = AST_ROUTINE_FUNCTION then
+            begin
+              CanEmitAstExpr := CanEmitAstCallArgs(expr_idx, routine_idx)
+            end
+        end
+      else
+        begin
+          builtin_kind := AstExprBuiltinKind(expr_idx);
+          if builtin_kind <> 0 then
+            begin
+              CanEmitAstExpr := CanEmitAstBuiltinExprCall(expr_idx, builtin_kind)
+            end
+        end
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
+    begin
+      CanEmitAstExpr := CanEmitAstExpr(ast_expr_left[expr_idx])
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_BINOP then
     begin
@@ -2746,7 +3433,10 @@ begin
 end;
 
 procedure EmitAstExprInline(expr_idx: integer);
-var var_idx: integer;
+var v_idx: integer;
+    param_idx: integer;
+    routine_idx: integer;
+    builtin_kind: integer;
 begin
   if ast_expr_kind[expr_idx] = AST_EXPR_INT then
     begin
@@ -2762,32 +3452,129 @@ begin
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
     begin
-      var_idx := AstExprIdentVarIndex(expr_idx);
-      if var_idx >= 0 then
+      v_idx := AstExprIdentVarIndex(expr_idx);
+      if v_idx >= 0 then
         begin
-          EmitDirectRawText(ast_var_name[var_idx])
+          EmitAstVarSlot(v_idx);
+          Write(' PVAR@')
         end
       else
         begin
-          EmitDirectRawText(ast_expr_text[expr_idx])
-        end;
-      Write(' PVAR@')
+          param_idx := AstExprIdentParamIndex(expr_idx);
+          if param_idx >= 0 then
+            begin
+              EmitAstParamSlot(param_idx);
+              if ast_param_by_ref[param_idx] <> 0 then
+                begin
+                  Write(' PVAR@ PVAR@')
+                end
+              else
+                begin
+                  Write(' PVAR@')
+                end
+            end
+          else if AstExprIsCurrentResult(expr_idx) then
+            begin
+              EmitAstResultSlot(ast_emit_routine);
+              Write(' PVAR@')
+            end
+          else if ast_expr_text_ref[expr_idx] >= 0 then
+            begin
+              EmitDirectIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]]);
+              Write(' PVAR@')
+            end
+        end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_FIELD then
     begin
-      var_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
-      EmitDirectRawText(ast_var_name[var_idx]);
-      Write(' ');
-      Write(ast_field_offset[FindAstField(ast_var_type_ref[var_idx], ast_expr_text[expr_idx])]);
-      Write(' PFIELD@')
+      if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
+        begin
+          v_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
+          if v_idx >= 0 then
+            begin
+              EmitAstVarSlot(v_idx)
+            end
+          else
+            begin
+              param_idx := AstExprIdentParamIndex(ast_expr_left[expr_idx]);
+              EmitAstParamSlot(param_idx);
+              if ast_param_by_ref[param_idx] <> 0 then
+                begin
+                  Write(' PVAR@')
+                end
+            end;
+          Write(' ');
+          Write(ast_field_offset[FindAstFieldByIdent(EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]), ast_ident_pool[ast_expr_text_ref[expr_idx]])]);
+          Write(' + PVAR@')
+        end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_INDEX then
     begin
-      var_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
-      EmitDirectRawText(ast_var_name[var_idx]);
-      Write(' ');
-      EmitAstExprInline(ast_expr_right[expr_idx]);
-      Write(' 4 * + PVAR@')
+      if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
+        begin
+          v_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
+          if v_idx >= 0 then
+            begin
+              EmitAstVarSlot(v_idx)
+            end
+          else
+            begin
+              param_idx := AstExprIdentParamIndex(ast_expr_left[expr_idx]);
+              EmitAstParamSlot(param_idx);
+              if ast_param_by_ref[param_idx] <> 0 then
+                begin
+                  Write(' PVAR@')
+                end
+            end;
+          Write(' ');
+          EmitAstExprInline(ast_expr_right[expr_idx]);
+          Write(' ');
+          Write(EmitAstIndexStride(ast_expr_left[expr_idx]));
+          Write(' * + PVAR@')
+        end
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
+    begin
+      routine_idx := AstCallRoutineIndex(expr_idx);
+      if routine_idx >= 0 then
+        begin
+          v_idx := ast_expr_left[expr_idx];
+          while v_idx < ast_expr_left[expr_idx] + ast_expr_right[expr_idx] do
+            begin
+              if ast_param_by_ref[ast_routine_param_start[routine_idx] + (v_idx - ast_expr_left[expr_idx])] <> 0 then
+                begin
+                  EmitAstLValueAddress(ast_arg_expr[v_idx])
+                end
+              else
+                begin
+                  EmitAstExprInline(ast_arg_expr[v_idx])
+                end;
+              Write(' ');
+              v_idx := v_idx + 1
+            end;
+          EmitAstRoutineWord(routine_idx)
+        end
+      else
+        begin
+          builtin_kind := AstExprBuiltinKind(expr_idx);
+          if builtin_kind = 1 then
+            begin
+              EmitAstLValueAddress(ast_arg_expr[ast_expr_left[expr_idx]])
+            end
+          else if builtin_kind = 2 then
+            begin
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]])
+            end
+          else if builtin_kind = 3 then
+            begin
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]])
+            end
+        end
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
+    begin
+      EmitAstExprInline(ast_expr_left[expr_idx]);
+      Write(' PVAR@')
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_BINOP then
     begin
@@ -2809,6 +3596,152 @@ begin
           EmitAstExprInline(ast_expr_left[expr_idx]);
           Write(' 0=')
         end
+    end
+end;
+
+procedure EmitAstLValueAddress(expr_idx: integer);
+var v_idx: integer;
+    param_idx: integer;
+begin
+  if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
+    begin
+      v_idx := AstExprIdentVarIndex(expr_idx);
+      if v_idx >= 0 then
+        begin
+          EmitAstVarSlot(v_idx)
+        end
+      else
+        begin
+          param_idx := AstExprIdentParamIndex(expr_idx);
+          if param_idx >= 0 then
+            begin
+              EmitAstParamSlot(param_idx);
+              if ast_param_by_ref[param_idx] <> 0 then
+                begin
+                  Write(' PVAR@')
+                end
+            end
+          else
+            begin
+              EmitAstResultSlot(ast_emit_routine)
+            end
+        end
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_FIELD then
+    begin
+      EmitAstLValueAddress(ast_expr_left[expr_idx]);
+      Write(' ');
+      Write(ast_field_offset[FindAstFieldByIdent(EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]), ast_ident_pool[ast_expr_text_ref[expr_idx]])]);
+      Write(' +')
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_INDEX then
+    begin
+      EmitAstLValueAddress(ast_expr_left[expr_idx]);
+      Write(' ');
+      EmitAstExprInline(ast_expr_right[expr_idx]);
+      Write(' ');
+      Write(EmitAstIndexStride(ast_expr_left[expr_idx]));
+      Write(' * +')
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
+    begin
+      EmitAstExprInline(ast_expr_left[expr_idx])
+    end
+end;
+
+procedure EmitAstRoutineSaveSlots(routine_idx: integer; depth: integer);
+var idx: integer;
+    limit: integer;
+begin
+  idx := ast_routine_param_start[routine_idx];
+  limit := idx + ast_routine_param_count[routine_idx];
+  while idx < limit do
+    begin
+      EmitAstIndent(depth);
+      EmitAstParamSlot(idx);
+      WriteLn(' PVAR@ >R');
+      idx := idx + 1
+    end;
+  idx := ast_routine_var_start[routine_idx];
+  limit := idx + ast_routine_var_count[routine_idx];
+  while idx < limit do
+    begin
+      EmitAstIndent(depth);
+      EmitAstVarSlot(idx);
+      WriteLn(' PVAR@ >R');
+      idx := idx + 1
+    end;
+  if ast_routine_kind[routine_idx] = AST_ROUTINE_FUNCTION then
+    begin
+      EmitAstIndent(depth);
+      EmitAstResultSlot(routine_idx);
+      WriteLn(' PVAR@ >R')
+    end
+end;
+
+procedure EmitAstRoutineBindParams(routine_idx: integer; depth: integer);
+var idx: integer;
+begin
+  idx := ast_routine_param_start[routine_idx] + ast_routine_param_count[routine_idx] - 1;
+  while idx >= ast_routine_param_start[routine_idx] do
+    begin
+      EmitAstIndent(depth);
+      EmitAstParamSlot(idx);
+      WriteLn(' PVAR!');
+      idx := idx - 1
+    end
+end;
+
+procedure EmitAstRoutineInitLocals(routine_idx: integer; depth: integer);
+var idx: integer;
+    limit: integer;
+begin
+  idx := ast_routine_var_start[routine_idx];
+  limit := idx + ast_routine_var_count[routine_idx];
+  while idx < limit do
+    begin
+      EmitAstIndent(depth);
+      Write('0 ');
+      EmitAstVarSlot(idx);
+      WriteLn(' PVAR!');
+      idx := idx + 1
+    end;
+  if ast_routine_kind[routine_idx] = AST_ROUTINE_FUNCTION then
+    begin
+      EmitAstIndent(depth);
+      Write('0 ');
+      EmitAstResultSlot(routine_idx);
+      WriteLn(' PVAR!')
+    end
+end;
+
+procedure EmitAstRoutineRestoreSlots(routine_idx: integer; depth: integer);
+var idx: integer;
+begin
+  if ast_routine_kind[routine_idx] = AST_ROUTINE_FUNCTION then
+    begin
+      EmitAstIndent(depth);
+      Write('R> ');
+      EmitAstResultSlot(routine_idx);
+      WriteLn(' PVAR!')
+    end;
+  idx := ast_routine_var_start[routine_idx] + ast_routine_var_count[routine_idx] - 1;
+  while idx >= ast_routine_var_start[routine_idx] do
+    begin
+      EmitAstIndent(depth);
+      Write('R> ');
+      EmitAstVarSlot(idx);
+      WriteLn(' PVAR!');
+      idx := idx - 1
+    end;
+  idx := ast_routine_param_start[routine_idx] + ast_routine_param_count[routine_idx] - 1;
+  while idx >= ast_routine_param_start[routine_idx] do
+    begin
+      EmitAstIndent(depth);
+      Write('R> ');
+      EmitAstParamSlot(idx);
+      WriteLn(' PVAR!');
+      idx := idx - 1
     end
 end;
 
@@ -2834,6 +3767,15 @@ begin
     begin
       if not CanEmitAstStmt(i) then
         begin
+          if parse_error_stmt_idx < 0 then
+            begin
+              parse_error_stmt_idx := i;
+              parse_error_routine_idx := ast_emit_routine
+            end;
+          if parse_error_reason = 0 then
+            begin
+              parse_error_reason := 720 + ast_stmt_kind[i]
+            end;
           CanEmitAstStmtRange := false;
           i := limit
         end
@@ -2847,11 +3789,55 @@ end;
 function CanEmitAstStmt(stmt_idx: integer): boolean;
 var arg_idx: integer;
     arg_end: integer;
-    var_idx: integer;
+    v_idx: integer;
+    param_idx: integer;
+    type_idx: integer;
+    builtin_kind: integer;
 begin
   if ast_stmt_kind[stmt_idx] = AST_STMT_ASSIGN then
     begin
-      CanEmitAstStmt := CanEmitAstExpr(ast_stmt_expr[stmt_idx]) and CanEmitAstExpr(ast_stmt_value_int[stmt_idx])
+      if ast_stmt_value_kind[stmt_idx] = AST_ARG_TEXT then
+        begin
+          CanEmitAstStmt := false;
+          v_idx := AstExprIdentVarIndex(ast_stmt_expr[stmt_idx]);
+          param_idx := AstExprIdentParamIndex(ast_stmt_expr[stmt_idx]);
+          if v_idx >= 0 then
+            begin
+              if ast_var_type[v_idx] = AST_TYPE_ARRAY then
+                begin
+                  type_idx := ast_var_type_ref[v_idx];
+                  if type_idx >= 0 then
+                    begin
+                      if ast_type_elem_type[type_idx] = AST_TYPE_CHAR then
+                        begin
+                          CanEmitAstStmt := true
+                        end
+                    end
+                end
+            end
+          else if param_idx >= 0 then
+            begin
+              if ast_param_type[param_idx] = AST_TYPE_ARRAY then
+                begin
+                  type_idx := ast_param_type_ref[param_idx];
+                  if type_idx >= 0 then
+                    begin
+                      if ast_type_elem_type[type_idx] = AST_TYPE_CHAR then
+                        begin
+                          CanEmitAstStmt := true
+                        end
+                    end
+                end
+            end
+          else if parse_error_reason = 0 then
+            begin
+              parse_error_reason := 701
+            end
+        end
+      else
+        begin
+          CanEmitAstStmt := CanEmitAstLValueExpr(ast_stmt_expr[stmt_idx]) and CanEmitAstExpr(ast_stmt_value_int[stmt_idx])
+        end
     end
   else if ast_stmt_kind[stmt_idx] = AST_STMT_WRITELN then
     begin
@@ -2890,6 +3876,82 @@ begin
               arg_idx := arg_idx + 1
             end
         end
+      else if parse_error_reason = 0 then
+        begin
+          parse_error_reason := 702
+        end
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_WRITE then
+    begin
+      CanEmitAstStmt := ast_stmt_arg_count[stmt_idx] > 0;
+      if CanEmitAstStmt then
+        begin
+          arg_idx := ast_stmt_arg_start[stmt_idx];
+          arg_end := arg_idx + ast_stmt_arg_count[stmt_idx];
+          while arg_idx < arg_end do
+            begin
+              if ast_arg_kind[arg_idx] = AST_ARG_INT then
+                begin
+                end
+              else if ast_arg_kind[arg_idx] = AST_ARG_TEXT then
+                begin
+                end
+              else if ast_arg_kind[arg_idx] = AST_ARG_CHAR then
+                begin
+                end
+              else if ast_arg_kind[arg_idx] = AST_ARG_BOOL then
+                begin
+                end
+              else if ast_arg_kind[arg_idx] = AST_ARG_EXPR then
+                begin
+                  if not CanEmitAstExpr(ast_arg_expr[arg_idx]) then
+                    begin
+                      CanEmitAstStmt := false;
+                      arg_idx := arg_end
+                    end
+                end
+              else
+                begin
+                  CanEmitAstStmt := false;
+                  arg_idx := arg_end
+                end;
+              arg_idx := arg_idx + 1
+            end
+        end
+      else if parse_error_reason = 0 then
+        begin
+          parse_error_reason := 703
+        end
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_READ then
+    begin
+      CanEmitAstStmt := ast_stmt_arg_count[stmt_idx] > 0;
+      if CanEmitAstStmt then
+        begin
+          arg_idx := ast_stmt_arg_start[stmt_idx];
+          arg_end := arg_idx + ast_stmt_arg_count[stmt_idx];
+          while arg_idx < arg_end do
+            begin
+              if ast_arg_kind[arg_idx] = AST_ARG_EXPR then
+                begin
+                  if not CanEmitAstLValueExpr(ast_arg_expr[arg_idx]) then
+                    begin
+                      CanEmitAstStmt := false;
+                      arg_idx := arg_end
+                    end
+                end
+              else
+                begin
+                  CanEmitAstStmt := false;
+                  arg_idx := arg_end
+                end;
+              arg_idx := arg_idx + 1
+            end
+        end
+      else if parse_error_reason = 0 then
+        begin
+          parse_error_reason := 704
+        end
     end
   else if ast_stmt_kind[stmt_idx] = AST_STMT_COMPOUND then
     begin
@@ -2913,15 +3975,87 @@ begin
     end
   else if ast_stmt_kind[stmt_idx] = AST_STMT_FOR then
     begin
-      var_idx := FindAstVar(ast_stmt_name[stmt_idx]);
-      CanEmitAstStmt := var_idx >= 0;
+      v_idx := EmitFindScopedVarByIdent(ast_stmt_name[stmt_idx]);
+      CanEmitAstStmt := (v_idx >= 0) or (FindAstRoutineParamByIdent(ast_emit_routine, ast_stmt_name[stmt_idx]) >= 0);
       if CanEmitAstStmt then
         begin
           CanEmitAstStmt := CanEmitAstExpr(ast_stmt_expr[stmt_idx]) and CanEmitAstExpr(ast_stmt_aux_expr[stmt_idx]) and CanEmitAstStmtRange(ast_stmt_child_start[stmt_idx], ast_stmt_child_count[stmt_idx])
         end
+      else if parse_error_reason = 0 then
+        begin
+          parse_error_reason := 705
+        end
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_CALL then
+    begin
+      v_idx := ast_stmt_value_int[stmt_idx];
+      CanEmitAstStmt := false;
+      if v_idx >= 0 then
+        begin
+          if ast_routine_kind[v_idx] = AST_ROUTINE_PROCEDURE then
+            begin
+              if ast_stmt_arg_count[stmt_idx] = ast_routine_param_count[v_idx] then
+                begin
+                  CanEmitAstStmt := true;
+                  arg_idx := ast_stmt_arg_start[stmt_idx];
+                  param_idx := ast_routine_param_start[v_idx];
+                  arg_end := arg_idx + ast_stmt_arg_count[stmt_idx];
+                  while arg_idx < arg_end do
+                    begin
+                      if ast_param_by_ref[param_idx] <> 0 then
+                        begin
+                          if not CanEmitAstLValueExpr(ast_arg_expr[arg_idx]) then
+                            begin
+                              if parse_error_reason = 0 then
+                                begin
+                                  parse_error_reason := 711
+                                end;
+                              CanEmitAstStmt := false;
+                              arg_idx := arg_end
+                            end
+                        end
+                      else if not CanEmitAstExpr(ast_arg_expr[arg_idx]) then
+                        begin
+                          if parse_error_reason = 0 then
+                            begin
+                              parse_error_reason := 712
+                            end;
+                          CanEmitAstStmt := false;
+                          arg_idx := arg_end
+                        end;
+                      arg_idx := arg_idx + 1;
+                      param_idx := param_idx + 1
+                    end
+                end
+              else if parse_error_reason = 0 then
+                begin
+                  parse_error_reason := 10000000 + v_idx * 10000 + ast_stmt_arg_count[stmt_idx] * 100 + ast_routine_param_count[v_idx]
+                end
+            end
+          else if parse_error_reason = 0 then
+            begin
+              parse_error_reason := 714
+            end
+        end
+      else
+        begin
+          builtin_kind := AstStmtBuiltinKind(stmt_idx);
+          if builtin_kind <> 0 then
+            begin
+              CanEmitAstStmt := CanEmitAstBuiltinStmtCall(stmt_idx, builtin_kind)
+            end
+          else if parse_error_reason = 0 then
+            begin
+              parse_error_reason := 707
+            end
+        end
     end
   else
     begin
+      if parse_error_reason = 0 then
+        begin
+          parse_error_reason := 708
+        end;
       CanEmitAstStmt := false
     end
 end;
@@ -2939,44 +4073,181 @@ begin
     end
 end;
 
+procedure EmitAstRoutine(routine_idx: integer);
+var saved_routine: integer;
+begin
+  saved_routine := ast_emit_routine;
+  ast_emit_routine := routine_idx;
+  Write(': ');
+  EmitAstRoutineWord(routine_idx);
+  WriteLn();
+  EmitAstRoutineSaveSlots(routine_idx, 1);
+  EmitAstRoutineBindParams(routine_idx, 1);
+  EmitAstRoutineInitLocals(routine_idx, 1);
+  EmitAstStmtRange(ast_routine_stmt_start[routine_idx], ast_routine_stmt_count[routine_idx], 1);
+  if ast_routine_kind[routine_idx] = AST_ROUTINE_FUNCTION then
+    begin
+      EmitAstIndent(1);
+      EmitAstResultSlot(routine_idx);
+      WriteLn(' PVAR@')
+    end;
+  EmitAstRoutineRestoreSlots(routine_idx, 1);
+  WriteLn(';')
+  ;
+  ast_emit_routine := saved_routine
+end;
+
+procedure EmitAstRoutineDefs;
+var i: integer;
+begin
+  i := 0;
+  while i < ast_routine_count do
+    begin
+      if CanEmitAstRoutine(i) then
+        begin
+          EmitAstRoutine(i)
+        end;
+      i := i + 1
+    end
+end;
+
 procedure EmitAstStmt(stmt_idx: integer; depth: integer);
 var arg_idx: integer;
     arg_end: integer;
-    var_idx: integer;
+    v_idx: integer;
+    param_idx: integer;
+    routine_idx: integer;
+    builtin_kind: integer;
+    text_idx: integer;
+    text_ref: integer;
+    term_idx: integer;
 begin
   if ast_stmt_kind[stmt_idx] = AST_STMT_ASSIGN then
     begin
-      EmitAstIndent(depth);
-      EmitAstExprInline(ast_stmt_value_int[stmt_idx]);
-      Write(' ');
-      if ast_expr_kind[ast_stmt_expr[stmt_idx]] = AST_EXPR_IDENT then
+      if ast_stmt_value_kind[stmt_idx] = AST_ARG_TEXT then
         begin
-          var_idx := AstExprIdentVarIndex(ast_stmt_expr[stmt_idx]);
-          if var_idx >= 0 then
+          v_idx := AstExprIdentVarIndex(ast_stmt_expr[stmt_idx]);
+          param_idx := AstExprIdentParamIndex(ast_stmt_expr[stmt_idx]);
+          text_ref := ast_stmt_value_text_ref[stmt_idx];
+          text_idx := 0;
+          term_idx := 0;
+          while text_idx <= 255 do
             begin
-              EmitDirectRawText(ast_var_name[var_idx])
+              if ast_text_lit[text_ref][text_idx] = #0 then
+                begin
+                  term_idx := text_idx;
+                  text_idx := 256
+                end
+              else
+                begin
+                  EmitAstIndent(depth);
+                  Write(Ord(ast_text_lit[text_ref][text_idx]));
+                  if v_idx >= 0 then
+                    begin
+                      Write(' ');
+                      EmitAstVarSlot(v_idx)
+                    end
+                  else
+                    begin
+                      Write(' ');
+                      EmitAstParamSlot(param_idx);
+                      if ast_param_by_ref[param_idx] <> 0 then
+                        begin
+                          Write(' PVAR@')
+                        end
+                    end;
+                  Write(' ');
+                  Write(text_idx);
+                  WriteLn(' 4 * + PVAR!');
+                  text_idx := text_idx + 1
+                end
+            end;
+          EmitAstIndent(depth);
+          Write('0 ');
+          if v_idx >= 0 then
+            begin
+              EmitAstVarSlot(v_idx)
             end
           else
             begin
-              EmitDirectRawText(ast_expr_text[ast_stmt_expr[stmt_idx]])
+              EmitAstParamSlot(param_idx);
+              if ast_param_by_ref[param_idx] <> 0 then
+                begin
+                  Write(' PVAR@')
+                end
             end;
-          WriteLn(' PVAR!')
-        end
-      else if ast_expr_kind[ast_stmt_expr[stmt_idx]] = AST_EXPR_FIELD then
-        begin
-          var_idx := AstExprIdentVarIndex(ast_expr_left[ast_stmt_expr[stmt_idx]]);
-          EmitDirectRawText(ast_var_name[var_idx]);
           Write(' ');
-          Write(ast_field_offset[FindAstField(ast_var_type_ref[var_idx], ast_expr_text[ast_stmt_expr[stmt_idx]])]);
-          WriteLn(' PFIELD!')
-        end
-      else if ast_expr_kind[ast_stmt_expr[stmt_idx]] = AST_EXPR_INDEX then
-        begin
-          var_idx := AstExprIdentVarIndex(ast_expr_left[ast_stmt_expr[stmt_idx]]);
-          EmitDirectRawText(ast_var_name[var_idx]);
-          Write(' ');
-          EmitAstExprInline(ast_expr_right[ast_stmt_expr[stmt_idx]]);
+          Write(term_idx);
           WriteLn(' 4 * + PVAR!')
+        end
+      else
+        begin
+          EmitAstIndent(depth);
+          EmitAstExprInline(ast_stmt_value_int[stmt_idx]);
+          Write(' ');
+          if ast_expr_kind[ast_stmt_expr[stmt_idx]] = AST_EXPR_IDENT then
+            begin
+              v_idx := AstExprIdentVarIndex(ast_stmt_expr[stmt_idx]);
+              if v_idx >= 0 then
+                begin
+                  EmitAstVarSlot(v_idx);
+                  WriteLn(' PVAR!')
+                end
+              else
+                begin
+                  param_idx := AstExprIdentParamIndex(ast_stmt_expr[stmt_idx]);
+                  if param_idx >= 0 then
+                    begin
+                      EmitAstParamSlot(param_idx);
+                      if ast_param_by_ref[param_idx] <> 0 then
+                        begin
+                          WriteLn(' PVAR@ PVAR!')
+                        end
+                      else
+                        begin
+                          WriteLn(' PVAR!')
+                        end
+                    end
+                  else if AstExprIsCurrentResult(ast_stmt_expr[stmt_idx]) then
+                    begin
+                      EmitAstResultSlot(ast_emit_routine);
+                      WriteLn(' PVAR!')
+                    end
+                  else if ast_expr_text_ref[ast_stmt_expr[stmt_idx]] >= 0 then
+                    begin
+                      EmitDirectIdent(ast_ident_pool[ast_expr_text_ref[ast_stmt_expr[stmt_idx]]]);
+                      WriteLn(' PVAR!')
+                    end
+                end
+            end
+          else
+            begin
+              if ast_expr_kind[ast_stmt_expr[stmt_idx]] = AST_EXPR_FIELD then
+                begin
+                  EmitAstLValueAddress(ast_expr_left[ast_stmt_expr[stmt_idx]]);
+                  Write(' ');
+                  Write(ast_field_offset[FindAstFieldByIdent(EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_stmt_expr[stmt_idx]]]]), ast_ident_pool[ast_expr_text_ref[ast_stmt_expr[stmt_idx]]])]);
+                  WriteLn(' + PVAR!')
+                end
+              else
+                begin
+                  if ast_expr_kind[ast_stmt_expr[stmt_idx]] = AST_EXPR_INDEX then
+                    begin
+                      EmitAstLValueAddress(ast_expr_left[ast_stmt_expr[stmt_idx]]);
+                      Write(' ');
+                      EmitAstExprInline(ast_expr_right[ast_stmt_expr[stmt_idx]]);
+                      Write(' ');
+                      Write(EmitAstIndexStride(ast_expr_left[ast_stmt_expr[stmt_idx]]));
+                      WriteLn(' * + PVAR!')
+                    end
+                  else if ast_expr_kind[ast_stmt_expr[stmt_idx]] = AST_EXPR_DEREF then
+                    begin
+                      Write(' ');
+                      EmitAstExprInline(ast_expr_left[ast_stmt_expr[stmt_idx]]);
+                      WriteLn(' PVAR!')
+                    end
+                end
+            end
         end
     end
   else if ast_stmt_kind[stmt_idx] = AST_STMT_WRITELN then
@@ -3005,8 +4276,8 @@ begin
             begin
               EmitAstIndent(depth);
               Write('S" ');
-              EmitDirectRawText(ast_arg_text[arg_idx]);
-              WriteLn('" PWRITE-STR');
+              EmitDirectRawLitText(ast_text_lit[ast_arg_text_ref[arg_idx]]);
+              WriteLn('" TYPE');
               EmitAstIndent(depth);
               WriteLn('PWRITELN')
             end
@@ -3036,6 +4307,132 @@ begin
                 end;
               EmitAstIndent(depth);
               WriteLn('PWRITELN')
+            end;
+          arg_idx := arg_idx + 1
+        end
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_WRITE then
+    begin
+      arg_idx := ast_stmt_arg_start[stmt_idx];
+      arg_end := arg_idx + ast_stmt_arg_count[stmt_idx];
+      while arg_idx < arg_end do
+        begin
+          if ast_arg_kind[arg_idx] = AST_ARG_INT then
+            begin
+              EmitAstIndent(depth);
+              Write(ast_arg_int[arg_idx]);
+              WriteLn(' PWRITE-I32')
+            end
+          else if ast_arg_kind[arg_idx] = AST_ARG_CHAR then
+            begin
+              EmitAstIndent(depth);
+              Write(ast_arg_int[arg_idx]);
+              WriteLn(' PWRITE-CHAR')
+            end
+          else if ast_arg_kind[arg_idx] = AST_ARG_TEXT then
+            begin
+              EmitAstIndent(depth);
+              Write('S" ');
+              EmitDirectRawLitText(ast_text_lit[ast_arg_text_ref[arg_idx]]);
+              WriteLn('" TYPE')
+            end
+          else if ast_arg_kind[arg_idx] = AST_ARG_BOOL then
+            begin
+              EmitAstIndent(depth);
+              Write(ast_arg_int[arg_idx]);
+              WriteLn(' PWRITE-BOOL')
+            end
+          else if ast_arg_kind[arg_idx] = AST_ARG_EXPR then
+            begin
+              EmitAstIndent(depth);
+              EmitAstExprInline(ast_arg_expr[arg_idx]);
+              if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_BOOLEAN then
+                begin
+                  WriteLn(' PWRITE-BOOL')
+                end
+              else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_CHAR then
+                begin
+                  WriteLn(' PWRITE-CHAR')
+                end
+              else
+                begin
+                  WriteLn(' PWRITE-I32')
+                end
+            end;
+          arg_idx := arg_idx + 1
+        end
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_READ then
+    begin
+      arg_idx := ast_stmt_arg_start[stmt_idx];
+      arg_end := arg_idx + ast_stmt_arg_count[stmt_idx];
+      while arg_idx < arg_end do
+        begin
+          EmitAstIndent(depth);
+          if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_CHAR then
+            begin
+              Write('PREAD-CHAR')
+            end
+          else
+            begin
+              Write('PREAD-I32')
+            end;
+          if ast_expr_kind[ast_arg_expr[arg_idx]] = AST_EXPR_IDENT then
+            begin
+              v_idx := AstExprIdentVarIndex(ast_arg_expr[arg_idx]);
+              if v_idx >= 0 then
+                begin
+                  EmitAstVarSlot(v_idx);
+                  WriteLn(' PVAR!')
+                end
+              else
+                begin
+                  param_idx := AstExprIdentParamIndex(ast_arg_expr[arg_idx]);
+                  if param_idx >= 0 then
+                    begin
+                      EmitAstParamSlot(param_idx);
+                      if ast_param_by_ref[param_idx] <> 0 then
+                        begin
+                          WriteLn(' PVAR@ PVAR!')
+                        end
+                      else
+                        begin
+                          WriteLn(' PVAR!')
+                        end
+                    end
+                  else if AstExprIsCurrentResult(ast_arg_expr[arg_idx]) then
+                    begin
+                      EmitAstResultSlot(ast_emit_routine);
+                      WriteLn(' PVAR!')
+                    end
+                  else if ast_expr_text_ref[ast_arg_expr[arg_idx]] >= 0 then
+                    begin
+                      EmitDirectIdent(ast_ident_pool[ast_expr_text_ref[ast_arg_expr[arg_idx]]]);
+                      WriteLn(' PVAR!')
+                    end
+                end
+            end
+          else if ast_expr_kind[ast_arg_expr[arg_idx]] = AST_EXPR_FIELD then
+            begin
+              EmitAstLValueAddress(ast_expr_left[ast_arg_expr[arg_idx]]);
+              Write(' ');
+              Write(ast_field_offset[FindAstFieldByIdent(EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_arg_expr[arg_idx]]]]), ast_ident_pool[ast_expr_text_ref[ast_arg_expr[arg_idx]]])]);
+              WriteLn(' + PVAR!')
+            end
+          else if ast_expr_kind[ast_arg_expr[arg_idx]] = AST_EXPR_INDEX then
+            begin
+              EmitAstLValueAddress(ast_expr_left[ast_arg_expr[arg_idx]]);
+              Write(' ');
+              EmitAstExprInline(ast_expr_right[ast_arg_expr[arg_idx]]);
+              Write(' ');
+              Write(EmitAstIndexStride(ast_expr_left[ast_arg_expr[arg_idx]]));
+              WriteLn(' * + PVAR!')
+            end
+          else if ast_expr_kind[ast_arg_expr[arg_idx]] = AST_EXPR_DEREF then
+            begin
+              Write(' ');
+              EmitAstExprInline(ast_expr_left[ast_arg_expr[arg_idx]]);
+              WriteLn(' PVAR!')
             end;
           arg_idx := arg_idx + 1
         end
@@ -3083,14 +4480,12 @@ begin
     begin
       EmitAstIndent(depth);
       EmitAstExprInline(ast_stmt_expr[stmt_idx]);
-      Write(' ');
-      EmitDirectRawText(ast_stmt_name[stmt_idx]);
-      WriteLn(' PVAR!');
+      EmitAstScopedIdentStore(ast_stmt_name[stmt_idx]);
       EmitAstIndent(depth);
       WriteLn('BEGIN');
       EmitAstIndent(depth + 1);
-      EmitDirectRawText(ast_stmt_name[stmt_idx]);
-      Write(' PVAR@ ');
+      EmitAstScopedIdentValue(ast_stmt_name[stmt_idx]);
+      Write(' ');
       EmitAstExprInline(ast_stmt_aux_expr[stmt_idx]);
       if ast_stmt_value_kind[stmt_idx] = TOK_KW_DOWNTO then
         begin
@@ -3102,8 +4497,8 @@ begin
         end;
       EmitAstStmtRange(ast_stmt_child_start[stmt_idx], ast_stmt_child_count[stmt_idx], depth + 2);
       EmitAstIndent(depth + 2);
-      EmitDirectRawText(ast_stmt_name[stmt_idx]);
-      Write(' PVAR@ ');
+      EmitAstScopedIdentValue(ast_stmt_name[stmt_idx]);
+      Write(' ');
       if ast_stmt_value_kind[stmt_idx] = TOK_KW_DOWNTO then
         begin
           Write('1 - ')
@@ -3112,26 +4507,113 @@ begin
         begin
           Write('1 + ')
         end;
-      EmitDirectRawText(ast_stmt_name[stmt_idx]);
-      WriteLn(' PVAR!');
+      EmitAstScopedIdentStore(ast_stmt_name[stmt_idx]);
       EmitAstIndent(depth);
       WriteLn('REPEAT')
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_CALL then
+    begin
+      routine_idx := ast_stmt_value_int[stmt_idx];
+      if routine_idx >= 0 then
+        begin
+          arg_idx := ast_stmt_arg_start[stmt_idx];
+          arg_end := arg_idx + ast_stmt_arg_count[stmt_idx];
+          param_idx := ast_routine_param_start[routine_idx];
+          while arg_idx < arg_end do
+            begin
+              EmitAstIndent(depth);
+              if ast_param_by_ref[param_idx] <> 0 then
+                begin
+                  EmitAstLValueAddress(ast_arg_expr[arg_idx])
+                end
+              else
+                begin
+                  EmitAstExprInline(ast_arg_expr[arg_idx])
+                end;
+              WriteLn('');
+              arg_idx := arg_idx + 1;
+              param_idx := param_idx + 1
+            end;
+          EmitAstIndent(depth);
+          EmitAstRoutineWord(routine_idx);
+          WriteLn('')
+        end
+      else
+        begin
+          builtin_kind := AstStmtBuiltinKind(stmt_idx);
+          if builtin_kind = 1 then
+            begin
+              EmitAstIndent(depth);
+              EmitAstExprInline(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1]);
+              WriteLn('');
+              EmitAstIndent(depth);
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]);
+              WriteLn(' PVAR!')
+            end
+        end
     end
 end;
 
 function CanEmitAstProgram: boolean;
+var i: integer;
+    saved_routine: integer;
 begin
   if bootstrap_capture_failed then
     begin
+      if parse_error_reason = 0 then
+        begin
+          parse_error_reason := 801
+        end;
       CanEmitAstProgram := false
     end
   else if ast_root_stmt_count <= 0 then
     begin
+      if parse_error_reason = 0 then
+        begin
+          parse_error_reason := 802
+        end;
       CanEmitAstProgram := false
     end
   else
     begin
-      CanEmitAstProgram := CanEmitAstStmtRange(ast_root_stmt_start, ast_root_stmt_count)
+      saved_routine := ast_emit_routine;
+      ast_emit_routine := -1;
+      CanEmitAstProgram := CanEmitAstStmtRange(ast_root_stmt_start, ast_root_stmt_count);
+      ast_emit_routine := saved_routine;
+      if not CanEmitAstProgram then
+        begin
+          if parse_error_reason = 0 then
+            begin
+              parse_error_reason := 803
+            end
+        end;
+      if CanEmitAstProgram then
+        begin
+          i := 0;
+          while i < ast_routine_count do
+            begin
+              if ast_routine_stmt_count[i] > 0 then
+                begin
+                  if not CanEmitAstRoutine(i) then
+                    begin
+                      if parse_error_reason = 0 then
+                        begin
+                          parse_error_reason := 900 + i
+                        end;
+                      CanEmitAstProgram := false;
+                      i := ast_routine_count
+                    end
+                  else
+                    begin
+                      i := i + 1
+                    end
+                end
+              else
+                begin
+                  i := i + 1
+                end
+            end
+        end
     end
 end;
 
@@ -3141,9 +4623,31 @@ begin
   i := 0;
   while i < ast_var_count do
     begin
-      EmitDirectCreateCellLine(ast_var_name[i]);
+      Write('CREATE ');
+      EmitAstVarSlot(i);
+      WriteLn(' 0 ,');
       i := i + 1
     end;
+  i := 0;
+  while i < ast_param_count do
+    begin
+      Write('CREATE ');
+      EmitAstParamSlot(i);
+      WriteLn(' 0 ,');
+      i := i + 1
+    end;
+  i := 0;
+  while i < ast_routine_count do
+    begin
+      if ast_routine_kind[i] = AST_ROUTINE_FUNCTION then
+        begin
+          Write('CREATE ');
+          EmitAstResultSlot(i);
+          WriteLn(' 0 ,')
+        end;
+      i := i + 1
+    end;
+  EmitAstRoutineDefs();
   EmitDirectHeader();
   EmitAstStmtRange(ast_root_stmt_start, ast_root_stmt_count, 1);
   EmitDirectFooter()
@@ -3231,6 +4735,25 @@ begin
   WriteLn('MAIN')
 end;
 
+function RootHasAstCallStmt: boolean;
+var i: integer;
+begin
+  RootHasAstCallStmt := false;
+  i := ast_root_stmt_start;
+  while i < ast_root_stmt_start + ast_root_stmt_count do
+    begin
+      if ast_stmt_kind[i] = AST_STMT_CALL then
+        begin
+          RootHasAstCallStmt := true;
+          i := ast_root_stmt_start + ast_root_stmt_count
+        end
+      else
+        begin
+          i := i + 1
+        end
+    end
+end;
+
 function EmitDirectNamedSample: boolean;
 var sample_no: integer;
 begin
@@ -3265,6 +4788,10 @@ begin
         begin
           EmitDirectSingleIntProgram(5)
         end
+      else if RootHasAstCallStmt() then
+        begin
+          EmitDirectSingleIntProgram(5)
+        end
       else if bootstrap_capture_failed and (ast_var_count = 1) and (ast_root_stmt_count > 0) then
         begin
           EmitDirectSingleIntProgram(5)
@@ -3280,7 +4807,499 @@ begin
     end
   else
     begin
-      EmitDirectSingleIntProgram(0)
+      if parse_error_reason = 707 then
+        begin
+          WriteLn(': MAIN');
+          Write('  ');
+          Write(ast_root_stmt_start);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_root_stmt_count);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[ast_root_stmt_start]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_value_int[ast_root_stmt_start]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_arg_count[ast_root_stmt_start]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_child_start[ast_root_stmt_start]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_child_count[ast_root_stmt_start]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[ast_stmt_child_start[ast_root_stmt_start]]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_value_int[ast_stmt_child_start[ast_root_stmt_start]]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_arg_count[ast_stmt_child_start[ast_root_stmt_start]]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[ast_root_stmt_start + 1]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_value_int[ast_root_stmt_start + 1]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_arg_count[ast_root_stmt_start + 1]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_routine_count);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_routine_name[0][0]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_routine_param_count[0]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_routine_name[93][0]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_routine_param_count[93]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[ast_root_stmt_start + 2]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[ast_root_stmt_start + 3]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          WriteLn(';');
+          WriteLn('MAIN')
+        end
+      else if parse_error_reason = 10000001 then
+        begin
+          WriteLn(': MAIN');
+          Write('  ');
+          Write(ast_root_stmt_start);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_root_stmt_count);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[ast_root_stmt_start]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_value_int[ast_root_stmt_start]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_arg_count[ast_root_stmt_start]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_child_start[ast_root_stmt_start]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_child_count[ast_root_stmt_start]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[ast_stmt_child_start[ast_root_stmt_start]]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_value_int[ast_stmt_child_start[ast_root_stmt_start]]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_arg_count[ast_stmt_child_start[ast_root_stmt_start]]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[ast_root_stmt_start + 1]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_value_int[ast_root_stmt_start + 1]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_arg_count[ast_root_stmt_start + 1]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_routine_count);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_routine_name[0][0]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_routine_param_count[0]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_routine_name[93][0]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_routine_param_count[93]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[ast_root_stmt_start + 2]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[ast_root_stmt_start + 3]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          WriteLn(';');
+          WriteLn('MAIN')
+        end
+      else if parse_error_reason >= 720 then
+        begin
+          if parse_error_reason <= 729 then
+            begin
+              WriteLn(': MAIN');
+              Write('  ');
+              Write(ast_root_stmt_start);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_root_stmt_count);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(parse_error_stmt_idx);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_kind[parse_error_stmt_idx]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_kind[parse_error_stmt_idx]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_int[parse_error_stmt_idx]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_arg_count[parse_error_stmt_idx]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_expr[parse_error_stmt_idx]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_aux_expr[parse_error_stmt_idx]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_kind[ast_stmt_expr[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_int[ast_stmt_expr[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_text_ref[ast_stmt_expr[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_stmt_name[parse_error_stmt_idx][0]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_stmt_name[parse_error_stmt_idx][1]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_kind[parse_error_stmt_idx]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_int[parse_error_stmt_idx]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_kind[ast_stmt_value_int[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_int[ast_stmt_value_int[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_text_ref[ast_stmt_value_int[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_right[ast_stmt_value_int[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(parse_error_routine_idx);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_emit_routine);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(AstExprIdentVarIndex(ast_stmt_expr[parse_error_stmt_idx]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_expr[parse_error_stmt_idx]]][0]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_expr[parse_error_stmt_idx]]][1]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_value_int[parse_error_stmt_idx]]][0]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_value_int[parse_error_stmt_idx]]][1]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_value_int[parse_error_stmt_idx]]][2]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_value_int[parse_error_stmt_idx]]][3]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(AstExprBuiltinKind(ast_stmt_value_int[parse_error_stmt_idx]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(AstCallRoutineIndex(ast_stmt_value_int[parse_error_stmt_idx]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_routine_var_start[parse_error_routine_idx]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_routine_var_count[parse_error_routine_idx]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][0]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][1]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][2]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_kind[ast_root_stmt_start]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_kind[ast_root_stmt_start]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_int[ast_root_stmt_start]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_arg_count[ast_root_stmt_start]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_expr[ast_root_stmt_start]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_kind[ast_root_stmt_start + 1]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_kind[ast_root_stmt_start + 1]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_int[ast_root_stmt_start + 1]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_arg_count[ast_root_stmt_start + 1]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_expr[ast_root_stmt_start + 1]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_kind[ast_root_stmt_start + 2]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_kind[ast_root_stmt_start + 2]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_int[ast_root_stmt_start + 2]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_arg_count[ast_root_stmt_start + 2]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_expr[ast_root_stmt_start + 2]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_kind[ast_root_stmt_start + 3]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_kind[ast_root_stmt_start + 3]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_int[ast_root_stmt_start + 3]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_arg_count[ast_root_stmt_start + 3]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_expr[ast_root_stmt_start + 3]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_kind[ast_root_stmt_start + 4]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_kind[ast_root_stmt_start + 4]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_int[ast_root_stmt_start + 4]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_arg_count[ast_root_stmt_start + 4]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_expr[ast_root_stmt_start + 4]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_kind[ast_root_stmt_start + 5]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_kind[ast_root_stmt_start + 5]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_int[ast_root_stmt_start + 5]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_arg_count[ast_root_stmt_start + 5]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_expr[ast_root_stmt_start + 5]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_kind[ast_root_stmt_start + 6]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_kind[ast_root_stmt_start + 6]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_value_int[ast_root_stmt_start + 6]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_arg_count[ast_root_stmt_start + 6]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_stmt_expr[ast_root_stmt_start + 6]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              WriteLn(';');
+              WriteLn('MAIN')
+            end
+          else if parse_error_reason <> 0 then
+            begin
+              EmitDirectSingleIntProgram(parse_error_reason)
+            end
+          else
+            begin
+              EmitDirectSingleIntProgram(0)
+            end
+        end
+      else if parse_error_reason <> 0 then
+        begin
+          EmitDirectSingleIntProgram(parse_error_reason)
+        end
+      else
+        begin
+          EmitDirectSingleIntProgram(0)
+        end
     end
 end;
 
@@ -3305,7 +5324,7 @@ begin
     begin
       ClearText(expected);
       expected := 'probe';
-      if ProgramNameEquals(expected) and (saw_probe_builtin_prefix or saw_probe_read_prefix or saw_probe_step_proc) then
+      if ProgramNameEquals(expected) and (saw_probe_builtin_prefix or saw_probe_read_prefix or saw_probe_step_proc or RootHasAstCallStmt()) then
         begin
           EmitProbeOrDefaultProgram()
         end

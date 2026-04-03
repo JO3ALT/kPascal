@@ -227,6 +227,21 @@ statement は `ParseStatement` 一箇所で分岐し、必要なら `ParseAssign
 ### 原則5
 Pascal の独自拡張は標準 Pascal に正規化しない。
 
+### 原則6
+`forward` は使わず、include 順と手続き定義順を前から順に読める形に固定する。
+
+### 原則7
+文字列リテラルから `array[...] of char` への転送は通常の `:=` 代入として扱い、通常の文字列コピーだけを `StrCopy` に任せる。`CopyCharArray` のような重複 helper は増やさない。
+
+### 原則8
+入力処理は全ソースを先に読み切る形ではなく、stdin を逐次読んで処理する構造を優先する。
+
+### 原則9
+パーサは `expanded.rs` と 1 対 1 対応を維持する。Pascal の表現力が足りない部分は関数・手続きの追加で補い、Rust 側の処理段階をまとめて別形に崩さない。
+
+### 原則10
+selfhost Pascal の `if ... then ... else ...` は、単文でも各枝を必ず `begin ... end` で囲む。`else if` も同様にブロックを省略しない。
+
 ---
 
 ## 4. まず実装・修正すべき単位
@@ -406,3 +421,10 @@ Rust+pest の参照実装をもとに、Pascal 手書き再帰下降パーサの
 - `stmt_list` は `stmt { ";" stmt } [";"]` である。
 - `const_decl`, `type_decl`, `type_section` は列構造が明瞭で、再帰下降へ直接落とせる。
 - よって、全文を参照する必要はない。局所断片だけで十分である。
+
+## kforthc 出力前提
+- 生成先は generic Forth ではなく、`kforthc` の bootstrap 互換 runtime surface である。
+- 文字列出力は `S" ..." TYPE` を前提にする。
+- 出力語は `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `TYPE`, `PWRITELN`, `PWRITE-HEX` を基本とする。
+- `S" ..."` は `TYPE`, `READ-F32`, `FNUMBER?` の直前でだけ使う前提にする。
+- `PWRITE-HEX` は大文字 8 桁 16 進文字列を出す前提で扱う。

@@ -152,6 +152,23 @@ begin
   ExpectKind(TOK_RPAREN)
 end;
 
+procedure BuildAstCallArgs(call_expr_idx: integer);
+begin
+  ExpectKind(TOK_LPAREN);
+  ast_expr_left[call_expr_idx] := ast_arg_count;
+  ast_expr_right[call_expr_idx] := 0;
+  if token_kind <> TOK_RPAREN then
+    begin
+      AppendAstCallExprArg(call_expr_idx, BuildAstExpr());
+      while token_kind = TOK_COMMA do
+        begin
+          NextToken();
+          AppendAstCallExprArg(call_expr_idx, BuildAstExpr())
+        end
+    end;
+  ExpectKind(TOK_RPAREN)
+end;
+
 procedure ParseFieldSelector;
 begin
   ExpectKind(TOK_DOT);
@@ -311,6 +328,7 @@ begin
       else
         begin
           bootstrap_capture_failed := true;
+          parse_error_reason := 201;
           FailParse()
         end
     end
@@ -337,20 +355,21 @@ begin
     end
   else if token_kind = TOK_IDENT then
     begin
-      expr_idx := NewAstExpr(AST_EXPR_IDENT);
       ClearText(temp_text);
       StrCopy(token_text, temp_text);
-      ast_expr_int[expr_idx] := FindAstVar(temp_text);
-      StrCopy(temp_text, ast_expr_text[expr_idx]);
       NextToken();
       if token_kind = TOK_LPAREN then
         begin
-          bootstrap_capture_failed := true;
-          ParseCallSuffix();
-          BuildAstPrimaryExpr := -1
+          expr_idx := NewAstExpr(AST_EXPR_CALL);
+          ast_expr_text_ref[expr_idx] := NewAstIdent(temp_text);
+          BuildAstCallArgs(expr_idx);
+          BuildAstPrimaryExpr := expr_idx
         end
       else
         begin
+          expr_idx := NewAstExpr(AST_EXPR_IDENT);
+          ast_expr_int[expr_idx] := FindScopedAstVar(temp_text);
+          ast_expr_text_ref[expr_idx] := NewAstIdent(temp_text);
           while IsSelectorToken() do
             begin
               if token_kind = TOK_DOT then
@@ -358,11 +377,12 @@ begin
                   NextToken();
                   if token_kind <> TOK_IDENT then
                     begin
+                      parse_error_reason := 202;
                       FailParse()
                     end;
                   field_idx := NewAstExpr(AST_EXPR_FIELD);
                   ast_expr_left[field_idx] := expr_idx;
-                  StrCopy(token_text, ast_expr_text[field_idx]);
+                  ast_expr_text_ref[field_idx] := NewAstIdent(token_text);
                   expr_idx := field_idx;
                   NextToken()
                 end
@@ -378,9 +398,10 @@ begin
                 end
               else
                 begin
-                  bootstrap_capture_failed := true;
                   ParseDerefSelector();
-                  expr_idx := -1
+                  field_idx := NewAstExpr(AST_EXPR_DEREF);
+                  ast_expr_left[field_idx] := expr_idx;
+                  expr_idx := field_idx
                 end
             end;
           BuildAstPrimaryExpr := expr_idx
@@ -389,11 +410,16 @@ begin
   else if IsLiteralKeywordToken() then
     begin
       bootstrap_capture_failed := true;
+      if parse_error_reason = 0 then
+        begin
+          parse_error_reason := 205
+        end;
       NextToken()
     end
   else
     begin
       bootstrap_capture_failed := true;
+      parse_error_reason := 203;
       FailParse()
     end
 end;
@@ -491,6 +517,7 @@ procedure BuildLValue;
 begin
   if token_kind <> TOK_IDENT then
     begin
+      parse_error_reason := 204;
       FailParse()
     end;
   NextToken();

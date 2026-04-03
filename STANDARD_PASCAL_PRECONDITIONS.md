@@ -59,7 +59,8 @@ Self-hosting validation also includes a preprocessed single-source path. `script
 
 ## kforthc Output Contract
 - The Forth backend contract is `kforthc`'s bootstrap-style runtime surface.
-- Output generation should prefer `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `PWRITE-STR`, `PWRITELN`, and `PWRITE-HEX`.
+- Output generation should prefer `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `TYPE`, `PWRITELN`, and `PWRITE-HEX`.
 - `.` and `EMIT` may exist as aliases, but they are not the primary output contract for generated code.
-- `S" ..."` is assumed to be valid only when immediately followed by `PWRITE-STR`, `READ-F32`, or `FNUMBER?`.
-- `TYPE` must not be assumed for string-output compatibility.
+- `S" ..."` is assumed to be valid only when immediately followed by `TYPE`, `READ-F32`, or `FNUMBER?`.
+- String-output compatibility should assume `TYPE`: use `S" ..." TYPE`.
+- Assume `PWRITE-HEX` produces uppercase 8-digit hexadecimal text.

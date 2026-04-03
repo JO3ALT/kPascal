@@ -2372,14 +2372,14 @@ mod codegen {
             self.wln(";");
             self.wln(": __VARIANT_MISMATCH");
             self.indent += 1;
-            self.wln("S\" Variant tag mismatch\" PWRITE-STR");
+            self.wln("S\" Variant tag mismatch\" TYPE");
             self.wln("PWRITELN");
             self.wln("1 0 / DROP");
             self.indent -= 1;
             self.wln(";");
             self.wln(": __SUBRANGE_MISMATCH");
             self.indent += 1;
-            self.wln("S\" Subrange check failed\" PWRITE-STR");
+            self.wln("S\" Subrange check failed\" TYPE");
             self.wln("PWRITELN");
             self.wln("1 0 / DROP");
             self.indent -= 1;
@@ -4852,7 +4852,7 @@ mod codegen {
             {
                 self.wln(
                     &::alloc::__export::must_use({
-                        ::alloc::fmt::format(format_args!("S\" {0}\" PWRITE-STR", s))
+                        ::alloc::fmt::format(format_args!("S\" {0}\" TYPE", s))
                     }),
                 );
                 return;

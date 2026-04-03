@@ -3,8 +3,6 @@ use std::collections::HashMap;
 use crate::ast::*;
 use crate::sema::*;
 
-const KFORTHC_RUNTIME_DATA_BYTES: u32 = 524_288 * 4;
-
 #[derive(Clone)]
 struct VarAccess {
     slot: String,
@@ -504,7 +502,7 @@ impl<'a> ForthGen<'a> {
 
         self.wln(": __VARIANT_MISMATCH");
         self.indent += 1;
-        self.wln("S\" Variant tag mismatch\" PWRITE-STR");
+        self.wln("S\" Variant tag mismatch\" TYPE");
         self.wln("PWRITELN");
         self.wln("1 0 / DROP");
         self.indent -= 1;
@@ -512,7 +510,7 @@ impl<'a> ForthGen<'a> {
 
         self.wln(": __SUBRANGE_MISMATCH");
         self.indent += 1;
-        self.wln("S\" Subrange check failed\" PWRITE-STR");
+        self.wln("S\" Subrange check failed\" TYPE");
         self.wln("PWRITELN");
         self.wln("1 0 / DROP");
         self.indent -= 1;
@@ -2273,7 +2271,7 @@ impl<'a> ForthGen<'a> {
             && !s.contains('\n')
             && !s.contains('\r')
         {
-            self.wln(&format!("S\" {}\" PWRITE-STR", s));
+            self.wln(&format!("S\" {}\" TYPE", s));
             return;
         }
         for ch in s.chars() {
@@ -2497,12 +2495,6 @@ impl<'a> ForthGen<'a> {
             .static_data_bytes
             .checked_add(sz)
             .ok_or_else(|| format!("static data layout overflow while allocating {name}"))?;
-        if next > KFORTHC_RUNTIME_DATA_BYTES {
-            return Err(format!(
-                "static data {} bytes exceeds kforthc runtime limit {} bytes while allocating {name}; shrink global storage or add packed-char/runtime-frame support",
-                next, KFORTHC_RUNTIME_DATA_BYTES
-            ));
-        }
         if sz <= 4 {
             self.wln(&format!("CREATE {name} 0 ,"));
         } else {

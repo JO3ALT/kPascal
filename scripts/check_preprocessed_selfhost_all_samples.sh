@@ -7,7 +7,7 @@ cd "$repo_root"
 tmp_dir="$(mktemp -d /tmp/kpascal-pre-selfhost-all-XXXXXX)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
-prekpascal_bin="../prekpascal/target/debug/prekpascal"
+preprocess_bin="scripts/preprocess_selfhost.sh"
 kforthc_bin="../kFORTHc/target/release/kforthc"
 runtime_c="../kFORTHc/runtime/runtime.c"
 llc_bin="${LLC_BIN:-llc-14}"
@@ -32,8 +32,8 @@ print(str(len(src)) + ''.join(f' {ord(c)}' for c in src), end='')
 PY
 }
 
-if [[ ! -x "$prekpascal_bin" ]]; then
-  printf 'missing prekpascal binary: %s\n' "$prekpascal_bin" >&2
+if [[ ! -x "$preprocess_bin" ]]; then
+  printf 'missing selfhost preprocessor: %s\n' "$preprocess_bin" >&2
   exit 1
 fi
 
@@ -42,7 +42,7 @@ if [[ ! -x "$kforthc_bin" ]]; then
   exit 1
 fi
 
-"$prekpascal_bin" < selfhost/kpsc_main.pas > "$tmp_dir/kpsc_main_flat.pas"
+"$preprocess_bin" selfhost/kpsc_main.pas > "$tmp_dir/kpsc_main_flat.pas"
 cargo run --quiet < "$tmp_dir/kpsc_main_flat.pas" > "$tmp_dir/kpsc_main.fth"
 compile_forth \
   "$tmp_dir/kpsc_main.fth" \

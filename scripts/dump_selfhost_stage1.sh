@@ -20,7 +20,7 @@ STAGE1_OBJ="$OUT_DIR/stage1.o"
 STAGE1_BIN="$OUT_DIR/stage1.out"
 STAGE1_OUT="$OUT_DIR/stage1_generated.fth"
 
-../prekpascal/target/debug/prekpascal < selfhost/kpsc_main.pas > "$FLAT_SRC"
+bash scripts/preprocess_selfhost.sh selfhost/kpsc_main.pas > "$FLAT_SRC"
 ./target/debug/kpascal < "$FLAT_SRC" > "$SELFHOST_FORTH"
 ../kFORTHc/target/release/kforthc "$SELFHOST_FORTH" "$STAGE1_LL" >/dev/null
 "$LLC_BIN" -filetype=obj "$STAGE1_LL" -o "$STAGE1_OBJ"

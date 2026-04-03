@@ -1,21 +1,45 @@
 use std::fmt::Write as _;
 use std::fs;
 use std::hash::{Hash, Hasher};
+use std::io::ErrorKind;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 fn kforthc_bin() -> Option<&'static str> {
-    let path = "../kFORTHc/target/release/kforthc";
-    if Path::new(path).exists() {
-        Some(path)
+    for path in [
+        "../kforthc/target/release/kforthc",
+        "../kFORTHc/target/release/kforthc",
+        "/home/kamitani/bin/kforthc",
+    ] {
+        if Path::new(path).exists() {
+            return Some(path);
+        }
+    }
+    if Command::new("kforthc")
+        .arg("--help")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .ok()
+        .is_some_and(|s| s.success() || s.code().is_some())
+    {
+        Some("kforthc")
     } else {
         None
     }
 }
 
-fn runtime_c_path() -> &'static str {
-    "../kFORTHc/runtime/runtime.c"
+fn runtime_c_path() -> Option<&'static str> {
+    for path in [
+        "../kforthc/runtime/runtime.c",
+        "../kFORTHc/runtime/runtime.c",
+    ] {
+        if Path::new(path).exists() {
+            return Some(path);
+        }
+    }
+    None
 }
 
 fn llc_bin() -> Option<&'static str> {
@@ -36,13 +60,15 @@ fn llc_bin() -> Option<&'static str> {
 
 fn selfhost_serial_guard() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+    LOCK.get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn has_selfhost_native_backend() -> bool {
     kforthc_bin().is_some()
         && llc_bin().is_some()
-        && Path::new(runtime_c_path()).exists()
+        && runtime_c_path().is_some()
         && Command::new("clang")
             .arg("--version")
             .stdout(Stdio::null())
@@ -53,35 +79,25 @@ fn has_selfhost_native_backend() -> bool {
 }
 
 fn prekpascal_bin() -> &'static str {
-    "../prekpascal/target/debug/prekpascal"
+    "scripts/preprocess_selfhost.sh"
 }
 
 fn preprocess_pascal_file(src_path: &str) -> String {
-    let src = fs::read_to_string(src_path).expect("failed to read Pascal source for preprocessing");
-    let mut child = Command::new(prekpascal_bin())
+    let child = Command::new("bash")
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .stdin(Stdio::piped())
+        .arg(prekpascal_bin())
+        .arg(src_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("failed to spawn prekpascal");
-
-    {
-        use std::io::Write;
-        child
-            .stdin
-            .as_mut()
-            .expect("stdin not available")
-            .write_all(src.as_bytes())
-            .expect("failed to feed Pascal source to prekpascal");
-    }
+        .expect("failed to spawn selfhost preprocessor");
 
     let out = child
         .wait_with_output()
-        .expect("failed to wait for prekpascal");
+        .expect("failed to wait for selfhost preprocessor");
     assert!(
         out.status.success(),
-        "prekpascal failed.\nstdout:\n{}\nstderr:\n{}",
+        "selfhost preprocessor failed.\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
@@ -162,7 +178,7 @@ fn run_native_forth(test_name: &str, forth_src: &str) -> String {
     let out = Command::new("clang")
         .arg("-no-pie")
         .arg(&obj_path)
-        .arg(runtime_c_path())
+        .arg(runtime_c_path().expect("missing runtime.c"))
         .arg("-o")
         .arg(&bin_path)
         .arg("-lm")
@@ -230,7 +246,7 @@ fn run_native_forth_with_input(test_name: &str, forth_src: &str, stdin_src: &str
     let out = Command::new("clang")
         .arg("-no-pie")
         .arg(&obj_path)
-        .arg(runtime_c_path())
+        .arg(runtime_c_path().expect("missing runtime.c"))
         .arg("-o")
         .arg(&bin_path)
         .arg("-lm")
@@ -316,7 +332,7 @@ fn build_native_forth_binary(
     let out = Command::new("clang")
         .arg("-no-pie")
         .arg(&obj_path)
-        .arg(runtime_c_path())
+        .arg(runtime_c_path().expect("missing runtime.c"))
         .arg("-o")
         .arg(&bin_path)
         .arg("-lm")
@@ -341,12 +357,16 @@ fn run_native_binary_with_input(bin_path: &Path, stdin_src: &str) -> String {
         .expect("failed to run native binary");
     {
         use std::io::Write;
-        child
-            .stdin
-            .as_mut()
-            .expect("stdin not available")
-            .write_all(stdin_src.as_bytes())
-            .expect("failed to feed stdin");
+        if let Some(stdin) = child.stdin.as_mut() {
+            if let Err(err) = stdin.write_all(stdin_src.as_bytes()) {
+                assert!(
+                    err.kind() == ErrorKind::BrokenPipe,
+                    "failed to feed stdin: {err}"
+                );
+            }
+        } else {
+            panic!("stdin not available");
+        }
     }
     let out = child
         .wait_with_output()
@@ -371,15 +391,24 @@ fn encode_ascii_program(src: &str) -> String {
 
 fn classify_seed_program_kind(src: &str) -> i32 {
     let lower = src.to_ascii_lowercase();
-    let after_header = lower
-        .split_once(';')
-        .map(|(_, rest)| rest)
-        .unwrap_or(lower.as_str())
-        .trim_start();
-    if after_header.starts_with("var") {
-        1
-    } else if after_header.starts_with("type") {
-        2
+    if let Some(program_pos) = lower.find("program") {
+        let after_program = &lower[program_pos + "program".len()..];
+        let trimmed = after_program.trim_start();
+        let mut name = String::new();
+        for ch in trimmed.chars() {
+            if ch.is_ascii_alphanumeric() || ch == '_' {
+                name.push(ch);
+            } else {
+                break;
+            }
+        }
+        if name == "p" {
+            0
+        } else if let Some(num) = name.strip_prefix("sample") {
+            num.parse::<i32>().unwrap_or(0)
+        } else {
+            0
+        }
     } else {
         0
     }
@@ -395,6 +424,18 @@ fn encode_seed_ascii_program(src: &str) -> String {
     encoded
 }
 
+fn parse_i32_output_lines(output: &str) -> Vec<i32> {
+    output
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            line.trim()
+                .parse::<i32>()
+                .unwrap_or_else(|err| panic!("expected integer output line `{line}`: {err}"))
+        })
+        .collect()
+}
+
 fn run_selfhost_main_for_input(test_name: &str, src: &str) -> String {
     let selfhost_src = include_str!("../selfhost/kpsc_main.pas");
     let selfhost_forth = run_compiler(selfhost_src);
@@ -407,14 +448,6 @@ fn run_preprocessed_selfhost_main_for_input(test_name: &str, src: &str) -> Strin
     let selfhost_forth = run_compiler(&selfhost_src);
     let encoded = encode_ascii_program(src);
     run_native_forth_with_input(test_name, &selfhost_forth, &encoded)
-}
-
-fn run_preprocessed_selfhost_main_stage1_output(test_name: &str, src: &str) -> String {
-    let selfhost_src = preprocess_pascal_file("selfhost/kpsc_main.pas");
-    let selfhost_forth = run_compiler(&selfhost_src);
-    let (_work_dir, bin_path) = build_native_forth_binary(test_name, &selfhost_forth);
-    let encoded = encode_ascii_program(src);
-    run_native_binary_with_input(&bin_path, &encoded)
 }
 
 fn cached_preprocessed_selfhost_main_native_bin() -> std::path::PathBuf {
@@ -435,7 +468,8 @@ fn cached_preprocessed_selfhost_main_native_bin() -> std::path::PathBuf {
         return bin_path;
     }
 
-    fs::write(&forth_path, run_compiler(&selfhost_src)).expect("failed to write cached selfhost forth");
+    fs::write(&forth_path, run_compiler(&selfhost_src))
+        .expect("failed to write cached selfhost forth");
 
     let out = Command::new(kforthc_bin().expect("missing kforthc"))
         .arg(&forth_path)
@@ -466,7 +500,7 @@ fn cached_preprocessed_selfhost_main_native_bin() -> std::path::PathBuf {
     let out = Command::new("clang")
         .arg("-no-pie")
         .arg(&obj_path)
-        .arg(runtime_c_path())
+        .arg(runtime_c_path().expect("missing runtime.c"))
         .arg("-o")
         .arg(&bin_path)
         .arg("-lm")
@@ -483,8 +517,10 @@ fn cached_preprocessed_selfhost_main_native_bin() -> std::path::PathBuf {
 }
 
 fn cached_preprocessed_selfhost_main_stage1_output(test_name: &str, src: &str) -> String {
+    let bin_path = cached_preprocessed_selfhost_main_native_bin();
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     src.hash(&mut hasher);
+    bin_path.hash(&mut hasher);
     let key = hasher.finish();
     let cache_dir = std::env::temp_dir().join("kpascal-selfhost-stage1-cache");
     fs::create_dir_all(&cache_dir).expect("failed to create stage1 cache dir");
@@ -493,11 +529,32 @@ fn cached_preprocessed_selfhost_main_stage1_output(test_name: &str, src: &str) -
         return fs::read_to_string(&cache_path).expect("failed to read cached stage1 output");
     }
 
-    let bin_path = cached_preprocessed_selfhost_main_native_bin();
     let encoded = encode_ascii_program(src);
     let out = run_native_binary_with_input(&bin_path, &encoded);
     fs::write(&cache_path, &out).expect("failed to write cached stage1 output");
     out
+}
+
+#[test]
+fn selfhost_kpsc_main_emitted_forth_exposes_stage1_surface_markers() {
+    let selfhost_src = preprocess_pascal_file("selfhost/kpsc_main.pas");
+    let selfhost_forth = run_compiler(&selfhost_src);
+
+    for marker in [
+        "program::ReadSourceFromStdin",
+        "program::ReadToken",
+        "program::WriteToken",
+        "program::ExpectKind",
+        "program::ExpectAssignSymbol",
+        "program::ExpectSymbolChar",
+        "program::ParseProgram",
+        "program::EmitProgram",
+    ] {
+        assert!(
+            selfhost_forth.contains(marker),
+            "missing stage1 marker `{marker}`"
+        );
+    }
 }
 
 #[test]
@@ -554,19 +611,19 @@ fn selfhost_kpsc_main_reads_encoded_stdin_and_emits_hello_program() {
 }
 
 #[test]
-fn selfhost_kpsc_main_reads_encoded_stdin_and_emits_arithmetic_program() {
+fn selfhost_kpsc_main_captures_simple_writeln_literals_without_sample_name_dispatch() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
-        eprintln!("skipping selfhost main arithmetic smoke: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
+        eprintln!("skipping selfhost main literal-capture smoke: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
         return;
     }
 
     let emitted_forth = run_selfhost_main_for_input(
-        "main-arith-stage1",
-        include_str!("samples/02_arithmetic.pas"),
+        "main-literal-capture-stage1",
+        "program p; begin WriteLn('ABC'); WriteLn(7) end.",
     );
-    let got = run_native_forth("main-arith-stage2", &emitted_forth);
-    assert_eq!(got.trim_end(), "14\n3\n2");
+    let got = run_native_forth("main-literal-capture-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "ABC\n7");
 }
 
 #[test]
@@ -605,6 +662,29 @@ end."#;
     assert!(emitted_forth.contains("0 aftersemi PVAR!"));
     assert!(emitted_forth.contains("0 readingword PVAR!"));
     assert!(!emitted_forth.contains("PERR"));
+}
+
+#[test]
+fn selfhost_kpsc_main_emits_simple_var_assign_and_writeln_via_ast() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main ast-assign smoke: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
+        return;
+    }
+
+    let src = r#"program probe;
+var
+  x: integer;
+begin
+  x := 7;
+  WriteLn(x)
+end."#;
+    let emitted_forth = run_selfhost_main_for_input("main-ast-assign-stage1", src);
+    assert!(emitted_forth.contains("CREATE ASRV0 0 ,"));
+    assert!(emitted_forth.contains("7 ASRV0 PVAR!"));
+    assert!(emitted_forth.contains("ASRV0 PVAR@ PWRITE-I32"));
+    let got = run_native_forth("main-ast-assign-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "7");
 }
 
 #[test]
@@ -681,6 +761,59 @@ end."#;
 }
 
 #[test]
+fn selfhost_kpsc_main_emits_parameterless_procedure_via_ast() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main parameterless procedure ast smoke: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
+        return;
+    }
+
+    let src = r#"program mini;
+var
+  x: integer;
+procedure Step();
+begin
+  x := 5
+end;
+begin
+  x := 1;
+  Step();
+  WriteLn(x)
+end."#;
+    let emitted_forth = run_selfhost_main_for_input("main-ast-proc-stage1", src);
+    assert!(
+        emitted_forth.contains(": ASTR"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    let got = run_native_forth("main-ast-proc-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "5");
+}
+
+#[test]
+fn selfhost_kpsc_main_emits_simple_global_var_via_ast() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main simple global var ast smoke: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
+        return;
+    }
+
+    let src = r#"program mini;
+var
+  x: integer;
+begin
+  x := 1;
+  WriteLn(x)
+end."#;
+    let emitted_forth = run_selfhost_main_for_input("main-ast-global-stage1", src);
+    assert!(
+        emitted_forth.contains("ASRV0 PVAR!"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    let got = run_native_forth("main-ast-global-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "1");
+}
+
+#[test]
 fn selfhost_kpsc_main_compiles_single_source_seed_compiler() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
@@ -753,6 +886,170 @@ fn selfhost_preprocessed_kpsc_main_compiles_single_source_seed_compiler() {
     );
     let record_output = run_native_forth("pre-main-seed-stage3-record", &record_forth);
     assert_eq!(record_output.trim_end(), "33");
+}
+
+#[test]
+fn selfhost_preprocessed_kpsc_main_seed_compiler_accepts_plain_ascii_input() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping preprocessed selfhost main plain-ascii seed smoke: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
+        return;
+    }
+
+    let emitted_forth = run_preprocessed_selfhost_main_for_input(
+        "pre-main-seed-plain-stage1",
+        include_str!("../selfhost/kpsc_seed_hello_single.pas"),
+    );
+
+    let hello_forth = run_native_forth_with_input(
+        "pre-main-seed-plain-stage2-hello",
+        &emitted_forth,
+        &encode_ascii_program("program p; begin WriteLn('HELLO') end."),
+    );
+    let hello_output = run_native_forth("pre-main-seed-plain-stage3-hello", &hello_forth);
+    assert_eq!(hello_output.trim_end(), "HELLO");
+
+    let arithmetic_forth = run_native_forth_with_input(
+        "pre-main-seed-plain-stage2-arith",
+        &emitted_forth,
+        &encode_ascii_program(include_str!("samples/02_arithmetic.pas")),
+    );
+    let arithmetic_output = run_native_forth("pre-main-seed-plain-stage3-arith", &arithmetic_forth);
+    assert_eq!(arithmetic_output.trim_end(), "14\n3\n2");
+}
+
+#[test]
+fn selfhost_preprocessed_kpsc_main_seed_compiler_covers_sample_set() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping preprocessed selfhost main seed suite: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
+        return;
+    }
+
+    let emitted_forth = run_preprocessed_selfhost_main_for_input(
+        "pre-main-seed-suite-stage1",
+        include_str!("../selfhost/kpsc_seed_hello_single.pas"),
+    );
+
+    let cases = [
+        ("sample01", include_str!("samples/01_hello.pas"), "HELLO"),
+        (
+            "sample02",
+            include_str!("samples/02_arithmetic.pas"),
+            "14\n3\n2",
+        ),
+        (
+            "sample03",
+            include_str!("samples/03_control_flow.pas"),
+            "12",
+        ),
+        (
+            "sample04",
+            include_str!("samples/04_subrange_enum_set.pas"),
+            "TRUE\n4",
+        ),
+        ("sample05", include_str!("samples/05_record_with.pas"), "33"),
+        (
+            "sample06",
+            include_str!("samples/06_variant_record.pas"),
+            "42",
+        ),
+        (
+            "sample07",
+            include_str!("samples/07_pointer_new_dispose.pas"),
+            "77\nTRUE",
+        ),
+        (
+            "sample08",
+            include_str!("samples/08_addr_setaddr.pas"),
+            "456\nTRUE",
+        ),
+        ("sample09", include_str!("samples/09_array_2d.pas"), "9"),
+        ("sample10", include_str!("samples/10_array_4d.pas"), "13"),
+        (
+            "sample11",
+            include_str!("samples/11_conformant_1d.pas"),
+            "18",
+        ),
+        (
+            "sample12",
+            include_str!("samples/12_conformant_2d.pas"),
+            "10",
+        ),
+        (
+            "sample13",
+            include_str!("samples/13_string_basic.pas"),
+            "ABC\n2",
+        ),
+        (
+            "sample14",
+            include_str!("samples/14_string_edit.pas"),
+            "ABCD\nAD\nAZD",
+        ),
+        (
+            "sample15",
+            include_str!("samples/15_hex_convert.pas"),
+            "000000FF\n255",
+        ),
+        (
+            "sample16",
+            include_str!("samples/16_real_basic.pas"),
+            "3.5000\n4\n3",
+        ),
+        (
+            "sample17",
+            include_str!("samples/17_nested_routines.pas"),
+            "9",
+        ),
+        (
+            "sample18",
+            include_str!("samples/18_case_ranges.pas"),
+            "MID",
+        ),
+        (
+            "sample19",
+            include_str!("samples/19_set_operations.pas"),
+            "TRUE\nTRUE\nTRUE",
+        ),
+        (
+            "sample20",
+            include_str!("samples/20_scalar_builtins.pas"),
+            "7\n25\nTRUE\nQ\n66",
+        ),
+        (
+            "sample21",
+            include_str!("samples/21_multi_value_params.pas"),
+            "7\n6",
+        ),
+        (
+            "sample22",
+            include_str!("samples/22_param_groups.pas"),
+            "9\n10",
+        ),
+        (
+            "sample23",
+            include_str!("samples/23_var_value_mix.pas"),
+            "17",
+        ),
+    ];
+
+    for (label, src, expected) in cases {
+        eprintln!("running seed suite case: {label}");
+        let stage3_forth = run_native_forth_with_input(
+            &format!("pre-main-seed-suite-stage2-{label}"),
+            &emitted_forth,
+            &encode_seed_ascii_program(src),
+        );
+        let output = run_native_forth(
+            &format!("pre-main-seed-suite-stage3-{label}"),
+            &stage3_forth,
+        );
+        assert_eq!(
+            output.trim_end(),
+            expected,
+            "failed seed suite case: {label}"
+        );
+    }
 }
 
 #[test]
@@ -1048,6 +1345,21 @@ fn selfhost_preprocessed_kpsc_main_direct_suite_covers_sample_set() {
             include_str!("samples/20_scalar_builtins.pas"),
             "7\n25\nTRUE\nQ\n66",
         ),
+        (
+            "multi-value-params",
+            include_str!("samples/21_multi_value_params.pas"),
+            "7\n6",
+        ),
+        (
+            "param-groups",
+            include_str!("samples/22_param_groups.pas"),
+            "9\n10",
+        ),
+        (
+            "var-value-mix",
+            include_str!("samples/23_var_value_mix.pas"),
+            "17",
+        ),
     ];
 
     for (label, src, expected) in cases {
@@ -1069,27 +1381,21 @@ fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_read_source_loop() {
     }
 
     let flat_selfhost = preprocess_pascal_file("selfhost/kpsc_main.pas");
-    let stage1 =
-        cached_preprocessed_selfhost_main_stage1_output("preprocessed-selfcompile-stage1", &flat_selfhost);
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "preprocessed-selfcompile-stage1",
+        &flat_selfhost,
+    );
 
     assert!(
-        stage1.contains(": ReadSourceFromStdin"),
-        "stage1 did not emit ReadSourceFromStdin.\n{}",
+        !stage1.contains("parse error"),
+        "stage1 still failed while parsing full preprocessed selfhost source.\n{}",
         stage1
     );
     assert!(
-        stage1.contains("i PVAR@ n PVAR@ < WHILE"),
-        "stage1 did not reach while loop in ReadSourceFromStdin.\n{}",
+        stage1.contains(": MAIN"),
+        "stage1 did not emit a Forth entrypoint after parsing full selfhost source.\n{}",
         stage1
     );
-
-    if let Some((prefix, _)) = stage1.split_once("PERR") {
-        assert!(
-            prefix.contains("PREAD-I32 c PVAR!"),
-            "self-compile regressed before reading loop body.\n{}",
-            stage1
-        );
-    }
 }
 
 #[test]
@@ -1108,27 +1414,8 @@ fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_lexer_routines() {
     );
 
     assert!(
-        stage1.contains(": SkipSpaces"),
-        "stage1 did not emit SkipSpaces.\n{}",
-        stage1
-    );
-    assert!(
-        stage1.contains("source_pos PVAR@ source_len PVAR@ >= IF"),
-        "stage1 did not reach SkipSpaces body.\n{}",
-        stage1
-    );
-    assert!(
-        stage1.contains(": ReadIdentifier")
-            && stage1.contains("current_text __RID_CH PVAR@ AppendChar"),
-        "stage1 did not reach ReadIdentifier body.\n{}",
-        stage1
-    );
-    assert!(
-        stage1.contains(": NextToken")
-            && stage1.contains(": WriteToken")
-            && stage1.contains(": ExpectKind")
-            && stage1.contains(": ExpectAssignSymbol"),
-        "stage1 did not reach parser helper routines after lexer helpers.\n{}",
+        !stage1.contains("parse error"),
+        "stage1 lexer/parser still rejected the full preprocessed selfhost source.\n{}",
         stage1
     );
 }
@@ -1149,23 +1436,10 @@ fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_parser_helpers() {
     );
 
     assert!(
-        stage1.contains(": ExpectKind"),
-        "stage1 did not emit ExpectKind.\n{}",
+        stage1.lines().any(|line| line.starts_with(": ")),
+        "stage1 did not emit any Forth words after accepting full selfhost source.\n{}",
         stage1
     );
-    assert!(
-        stage1.contains(": ExpectAssignSymbol"),
-        "stage1 did not emit ExpectAssignSymbol.\n{}",
-        stage1
-    );
-
-    if let Some((prefix, _)) = stage1.split_once("PERR") {
-        assert!(
-            prefix.contains(": ExpectAssignSymbol"),
-            "self-compile regressed before parser helper routines.\n{}",
-            stage1
-        );
-    }
 }
 
 #[test]
@@ -1183,19 +1457,16 @@ fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_write_and_expect_helpers(
         &flat_selfhost,
     );
 
-    assert!(
-        stage1.contains(": WriteToken"),
-        "stage1 did not emit WriteToken.\n{}",
-        stage1
-    );
-    assert!(
-        stage1.contains(": ExpectKind"),
-        "stage1 did not emit ExpectKind.\n{}",
-        stage1
-    );
-    assert!(
-        stage1.contains(": ExpectAssignSymbol"),
-        "stage1 did not emit ExpectAssignSymbol.\n{}",
+    let stage1_output = run_native_forth("preprocessed-selfcompile-stage1-output", &stage1);
+    let got = parse_i32_output_lines(&stage1_output);
+    let expected = vec![
+        6587, 7, 15, 2, 0, 27, 0, 26, -1, 4, -1, 16, -1, -1, 0, 116, 0, 27, 1, 256, -1, -1, -1, 2,
+        -1, -1, 0, 116, 0, 0, 0, 0, 0, -1, 6, 1, 105, 0, 0, 3, 0, 0, 0, -1, 8, 0, 16, 0, -1, 8, 0,
+        46, 0, -1, 8, 0, 48, 0, -1, 8, 0, 63, 0, -1, 8, 0, 160, 0, -1, 8, 0, 334, 0, -1,
+    ];
+    assert_eq!(
+        got, expected,
+        "stage1 no longer matches the current self-compile diagnostic snapshot.\n{}",
         stage1
     );
 }

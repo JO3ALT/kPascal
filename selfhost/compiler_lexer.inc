@@ -11,6 +11,16 @@ begin
   Write('r');
   Write('o');
   Write('r');
+  Write(' ');
+  Write(parse_error_reason);
+  Write(' ');
+  Write(token_kind);
+  Write(' ');
+  Write(ast_stmt_count);
+  Write(' ');
+  Write(ast_expr_count);
+  Write(' ');
+  Write(ast_arg_count);
   WriteLn()
 end;
 
@@ -264,6 +274,33 @@ begin
   token_kind := TOK_INT
 end;
 
+procedure ReadCharCodeToken;
+var i: integer;
+begin
+  ClearToken();
+  token_value := 0;
+  AdvanceSourceStream();
+  i := 0;
+  while i < 100000 do
+    begin
+      if stream_eof then
+        begin
+          i := 100000
+        end
+      else if IsDigit(stream_current_char) then
+        begin
+          token_value := token_value * 10 + Ord(stream_current_char) - Ord('0');
+          i := i + 1;
+          AdvanceSourceStream()
+        end
+      else
+        begin
+          i := 100000
+        end
+    end;
+  token_kind := TOK_INT
+end;
+
 procedure ReadStringToken;
 var i: integer;
 begin
@@ -444,6 +481,10 @@ begin
     begin
       ReadStringToken()
     end
+  else if stream_current_char = '#' then
+    begin
+      ReadCharCodeToken()
+    end
   else if stream_current_char < '0' then
     begin
       ReadSymbolToken()
@@ -478,6 +519,7 @@ procedure ExpectToken(kind: integer);
 begin
   if token_kind <> kind then
     begin
+      parse_error_reason := 1;
       FailParse()
     end;
   ReadToken()
@@ -487,6 +529,7 @@ procedure ExpectIdent(var dst: text_buf);
 begin
   if token_kind <> TOK_IDENT then
     begin
+      parse_error_reason := 2;
       FailParse()
     end;
   StrCopy(token_text, dst);

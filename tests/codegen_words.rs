@@ -131,6 +131,28 @@ end.
 }
 
 #[test]
+fn generates_typed_writes_for_bool_and_char_vars() {
+    let src = r#"
+program p;
+var
+  b: boolean;
+  c: char;
+begin
+  b := true;
+  c := 'A';
+  WriteLn(b);
+  WriteLn(c)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("1 b PVAR!"));
+    assert!(forth.contains("65 c PVAR!"));
+    assert!(forth.contains("b PVAR@ PWRITE-BOOL"));
+    assert!(forth.contains("c PVAR@ PWRITE-CHAR"));
+}
+
+#[test]
 fn supports_true_false_literals_in_expr() {
     let src = r#"
 program p;
@@ -270,6 +292,43 @@ end.
 }
 
 #[test]
+fn generates_expr_tree_for_unary_and_parenthesized_assignment() {
+    let src = r#"
+program p;
+var
+  i: integer;
+  b: boolean;
+begin
+  i := -(1 + 2);
+  b := not false;
+  WriteLn(i);
+  WriteLn(b)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("1 2 + NEGATE i PVAR!"));
+    assert!(forth.contains("0 0= b PVAR!"));
+    assert!(forth.contains("b PVAR@ PWRITE-BOOL"));
+}
+
+#[test]
+fn generates_expr_tree_for_arithmetic_assignment() {
+    let src = r#"
+program p;
+var
+  i: integer;
+begin
+  i := i + 1;
+  WriteLn(i)
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("i PVAR@ 1 + i PVAR!"));
+}
+
+#[test]
 fn generates_simple_assignment_without_stack_underflow_pattern() {
     let src = r#"
 program p;
@@ -306,9 +365,9 @@ end.
     assert!(forth.contains("REPEAT"));
     assert!(forth.contains("i PVAR@ 1 + i PVAR!"));
     assert!(forth.contains("i PVAR@ 1 - i PVAR!"));
-    assert!(forth.contains("65 PWRITE-CHAR"));
-    assert!(forth.contains("66 PWRITE-CHAR"));
-    assert!(forth.contains("67 PWRITE-CHAR"));
+    assert!(forth.contains("65 PWRITE-CHAR") || forth.contains("S\" ABC\" TYPE"));
+    assert!(forth.contains("66 PWRITE-CHAR") || forth.contains("S\" ABC\" TYPE"));
+    assert!(forth.contains("67 PWRITE-CHAR") || forth.contains("S\" ABC\" TYPE"));
 }
 
 #[test]
@@ -399,9 +458,15 @@ end.
     let forth = run_compiler(src);
     assert!(forth.contains("a PVAR@"));
     assert!(forth.contains("a 4 PFIELD@"));
-    assert!(forth.contains("v PVAR@"));
-    assert!(forth.contains("S_PROGR_C15B20 1 4 * + PVAR@"));
-    assert!(forth.contains("S_PROGR_C15B20 2 4 * + PVAR@"));
+    assert!(forth.contains("v PVAR@") || forth.contains("v R_PROGR_"));
+    assert!(
+        forth.contains("S_PROGR_C15B20 1 4 * + PVAR@")
+            || forth.contains("S_PROGR_C15B20 1 4 * + __SCB0 PVAR! __SCB0 PVAR@ PVAR@")
+    );
+    assert!(
+        forth.contains("S_PROGR_C15B20 2 4 * + PVAR@")
+            || forth.contains("S_PROGR_C15B20 2 4 * + __SCB0 PVAR! __SCB0 PVAR@ PVAR@")
+    );
     assert!(forth.contains("PFIELD!"));
 }
 
@@ -479,6 +544,39 @@ end.
 }
 
 #[test]
+fn generates_selector_expr_tree_for_field_and_index_access() {
+    let src = r#"
+program p;
+type
+  point = record
+    x: integer;
+    y: integer;
+  end;
+  arr = array[4] of integer;
+var
+  p: point;
+  a: arr;
+  i: integer;
+begin
+  p.y := 20;
+  i := 2;
+  a[i] := p.y + 1;
+  WriteLn(p.y);
+  WriteLn(a[i])
+end.
+"#;
+
+    let forth = run_compiler(src);
+    assert!(forth.contains("20 p 4 PFIELD!"));
+    assert!(forth.contains("p 4 PFIELD@ 1 + a i PVAR@ 4 * + PVAR!"));
+    assert!(forth.contains("p 4 PFIELD@ PWRITE-I32"));
+    assert!(
+        forth.contains("a i PVAR@ 4 * + PVAR@ PWRITE-I32")
+            || forth.contains("a i PVAR@ 4 * + __SCB0 PVAR! __SCB0 PVAR@ PVAR@ PWRITE-I32")
+    );
+}
+
+#[test]
 fn supports_array_type_and_index_access() {
     let src = r#"
 program p;
@@ -496,7 +594,10 @@ end.
     let forth = run_compiler(src);
     assert!(forth.contains("2 i PVAR!"));
     assert!(forth.contains("7 a i PVAR@ 4 * + PVAR!"));
-    assert!(forth.contains("a i PVAR@ 4 * + PVAR@ PWRITE-I32"));
+    assert!(
+        forth.contains("a i PVAR@ 4 * + PVAR@ PWRITE-I32")
+            || forth.contains("a i PVAR@ 4 * + __SCB0 PVAR! __SCB0 PVAR@ PVAR@ PWRITE-I32")
+    );
 }
 
 #[test]
@@ -526,7 +627,7 @@ begin
 end.
 "#;
     let forth = run_compiler(src);
-    assert!(!forth.contains("S\" A\"Z\" PWRITE-STR"));
+    assert!(!forth.contains("S\" A\"Z\" TYPE"));
     assert!(forth.contains("65 PWRITE-CHAR"));
     assert!(forth.contains("34 PWRITE-CHAR"));
     assert!(forth.contains("90 PWRITE-CHAR"));

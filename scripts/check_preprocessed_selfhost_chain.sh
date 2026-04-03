@@ -7,10 +7,26 @@ cd "$repo_root"
 tmp_dir="$(mktemp -d /tmp/kpascal-pre-selfhost-check-XXXXXX)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
-prekpascal_bin="../prekpascal/target/debug/prekpascal"
-kforthc_bin="../kFORTHc/target/release/kforthc"
-runtime_c="../kFORTHc/runtime/runtime.c"
+preprocess_bin="scripts/preprocess_selfhost.sh"
 llc_bin="${LLC_BIN:-llc-14}"
+
+if [[ -x ../kforthc/target/release/kforthc ]]; then
+  kforthc_bin="../kforthc/target/release/kforthc"
+elif [[ -x ../kFORTHc/target/release/kforthc ]]; then
+  kforthc_bin="../kFORTHc/target/release/kforthc"
+elif command -v kforthc >/dev/null 2>&1; then
+  kforthc_bin="kforthc"
+else
+  kforthc_bin=""
+fi
+
+if [[ -f ../kforthc/runtime/runtime.c ]]; then
+  runtime_c="../kforthc/runtime/runtime.c"
+elif [[ -f ../kFORTHc/runtime/runtime.c ]]; then
+  runtime_c="../kFORTHc/runtime/runtime.c"
+else
+  runtime_c=""
+fi
 
 compile_forth() {
   local forth_src="$1"
@@ -39,11 +55,25 @@ from pathlib import Path
 import sys
 src = Path(sys.argv[1]).read_text()
 lower = src.lower()
-after = lower.split(';', 1)[1].lstrip() if ';' in lower else lower.lstrip()
-if after.startswith('var'):
-    kind = 1
-elif after.startswith('type'):
-    kind = 2
+program_pos = lower.find('program')
+if program_pos >= 0:
+    trimmed = lower[program_pos + len('program'):].lstrip()
+    name_chars = []
+    for ch in trimmed:
+        if ch.isalnum() or ch == '_':
+            name_chars.append(ch)
+        else:
+            break
+    name = ''.join(name_chars)
+    if name == 'p':
+        kind = 0
+    elif name.startswith('sample'):
+        try:
+            kind = int(name[len('sample'):])
+        except ValueError:
+            kind = 0
+    else:
+        kind = 0
 else:
     kind = 0
 print(f"{len(src)} {kind}" + ''.join(f' {ord(c)}' for c in src), end='')
@@ -71,17 +101,31 @@ run_stage3() {
   fi
 }
 
-if [[ ! -x "$prekpascal_bin" ]]; then
-  printf 'missing prekpascal binary: %s\n' "$prekpascal_bin" >&2
+run_stage3_expected_file() {
+  local label="$1"
+  local src_file="$2"
+  local expected_file="$3"
+  local expected
+  expected="$(cat "$expected_file")"
+  run_stage3 "$label" "$src_file" "$expected"
+}
+
+if [[ ! -x "$preprocess_bin" ]]; then
+  printf 'missing selfhost preprocessor: %s\n' "$preprocess_bin" >&2
   exit 1
 fi
 
-if [[ ! -x "$kforthc_bin" ]]; then
+if [[ -z "$kforthc_bin" ]]; then
   printf 'missing kforthc binary: %s\n' "$kforthc_bin" >&2
   exit 1
 fi
 
-"$prekpascal_bin" < selfhost/kpsc_main.pas > "$tmp_dir/kpsc_main_flat.pas"
+if [[ -z "$runtime_c" || ! -f "$runtime_c" ]]; then
+  printf 'missing runtime.c\n' >&2
+  exit 1
+fi
+
+"$preprocess_bin" selfhost/kpsc_main.pas > "$tmp_dir/kpsc_main_flat.pas"
 cargo run --quiet < "$tmp_dir/kpsc_main_flat.pas" > "$tmp_dir/kpsc_main.fth"
 compile_forth \
   "$tmp_dir/kpsc_main.fth" \
@@ -99,9 +143,9 @@ compile_forth \
 
 printf "stage1 ok: preprocessed kpsc_main -> seed compiler\n\n"
 
-printf "%s" "program p; begin WriteLn('HELLO') end." > "$tmp_dir/hello.pas"
-run_stage3 "hello" "$tmp_dir/hello.pas" "HELLO"
-run_stage3 "arithmetic" "tests/samples/02_arithmetic.pas" $'14\n3\n2'
-run_stage3 "record" "tests/samples/05_record_with.pas" "33"
+for src_file in tests/samples/*.pas; do
+  label="$(basename "$src_file" .pas)"
+  run_stage3_expected_file "$label" "$src_file" "${src_file%.pas}.out"
+done
 
 printf "all stages ok\n"

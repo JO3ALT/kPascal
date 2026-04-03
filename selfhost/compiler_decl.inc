@@ -460,17 +460,88 @@ begin
   ExpectKind(TOK_SEMI)
 end;
 
-procedure ParseFormalParams;
+procedure ParseFormalParams(routine_idx: integer);
+var by_ref: boolean;
+    type_code: integer;
+    type_name: text_buf;
+    type_idx: integer;
+    param_start: integer;
 begin
   ExpectKind(TOK_LPAREN);
   while token_kind <> TOK_RPAREN do
     begin
+      by_ref := false;
       if token_kind = TOK_KW_VAR then
         begin
+          by_ref := true;
           NextToken()
         end;
-      ParseIdentList();
+      param_start := ast_param_count;
+      if token_kind <> TOK_IDENT then
+        begin
+          FailParse()
+        end;
+      AppendAstParam(routine_idx, token_text, AST_TYPE_UNKNOWN, by_ref);
+      NextToken();
+      while token_kind = TOK_COMMA do
+        begin
+          NextToken();
+          if token_kind <> TOK_IDENT then
+            begin
+              FailParse()
+            end;
+          AppendAstParam(routine_idx, token_text, AST_TYPE_UNKNOWN, by_ref);
+          NextToken()
+        end;
       ExpectKind(TOK_COLON);
+      type_code := AST_TYPE_UNKNOWN;
+      type_idx := -1;
+      if token_kind = TOK_KW_INTEGER then
+        begin
+          type_code := AST_TYPE_INTEGER
+        end
+      else if token_kind = TOK_KW_BOOLEAN then
+        begin
+          type_code := AST_TYPE_BOOLEAN
+        end
+      else if token_kind = TOK_KW_CHAR then
+        begin
+          type_code := AST_TYPE_CHAR
+        end
+      else if token_kind = TOK_KW_REAL then
+        begin
+          type_code := AST_TYPE_REAL
+        end
+      else if token_kind = TOK_IDENT then
+        begin
+          ClearText(type_name);
+          StrCopy(token_text, type_name);
+          type_idx := FindAstType(type_name);
+          if type_idx >= 0 then
+            begin
+              if ast_type_kind[type_idx] = AST_DECL_RECORD then
+                begin
+                  type_code := AST_TYPE_RECORD
+                end
+              else if ast_type_kind[type_idx] = AST_DECL_ARRAY then
+                begin
+                  type_code := AST_TYPE_ARRAY
+                end
+            end
+        end;
+      while param_start < ast_param_count do
+        begin
+          ast_param_type[param_start] := type_code;
+          if type_code = AST_TYPE_RECORD then
+            begin
+              ast_param_type_ref[param_start] := type_idx
+            end
+          else if type_code = AST_TYPE_ARRAY then
+            begin
+              ast_param_type_ref[param_start] := type_idx
+            end;
+          param_start := param_start + 1
+        end;
       ParseTypeRef();
       if token_kind = TOK_SEMI then
         begin
@@ -481,50 +552,86 @@ begin
 end;
 
 procedure ParseProcedureDecl;
-var proc_name: text_buf;
-    probe_name: text_buf;
+var probe_name: text_buf;
     was_capture_enabled: boolean;
+    was_capture_routine: integer;
+    routine_idx: integer;
 begin
   ExpectKind(TOK_KW_PROCEDURE);
-  ExpectIdent(proc_name);
+  if token_kind <> TOK_IDENT then
+    begin
+      FailParse()
+    end;
+  routine_idx := NewAstRoutine(token_text, AST_ROUTINE_PROCEDURE);
   ClearText(probe_name);
   probe_name := 'step';
-  if StrCmpIgnoreCase(proc_name, probe_name) = 0 then
+  if StrCmpIgnoreCase(token_text, probe_name) = 0 then
     begin
       saw_probe_step_proc := true
     end;
+  NextToken();
   if token_kind = TOK_LPAREN then
     begin
-      ParseFormalParams()
+      ParseFormalParams(routine_idx)
     end;
   ExpectKind(TOK_SEMI);
+  ast_routine_var_start[routine_idx] := ast_var_count;
   was_capture_enabled := ast_capture_enabled;
-  ast_capture_enabled := false;
+  was_capture_routine := ast_current_routine;
+  ast_current_routine := routine_idx;
   BuildBlock();
+  ast_current_routine := was_capture_routine;
   ast_capture_enabled := was_capture_enabled;
+  ast_routine_var_count[routine_idx] := ast_var_count - ast_routine_var_start[routine_idx];
   ExpectKind(TOK_SEMI)
 end;
 
 procedure ParseFunctionDecl;
 var was_capture_enabled: boolean;
+    was_capture_routine: integer;
+    routine_idx: integer;
+    ret_type_code: integer;
 begin
   ExpectKind(TOK_KW_FUNCTION);
   if token_kind <> TOK_IDENT then
     begin
       FailParse()
     end;
+  routine_idx := NewAstRoutine(token_text, AST_ROUTINE_FUNCTION);
   NextToken();
   if token_kind = TOK_LPAREN then
     begin
-      ParseFormalParams()
+      ParseFormalParams(routine_idx)
     end;
   ExpectKind(TOK_COLON);
+  ret_type_code := AST_TYPE_UNKNOWN;
+  if token_kind = TOK_KW_INTEGER then
+    begin
+      ret_type_code := AST_TYPE_INTEGER
+    end
+  else if token_kind = TOK_KW_BOOLEAN then
+    begin
+      ret_type_code := AST_TYPE_BOOLEAN
+    end
+  else if token_kind = TOK_KW_CHAR then
+    begin
+      ret_type_code := AST_TYPE_CHAR
+    end
+  else if token_kind = TOK_KW_REAL then
+    begin
+      ret_type_code := AST_TYPE_REAL
+    end;
+  ast_routine_ret_type[routine_idx] := ret_type_code;
   ParseTypeRef();
   ExpectKind(TOK_SEMI);
+  ast_routine_var_start[routine_idx] := ast_var_count;
   was_capture_enabled := ast_capture_enabled;
-  ast_capture_enabled := false;
+  was_capture_routine := ast_current_routine;
+  ast_current_routine := routine_idx;
   BuildBlock();
+  ast_current_routine := was_capture_routine;
   ast_capture_enabled := was_capture_enabled;
+  ast_routine_var_count[routine_idx] := ast_var_count - ast_routine_var_start[routine_idx];
   ExpectKind(TOK_SEMI)
 end;
 
@@ -568,8 +675,16 @@ begin
   root_count := ast_stmt_count - root_start;
   if ast_capture_enabled then
     begin
-      ast_root_stmt_start := root_start;
-      ast_root_stmt_count := root_count
+      if ast_current_routine >= 0 then
+        begin
+          ast_routine_stmt_start[ast_current_routine] := root_start;
+          ast_routine_stmt_count[ast_current_routine] := root_count
+        end
+      else
+        begin
+          ast_root_stmt_start := root_start;
+          ast_root_stmt_count := root_count
+        end
     end
 end;
 

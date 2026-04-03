@@ -112,7 +112,8 @@ MIT License（`LICENSE` を参照）。
 
 ## kforthc 出力契約
 - 想定する backend 契約は、`kforthc` が実装している bootstrap 互換 runtime surface です。
-- 生成 Forth では `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `PWRITE-STR`, `PWRITELN`, `PWRITE-HEX` を優先してください。
+- 生成 Forth では `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `TYPE`, `PWRITELN`, `PWRITE-HEX` を優先してください。
 - `.` と `EMIT` は整数出力と文字出力の alias にすぎません。
-- `S" ..."` は、現状では直後が `PWRITE-STR`, `READ-F32`, `FNUMBER?` の場合だけを前提にしてください。
-- 文字列出力に `TYPE` を使わないでください。`S" ..." PWRITE-STR` を使ってください。
+- `S" ..."` は、現状では直後が `TYPE`, `READ-F32`, `FNUMBER?` の場合だけを前提にしてください。
+- 文字列出力には `TYPE` を使ってください。`S" ..." TYPE` を使ってください。
+- `PWRITE-HEX` は `000000FF` のような大文字 8 桁 16 進文字列を出力する前提です。

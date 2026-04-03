@@ -315,7 +315,8 @@ Covered by integration test `e2e_cond_short_circuits_side_effects_on_kforth`.
 
 ## kforthc Output Compatibility
 - The generated Forth target is `kforthc`'s bootstrap-style runtime surface.
-- Prefer `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `PWRITE-STR`, `PWRITELN`, and `PWRITE-HEX`.
+- Prefer `PWRITE-I32`, `PWRITE-BOOL`, `PWRITE-CHAR`, `TYPE`, `PWRITELN`, and `PWRITE-HEX`.
 - `.` and `EMIT` are aliases, not the primary codegen contract.
-- `S" ..."` should only be used in the `kforthc`-supported forms `S" ..." PWRITE-STR`, `S" ..." READ-F32`, and `S" ..." FNUMBER?`.
-- Do not depend on `TYPE` for string output.
+- `S" ..."` should only be used in the `kforthc`-supported forms `S" ..." TYPE`, `S" ..." READ-F32`, and `S" ..." FNUMBER?`.
+- Depend on `TYPE` for string output.
+- Treat `PWRITE-HEX` output as uppercase 8-digit hexadecimal text.
