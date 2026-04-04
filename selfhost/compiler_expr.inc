@@ -306,6 +306,9 @@ function BuildAstPrimaryExpr: integer;
 var expr_idx: integer;
     index_idx: integer;
     field_idx: integer;
+    const_value: integer;
+    const_candidate: boolean;
+    name_idx: integer;
     temp_text: text_buf;
 begin
   BuildAstPrimaryExpr := -1;
@@ -367,9 +370,50 @@ begin
         end
       else
         begin
-          expr_idx := NewAstExpr(AST_EXPR_IDENT);
-          ast_expr_int[expr_idx] := FindScopedAstVar(temp_text);
-          ast_expr_text_ref[expr_idx] := NewAstIdent(temp_text);
+          const_candidate := false;
+          name_idx := 0;
+          while name_idx <= 255 do
+            begin
+              if temp_text[name_idx] = #0 then
+                begin
+                  name_idx := 256
+                end
+              else
+                begin
+                  if temp_text[name_idx] = '_' then
+                    begin
+                      const_candidate := true;
+                      name_idx := 256
+                    end
+                  else if temp_text[name_idx] >= 'A' then
+                    begin
+                      if temp_text[name_idx] <= 'Z' then
+                        begin
+                          const_candidate := true;
+                          name_idx := 256
+                        end
+                      else
+                        begin
+                          name_idx := name_idx + 1
+                        end
+                    end
+                  else
+                    begin
+                      name_idx := name_idx + 1
+                    end
+                end
+            end;
+          if const_candidate and TryResolveBuiltinConst(temp_text, const_value) then
+            begin
+              expr_idx := NewAstExpr(AST_EXPR_INT);
+              ast_expr_int[expr_idx] := const_value
+            end
+          else
+            begin
+              expr_idx := NewAstExpr(AST_EXPR_IDENT);
+              ast_expr_int[expr_idx] := FindScopedAstVar(temp_text);
+              ast_expr_text_ref[expr_idx] := NewAstIdent(temp_text)
+            end;
           while IsSelectorToken() do
             begin
               if token_kind = TOK_DOT then

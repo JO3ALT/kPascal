@@ -2520,7 +2520,7 @@ begin
       limit := idx + ast_routine_param_count[routine_idx];
       while idx < limit do
         begin
-          if StrCmpIdentIdent(ast_param_name[idx], name) = 0 then
+          if IdentEq(ast_param_name[idx], name) then
             begin
               FindAstRoutineParamByIdent := idx;
               idx := limit
@@ -2544,7 +2544,7 @@ begin
       limit := idx + ast_routine_var_count[ast_emit_routine];
       while idx < limit do
         begin
-          if StrCmpIdentIdent(ast_var_name[idx], name) = 0 then
+          if IdentEq(ast_var_name[idx], name) then
             begin
               EmitFindScopedVarByIdent := idx;
               idx := limit
@@ -2558,10 +2558,14 @@ begin
   if EmitFindScopedVarByIdent < 0 then
     begin
       idx := 0;
-      limit := AstGlobalVarLimit();
+      limit := ast_var_count;
       while idx < limit do
         begin
-          if StrCmpIdentIdent(ast_var_name[idx], name) = 0 then
+          if IsRoutineLocalVar(idx) then
+            begin
+              idx := idx + 1
+            end
+          else if IdentEq(ast_var_name[idx], name) then
             begin
               EmitFindScopedVarByIdent := idx;
               idx := limit
@@ -2597,7 +2601,7 @@ begin
             begin
               if ast_expr_text_ref[expr_idx] >= 0 then
                 begin
-                  if StrCmpIdentIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]], ast_routine_name[ast_emit_routine]) = 0 then
+                  if IdentEq(ast_ident_pool[ast_expr_text_ref[expr_idx]], ast_routine_name[ast_emit_routine]) then
                     begin
                       AstExprIsCurrentResult := true
                     end
@@ -2668,7 +2672,7 @@ begin
         begin
           if ast_routine_kind[ast_emit_routine] = AST_ROUTINE_FUNCTION then
             begin
-              if StrCmpIdentIdent(name, ast_routine_name[ast_emit_routine]) = 0 then
+              if IdentEq(name, ast_routine_name[ast_emit_routine]) then
                 begin
                   EmitAstResultSlot(ast_emit_routine);
                   Write(' PVAR@')
@@ -2726,7 +2730,7 @@ begin
         begin
           if ast_routine_kind[ast_emit_routine] = AST_ROUTINE_FUNCTION then
             begin
-              if StrCmpIdentIdent(name, ast_routine_name[ast_emit_routine]) = 0 then
+              if IdentEq(name, ast_routine_name[ast_emit_routine]) then
                 begin
                   Write(' ');
                   EmitAstResultSlot(ast_emit_routine);
@@ -2775,7 +2779,7 @@ begin
         begin
           if ast_routine_kind[ast_emit_routine] = AST_ROUTINE_FUNCTION then
             begin
-              if StrCmpIdentIdent(name, ast_routine_name[ast_emit_routine]) = 0 then
+              if IdentEq(name, ast_routine_name[ast_emit_routine]) then
                 begin
                   EmitAstIdentType := ast_routine_ret_type[ast_emit_routine]
                 end
@@ -2824,7 +2828,7 @@ var text_name: text_buf;
 begin
   ClearText(text_name);
   text_name := 'captured_writeln_text';
-  if StrCmpTextIdent(text_name, name) = 0 then
+  if TextIdentEq(text_name, name) then
     begin
       EmitAstIndexStrideByIdent := 1024
     end
@@ -2832,7 +2836,7 @@ begin
     begin
       ClearText(text_name);
       text_name := 'ast_text_lit';
-      if StrCmpTextIdent(text_name, name) = 0 then
+      if TextIdentEq(text_name, name) then
         begin
           EmitAstIndexStrideByIdent := 384
         end
@@ -2840,7 +2844,7 @@ begin
         begin
           ClearText(text_name);
           text_name := 'ast_var_name';
-          if StrCmpTextIdent(text_name, name) = 0 then
+          if TextIdentEq(text_name, name) then
             begin
               EmitAstIndexStrideByIdent := 152
             end
@@ -2848,7 +2852,7 @@ begin
             begin
               ClearText(text_name);
               text_name := 'ast_type_name';
-              if StrCmpTextIdent(text_name, name) = 0 then
+              if TextIdentEq(text_name, name) then
                 begin
                   EmitAstIndexStrideByIdent := 152
                 end
@@ -2856,7 +2860,7 @@ begin
                 begin
                   ClearText(text_name);
                   text_name := 'ast_field_name';
-                  if StrCmpTextIdent(text_name, name) = 0 then
+                  if TextIdentEq(text_name, name) then
                     begin
                       EmitAstIndexStrideByIdent := 152
                     end
@@ -2864,7 +2868,7 @@ begin
                     begin
                       ClearText(text_name);
                       text_name := 'ast_stmt_name';
-                      if StrCmpTextIdent(text_name, name) = 0 then
+                      if TextIdentEq(text_name, name) then
                         begin
                           EmitAstIndexStrideByIdent := 152
                         end
@@ -2872,7 +2876,7 @@ begin
                         begin
                           ClearText(text_name);
                           text_name := 'ast_routine_name';
-                          if StrCmpTextIdent(text_name, name) = 0 then
+                          if TextIdentEq(text_name, name) then
                             begin
                               EmitAstIndexStrideByIdent := 152
                             end
@@ -2880,7 +2884,7 @@ begin
                             begin
                               ClearText(text_name);
                               text_name := 'ast_param_name';
-                              if StrCmpTextIdent(text_name, name) = 0 then
+                              if TextIdentEq(text_name, name) then
                                 begin
                                   EmitAstIndexStrideByIdent := 152
                                 end
@@ -2888,7 +2892,7 @@ begin
                                 begin
                                   ClearText(text_name);
                                   text_name := 'ast_ident_pool';
-                                  if StrCmpTextIdent(text_name, name) = 0 then
+                                  if TextIdentEq(text_name, name) then
                                     begin
                                       EmitAstIndexStrideByIdent := 152
                                     end
@@ -3039,6 +3043,265 @@ begin
                 end
             end
         end
+    end
+end;
+
+procedure CopyBuiltinConstIdentText(var src: ident_buf; var dst: text_buf);
+var i: integer;
+    first_char: char;
+    start_idx: integer;
+begin
+  ClearText(dst);
+  first_char := #0;
+  start_idx := 0;
+  if src[0] = #0 then
+    begin
+      start_idx := 1;
+      if src[1] = 's' then
+        begin
+          if src[2] = 't' then
+            begin
+              if src[3] = '_' then
+                begin
+                  first_char := 'a'
+                end
+            end
+        end
+      else if src[1] = 'o' then
+        begin
+          if src[2] = 'k' then
+            begin
+              if src[3] = '_' then
+                begin
+                  first_char := 't'
+                end
+            end
+        end
+      else if src[1] = 'a' then
+        begin
+          if src[2] = 'x' then
+            begin
+              if src[3] = '_' then
+                begin
+                  first_char := 'm'
+                end
+            end
+          else if src[2] = 'p' then
+            begin
+              if src[3] = 't' then
+                begin
+                  first_char := 'c'
+                end
+            end
+        end
+      else if src[1] = 'd' then
+        begin
+          if src[2] = 'e' then
+            begin
+              if src[3] = 'n' then
+                begin
+                  first_char := 'i'
+                end
+            end
+        end
+      else if src[1] = 'i' then
+        begin
+          if src[2] = 't' then
+            begin
+              if src[3] = '_' then
+                begin
+                  first_char := 'l'
+                end
+            end
+        end;
+      if first_char = #0 then
+        begin
+          start_idx := 0
+        end
+    end;
+  if first_char <> #0 then
+    begin
+      dst[0] := first_char;
+      for i := 1 to IDENT_LAST do
+        begin
+          dst[i] := src[i]
+        end
+    end
+  else
+    begin
+      for i := 0 to IDENT_LAST do
+        begin
+          dst[i] := src[i]
+        end
+    end
+end;
+
+function MaybeBuiltinConstIdentName(var name: ident_buf): boolean;
+begin
+  MaybeBuiltinConstIdentName := false;
+  if name[0] = 'a' then
+    begin
+      if name[1] = 's' then
+        begin
+          if name[2] = 't' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+        end
+      else if name[1] = 'x' then
+        begin
+          if name[2] = '_' then
+            begin
+              MaybeBuiltinConstIdentName := true
+            end
+        end
+      else if name[1] = 'p' then
+        begin
+          if name[2] = 't' then
+            begin
+              MaybeBuiltinConstIdentName := true
+            end
+        end
+    end
+  else if name[0] = 't' then
+    begin
+      if name[1] = 'o' then
+        begin
+          if name[2] = 'k' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+        end
+    end
+  else if name[0] = 'm' then
+    begin
+      if name[1] = 'a' then
+        begin
+          if name[2] = 'x' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+        end
+    end
+  else if name[0] = 'c' then
+    begin
+      if name[1] = 'a' then
+        begin
+          if name[2] = 'p' then
+            begin
+              if name[3] = 't' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+        end
+    end
+  else if name[0] = 'i' then
+    begin
+      if name[1] = 'd' then
+        begin
+          if name[2] = 'e' then
+            begin
+              if name[3] = 'n' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+        end
+    end
+  else if name[0] = 'l' then
+    begin
+      if name[1] = 'i' then
+        begin
+          if name[2] = 't' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+        end
+    end
+  else if name[0] = #0 then
+    begin
+      if name[1] = 's' then
+        begin
+          if name[2] = 't' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+        end
+      else if name[1] = 'o' then
+        begin
+          if name[2] = 'k' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+        end
+      else if name[1] = 'a' then
+        begin
+          if name[2] = 'x' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+          else if name[2] = 'p' then
+            begin
+              if name[3] = 't' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+        end
+      else if name[1] = 'd' then
+        begin
+          if name[2] = 'e' then
+            begin
+              if name[3] = 'n' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+        end
+      else if name[1] = 'i' then
+        begin
+          if name[2] = 't' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstIdentName := true
+                end
+            end
+        end
+    end
+end;
+
+function TryResolveBuiltinConstIdent(var name: ident_buf; var value: integer): boolean;
+var normalized: text_buf;
+begin
+  TryResolveBuiltinConstIdent := false;
+  value := 0;
+  if MaybeBuiltinConstIdentName(name) then
+    begin
+      CopyBuiltinConstIdentText(name, normalized);
+      TryResolveBuiltinConstIdent := TryResolveBuiltinConst(normalized, value)
     end
 end;
 
@@ -3276,8 +3539,10 @@ end;
 
 function CanEmitAstExpr(expr_idx: integer): boolean;
 var v_idx: integer;
+    param_idx: integer;
     routine_idx: integer;
     builtin_kind: integer;
+    const_value: integer;
 begin
   if expr_idx < 0 then
     begin
@@ -3306,6 +3571,13 @@ begin
       if not CanEmitAstExpr then
         begin
           CanEmitAstExpr := AstExprIsCurrentResult(expr_idx)
+        end;
+      if not CanEmitAstExpr then
+        begin
+          if ast_expr_text_ref[expr_idx] >= 0 then
+            begin
+              CanEmitAstExpr := TryResolveBuiltinConstIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]], const_value)
+            end
         end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_FIELD then
@@ -3324,9 +3596,26 @@ begin
       CanEmitAstExpr := false;
       if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
         begin
-          if EmitAstIdentType(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]) = AST_TYPE_ARRAY then
+          if CanEmitAstExpr(ast_expr_right[expr_idx]) then
             begin
-              CanEmitAstExpr := CanEmitAstExpr(ast_expr_right[expr_idx])
+              v_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
+              param_idx := AstExprIdentParamIndex(ast_expr_left[expr_idx]);
+              if v_idx >= 0 then
+                begin
+                  CanEmitAstExpr := true
+                end
+              else if param_idx >= 0 then
+                begin
+                  CanEmitAstExpr := true
+                end
+              else if AstExprType(ast_expr_left[expr_idx]) = AST_TYPE_ARRAY then
+                begin
+                  CanEmitAstExpr := true
+                end
+              else if EmitAstIdentType(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]) = AST_TYPE_ARRAY then
+                begin
+                  CanEmitAstExpr := true
+                end
             end
         end
     end
@@ -3437,6 +3726,7 @@ var v_idx: integer;
     param_idx: integer;
     routine_idx: integer;
     builtin_kind: integer;
+    const_value: integer;
 begin
   if ast_expr_kind[expr_idx] = AST_EXPR_INT then
     begin
@@ -3480,8 +3770,15 @@ begin
             end
           else if ast_expr_text_ref[expr_idx] >= 0 then
             begin
-              EmitDirectIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]]);
-              Write(' PVAR@')
+              if TryResolveBuiltinConstIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]], const_value) then
+                begin
+                  Write(const_value)
+                end
+              else
+                begin
+                  EmitDirectIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]]);
+                  Write(' PVAR@')
+                end
             end
         end
     end
@@ -3759,6 +4056,7 @@ end;
 function CanEmitAstStmtRange(start_idx: integer; stmt_count_local: integer): boolean;
 var i: integer;
     limit: integer;
+    span: integer;
 begin
   CanEmitAstStmtRange := true;
   i := start_idx;
@@ -3781,8 +4079,45 @@ begin
         end
       else
         begin
-          i := i + 1
+          span := AstStmtSpan(i);
+          if span <= 0 then
+            begin
+              span := 1
+            end;
+          i := i + span
         end
+    end
+end;
+
+function AstStmtSpan(stmt_idx: integer): integer;
+begin
+  if stmt_idx < 0 then
+    begin
+      AstStmtSpan := 0
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_COMPOUND then
+    begin
+      AstStmtSpan := 1 + ast_stmt_child_count[stmt_idx]
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_IF then
+    begin
+      AstStmtSpan := 1 + ast_stmt_child_count[stmt_idx] + ast_stmt_else_count[stmt_idx]
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_WHILE then
+    begin
+      AstStmtSpan := 1 + ast_stmt_child_count[stmt_idx]
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_REPEAT then
+    begin
+      AstStmtSpan := 1 + ast_stmt_child_count[stmt_idx]
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_FOR then
+    begin
+      AstStmtSpan := 1 + ast_stmt_child_count[stmt_idx]
+    end
+  else
+    begin
+      AstStmtSpan := 1
     end
 end;
 
@@ -3801,6 +4136,17 @@ begin
           CanEmitAstStmt := false;
           v_idx := AstExprIdentVarIndex(ast_stmt_expr[stmt_idx]);
           param_idx := AstExprIdentParamIndex(ast_stmt_expr[stmt_idx]);
+          if v_idx < 0 then
+            begin
+              if param_idx < 0 then
+                begin
+                  v_idx := EmitFindScopedVarByIdent(ast_stmt_name[stmt_idx]);
+                  if v_idx < 0 then
+                    begin
+                      param_idx := FindAstRoutineParamByIdent(ast_emit_routine, ast_stmt_name[stmt_idx])
+                    end
+                end
+            end;
           if v_idx >= 0 then
             begin
               if ast_var_type[v_idx] = AST_TYPE_ARRAY then
@@ -3841,8 +4187,8 @@ begin
     end
   else if ast_stmt_kind[stmt_idx] = AST_STMT_WRITELN then
     begin
-      CanEmitAstStmt := ast_stmt_arg_count[stmt_idx] > 0;
-      if CanEmitAstStmt then
+      CanEmitAstStmt := true;
+      if ast_stmt_arg_count[stmt_idx] > 0 then
         begin
           arg_idx := ast_stmt_arg_start[stmt_idx];
           arg_end := arg_idx + ast_stmt_arg_count[stmt_idx];
@@ -3875,10 +4221,6 @@ begin
                 end;
               arg_idx := arg_idx + 1
             end
-        end
-      else if parse_error_reason = 0 then
-        begin
-          parse_error_reason := 702
         end
     end
   else if ast_stmt_kind[stmt_idx] = AST_STMT_WRITE then
@@ -3979,7 +4321,33 @@ begin
       CanEmitAstStmt := (v_idx >= 0) or (FindAstRoutineParamByIdent(ast_emit_routine, ast_stmt_name[stmt_idx]) >= 0);
       if CanEmitAstStmt then
         begin
-          CanEmitAstStmt := CanEmitAstExpr(ast_stmt_expr[stmt_idx]) and CanEmitAstExpr(ast_stmt_aux_expr[stmt_idx]) and CanEmitAstStmtRange(ast_stmt_child_start[stmt_idx], ast_stmt_child_count[stmt_idx])
+          if not CanEmitAstExpr(ast_stmt_expr[stmt_idx]) then
+            begin
+              if parse_error_reason = 0 then
+                begin
+                  parse_error_reason := 731
+                end;
+              CanEmitAstStmt := false
+            end
+          else if not CanEmitAstExpr(ast_stmt_aux_expr[stmt_idx]) then
+            begin
+              if parse_error_reason = 0 then
+                begin
+                  parse_error_reason := 732
+                end;
+              CanEmitAstStmt := false
+            end
+          else
+            begin
+              CanEmitAstStmt := CanEmitAstStmtRange(ast_stmt_child_start[stmt_idx], ast_stmt_child_count[stmt_idx]);
+              if not CanEmitAstStmt then
+                begin
+                  if parse_error_reason = 0 then
+                    begin
+                      parse_error_reason := 733
+                    end
+                end
+            end
         end
       else if parse_error_reason = 0 then
         begin
@@ -3989,6 +4357,10 @@ begin
   else if ast_stmt_kind[stmt_idx] = AST_STMT_CALL then
     begin
       v_idx := ast_stmt_value_int[stmt_idx];
+      if v_idx < 0 then
+        begin
+          v_idx := FindAstRoutineByIdent(ast_stmt_name[stmt_idx])
+        end;
       CanEmitAstStmt := false;
       if v_idx >= 0 then
         begin
@@ -4063,13 +4435,19 @@ end;
 procedure EmitAstStmtRange(start_idx: integer; stmt_count_local: integer; depth: integer);
 var i: integer;
     limit: integer;
+    span: integer;
 begin
   i := start_idx;
   limit := start_idx + stmt_count_local;
   while i < limit do
     begin
       EmitAstStmt(i, depth);
-      i := i + 1
+      span := AstStmtSpan(i);
+      if span <= 0 then
+        begin
+          span := 1
+        end;
+      i := i + span
     end
 end;
 
@@ -4128,6 +4506,17 @@ begin
         begin
           v_idx := AstExprIdentVarIndex(ast_stmt_expr[stmt_idx]);
           param_idx := AstExprIdentParamIndex(ast_stmt_expr[stmt_idx]);
+          if v_idx < 0 then
+            begin
+              if param_idx < 0 then
+                begin
+                  v_idx := EmitFindScopedVarByIdent(ast_stmt_name[stmt_idx]);
+                  if v_idx < 0 then
+                    begin
+                      param_idx := FindAstRoutineParamByIdent(ast_emit_routine, ast_stmt_name[stmt_idx])
+                    end
+                end
+            end;
           text_ref := ast_stmt_value_text_ref[stmt_idx];
           text_idx := 0;
           term_idx := 0;
@@ -4254,6 +4643,11 @@ begin
     begin
       arg_idx := ast_stmt_arg_start[stmt_idx];
       arg_end := arg_idx + ast_stmt_arg_count[stmt_idx];
+      if arg_idx >= arg_end then
+        begin
+          EmitAstIndent(depth);
+          WriteLn('PWRITELN')
+        end;
       while arg_idx < arg_end do
         begin
           if ast_arg_kind[arg_idx] = AST_ARG_INT then
@@ -4514,6 +4908,10 @@ begin
   else if ast_stmt_kind[stmt_idx] = AST_STMT_CALL then
     begin
       routine_idx := ast_stmt_value_int[stmt_idx];
+      if routine_idx < 0 then
+        begin
+          routine_idx := FindAstRoutineByIdent(ast_stmt_name[stmt_idx])
+        end;
       if routine_idx >= 0 then
         begin
           arg_idx := ast_stmt_arg_start[stmt_idx];
@@ -4737,6 +5135,7 @@ end;
 
 function RootHasAstCallStmt: boolean;
 var i: integer;
+    span: integer;
 begin
   RootHasAstCallStmt := false;
   i := ast_root_stmt_start;
@@ -4749,7 +5148,12 @@ begin
         end
       else
         begin
-          i := i + 1
+          span := AstStmtSpan(i);
+          if span <= 0 then
+            begin
+              span := 1
+            end;
+          i := i + span
         end
     end
 end;
@@ -4810,6 +5214,50 @@ begin
       if parse_error_reason = 707 then
         begin
           WriteLn(': MAIN');
+          Write('  ');
+          Write(parse_error_stmt_idx);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][0]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][1]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][2]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][3]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][4]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][5]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][6]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_value_int[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(AstStmtBuiltinKind(parse_error_stmt_idx));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
           Write('  ');
           Write(ast_root_stmt_start);
           WriteLn(' PWRITE-I32');
@@ -4981,9 +5429,13 @@ begin
         end
       else if parse_error_reason >= 720 then
         begin
-          if parse_error_reason <= 729 then
+          if parse_error_reason <= 739 then
             begin
               WriteLn(': MAIN');
+              Write('  ');
+              Write(parse_error_reason);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
               Write('  ');
               Write(ast_root_stmt_start);
               WriteLn(' PWRITE-I32');
@@ -5018,6 +5470,42 @@ begin
               WriteLn('  PWRITELN');
               Write('  ');
               Write(ast_stmt_aux_expr[parse_error_stmt_idx]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_kind[ast_stmt_aux_expr[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_int[ast_stmt_aux_expr[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_text_ref[ast_stmt_aux_expr[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_left[ast_stmt_aux_expr[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_right[ast_stmt_aux_expr[parse_error_stmt_idx]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_aux_expr[parse_error_stmt_idx]]][0]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_aux_expr[parse_error_stmt_idx]]][1]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_aux_expr[parse_error_stmt_idx]]][2]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_aux_expr[parse_error_stmt_idx]]][3]));
               WriteLn(' PWRITE-I32');
               WriteLn('  PWRITELN');
               Write('  ');
@@ -5118,6 +5606,38 @@ begin
               WriteLn('  PWRITELN');
               Write('  ');
               Write(AstCallRoutineIndex(ast_stmt_value_int[parse_error_stmt_idx]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_kind[ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_int[ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_text_ref[ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]]][0]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]]][1]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(AstExprIdentVarIndex(ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(AstExprIdentParamIndex(ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]));
               WriteLn(' PWRITE-I32');
               WriteLn('  PWRITELN');
               Write('  ');
@@ -5280,6 +5800,126 @@ begin
               Write(ast_stmt_expr[ast_root_stmt_start + 6]);
               WriteLn(' PWRITE-I32');
               WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_kind[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_kind[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][0]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][1]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(FindAstRoutineParamByIdent(parse_error_routine_idx, ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_param_type[FindAstRoutineParamByIdent(parse_error_routine_idx, ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]])]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_param_type_ref[FindAstRoutineParamByIdent(parse_error_routine_idx, ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]])]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_kind[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_int[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_text_ref[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][0]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][1]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][2]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][3]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(AstExprIdentVarIndex(ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_kind[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_text_ref[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(CanEmitAstExpr(ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]])));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_kind[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(ast_expr_text_ref[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]);
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(CanEmitAstExpr(ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]])));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]][0]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]][1]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]][2]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]][3]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]][0]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]][1]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]][2]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
+              Write('  ');
+              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]][3]));
+              WriteLn(' PWRITE-I32');
+              WriteLn('  PWRITELN');
               WriteLn(';');
               WriteLn('MAIN')
             end
@@ -5291,6 +5931,146 @@ begin
             begin
               EmitDirectSingleIntProgram(0)
             end
+        end
+      else if parse_error_reason = 701 then
+        begin
+          WriteLn(': MAIN');
+          Write('  ');
+          Write(parse_error_stmt_idx);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][0]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][1]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][2]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][3]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][4]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_stmt_name[parse_error_stmt_idx][5]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_expr[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_expr_kind[ast_stmt_expr[parse_error_stmt_idx]]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_expr_int[ast_stmt_expr[parse_error_stmt_idx]]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_expr_text_ref[ast_stmt_expr[parse_error_stmt_idx]]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(AstExprIdentVarIndex(ast_stmt_expr[parse_error_stmt_idx]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(AstExprIdentParamIndex(ast_stmt_expr[parse_error_stmt_idx]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(FindAstVarByIdent(ast_stmt_name[parse_error_stmt_idx]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(parse_error_routine_idx);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_routine_var_start[parse_error_routine_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_routine_var_count[parse_error_routine_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][0]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][1]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][2]));
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_emit_routine);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          WriteLn(';');
+          WriteLn('MAIN')
+        end
+      else if parse_error_reason = 702 then
+        begin
+          WriteLn(': MAIN');
+          Write('  ');
+          Write(parse_error_stmt_idx);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(parse_error_routine_idx);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_kind[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_arg_count[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_arg_start[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_value_kind[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_value_int[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_expr[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_child_start[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          Write('  ');
+          Write(ast_stmt_child_count[parse_error_stmt_idx]);
+          WriteLn(' PWRITE-I32');
+          WriteLn('  PWRITELN');
+          WriteLn(';');
+          WriteLn('MAIN')
         end
       else if parse_error_reason <> 0 then
         begin

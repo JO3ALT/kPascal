@@ -5,17 +5,17 @@ type
 const
   IDENT_LAST = 37;
   LIT_LAST = 95;
-  MAX_CAPTURED_WRITELNS = 32;
-  MAX_AST_VARS = 1024;
-  MAX_AST_STMTS = 8192;
-  MAX_AST_ARGS = 4096;
-  MAX_AST_EXPRS = 16384;
-  MAX_AST_TYPES = 256;
-  MAX_AST_FIELDS = 1024;
-  MAX_AST_ROUTINES = 512;
-  MAX_AST_PARAMS = 1024;
-  MAX_AST_TEXT_LITS = 2048;
-  MAX_AST_IDENTS = 8192;
+  MAX_CAPTURED_WRITELNS = 128;
+  MAX_AST_VARS = 8192;
+  MAX_AST_STMTS = 131072;
+  MAX_AST_ARGS = 65536;
+  MAX_AST_EXPRS = 131072;
+  MAX_AST_TYPES = 2048;
+  MAX_AST_FIELDS = 16384;
+  MAX_AST_ROUTINES = 4096;
+  MAX_AST_PARAMS = 16384;
+  MAX_AST_TEXT_LITS = 16384;
+  MAX_AST_IDENTS = 65536;
   CAPTURE_KIND_NONE = 0;
   CAPTURE_KIND_INT = 1;
   CAPTURE_KIND_TEXT = 2;
@@ -194,72 +194,73 @@ var
   parse_error_stmt_idx: integer;
   parse_error_routine_idx: integer;
   captured_writeln_count: integer;
-  captured_writeln_kind: array[0..31] of integer;
-  captured_writeln_int: array[0..31] of integer;
-  captured_writeln_text: array[0..31] of text_buf;
+  captured_writeln_kind: array[0..127] of integer;
+  captured_writeln_int: array[0..127] of integer;
+  captured_writeln_text: array[0..127] of text_buf;
   ast_capture_enabled: boolean;
   ast_capture_var_names: boolean;
   ast_var_count: integer;
-  ast_var_name: array[0..1023] of ident_buf;
-  ast_var_type: array[0..1023] of integer;
-  ast_var_type_ref: array[0..1023] of integer;
+  ast_var_name: array[0..8191] of ident_buf;
+  ast_var_type: array[0..8191] of integer;
+  ast_var_type_ref: array[0..8191] of integer;
+  ast_var_owner_routine: array[0..8191] of integer;
   ast_type_count: integer;
-  ast_type_name: array[0..255] of ident_buf;
-  ast_type_kind: array[0..255] of integer;
-  ast_type_elem_type: array[0..255] of integer;
-  ast_type_field_start: array[0..255] of integer;
-  ast_type_field_count: array[0..255] of integer;
+  ast_type_name: array[0..2047] of ident_buf;
+  ast_type_kind: array[0..2047] of integer;
+  ast_type_elem_type: array[0..2047] of integer;
+  ast_type_field_start: array[0..2047] of integer;
+  ast_type_field_count: array[0..2047] of integer;
   ast_field_count: integer;
-  ast_field_name: array[0..1023] of ident_buf;
-  ast_field_type: array[0..1023] of integer;
-  ast_field_offset: array[0..1023] of integer;
+  ast_field_name: array[0..16383] of ident_buf;
+  ast_field_type: array[0..16383] of integer;
+  ast_field_offset: array[0..16383] of integer;
   ast_root_stmt_start: integer;
   ast_root_stmt_count: integer;
   ast_stmt_count: integer;
-  ast_stmt_kind: array[0..8191] of integer;
-  ast_stmt_name: array[0..8191] of ident_buf;
-  ast_stmt_value_kind: array[0..8191] of integer;
-  ast_stmt_value_int: array[0..8191] of integer;
-  ast_stmt_value_text_ref: array[0..8191] of integer;
-  ast_stmt_expr: array[0..8191] of integer;
-  ast_stmt_aux_expr: array[0..8191] of integer;
-  ast_stmt_arg_start: array[0..8191] of integer;
-  ast_stmt_arg_count: array[0..8191] of integer;
-  ast_stmt_child_start: array[0..8191] of integer;
-  ast_stmt_child_count: array[0..8191] of integer;
-  ast_stmt_else_start: array[0..8191] of integer;
-  ast_stmt_else_count: array[0..8191] of integer;
+  ast_stmt_kind: array[0..131071] of integer;
+  ast_stmt_name: array[0..131071] of ident_buf;
+  ast_stmt_value_kind: array[0..131071] of integer;
+  ast_stmt_value_int: array[0..131071] of integer;
+  ast_stmt_value_text_ref: array[0..131071] of integer;
+  ast_stmt_expr: array[0..131071] of integer;
+  ast_stmt_aux_expr: array[0..131071] of integer;
+  ast_stmt_arg_start: array[0..131071] of integer;
+  ast_stmt_arg_count: array[0..131071] of integer;
+  ast_stmt_child_start: array[0..131071] of integer;
+  ast_stmt_child_count: array[0..131071] of integer;
+  ast_stmt_else_start: array[0..131071] of integer;
+  ast_stmt_else_count: array[0..131071] of integer;
   ast_arg_count: integer;
-  ast_arg_kind: array[0..4095] of integer;
-  ast_arg_int: array[0..4095] of integer;
-  ast_arg_text_ref: array[0..4095] of integer;
-  ast_arg_expr: array[0..4095] of integer;
+  ast_arg_kind: array[0..65535] of integer;
+  ast_arg_int: array[0..65535] of integer;
+  ast_arg_text_ref: array[0..65535] of integer;
+  ast_arg_expr: array[0..65535] of integer;
   ast_expr_count: integer;
-  ast_expr_kind: array[0..16383] of integer;
-  ast_expr_int: array[0..16383] of integer;
-  ast_expr_text_ref: array[0..16383] of integer;
-  ast_expr_op: array[0..16383] of integer;
-  ast_expr_left: array[0..16383] of integer;
-  ast_expr_right: array[0..16383] of integer;
+  ast_expr_kind: array[0..131071] of integer;
+  ast_expr_int: array[0..131071] of integer;
+  ast_expr_text_ref: array[0..131071] of integer;
+  ast_expr_op: array[0..131071] of integer;
+  ast_expr_left: array[0..131071] of integer;
+  ast_expr_right: array[0..131071] of integer;
   ast_routine_count: integer;
-  ast_routine_name: array[0..511] of ident_buf;
-  ast_routine_kind: array[0..511] of integer;
-  ast_routine_param_start: array[0..511] of integer;
-  ast_routine_param_count: array[0..511] of integer;
-  ast_routine_stmt_start: array[0..511] of integer;
-  ast_routine_stmt_count: array[0..511] of integer;
-  ast_routine_var_start: array[0..511] of integer;
-  ast_routine_var_count: array[0..511] of integer;
-  ast_routine_ret_type: array[0..511] of integer;
+  ast_routine_name: array[0..4095] of ident_buf;
+  ast_routine_kind: array[0..4095] of integer;
+  ast_routine_param_start: array[0..4095] of integer;
+  ast_routine_param_count: array[0..4095] of integer;
+  ast_routine_stmt_start: array[0..4095] of integer;
+  ast_routine_stmt_count: array[0..4095] of integer;
+  ast_routine_var_start: array[0..4095] of integer;
+  ast_routine_var_count: array[0..4095] of integer;
+  ast_routine_ret_type: array[0..4095] of integer;
   ast_param_count: integer;
-  ast_param_name: array[0..1023] of ident_buf;
-  ast_param_type: array[0..1023] of integer;
-  ast_param_type_ref: array[0..1023] of integer;
-  ast_param_by_ref: array[0..1023] of integer;
+  ast_param_name: array[0..16383] of ident_buf;
+  ast_param_type: array[0..16383] of integer;
+  ast_param_type_ref: array[0..16383] of integer;
+  ast_param_by_ref: array[0..16383] of integer;
   ast_text_lit_count: integer;
-  ast_text_lit: array[0..2047] of lit_buf;
+  ast_text_lit: array[0..16383] of lit_buf;
   ast_ident_count: integer;
-  ast_ident_pool: array[0..8191] of ident_buf;
+  ast_ident_pool: array[0..65535] of ident_buf;
   ast_current_routine: integer;
   ast_emit_routine: integer;
 
@@ -362,6 +363,1301 @@ begin
     end
 end;
 
+function StrCmpTextIdentShifted(var text: text_buf; var ident: ident_buf): integer;
+var i: integer;
+    done: boolean;
+begin
+  StrCmpTextIdentShifted := 0;
+  done := false;
+  for i := 0 to IDENT_LAST - 1 do
+    begin
+      if done = false then
+        begin
+          if text[i] <> ident[i + 1] then
+            begin
+              StrCmpTextIdentShifted := Ord(text[i]) - Ord(ident[i + 1]);
+              done := true
+            end
+          else if text[i] = #0 then
+            begin
+              done := true
+            end
+        end
+    end;
+  if done = false then
+    begin
+      if text[IDENT_LAST] <> #0 then
+        begin
+          StrCmpTextIdentShifted := Ord(text[IDENT_LAST])
+        end
+    end
+end;
+
+function TextIdentEq(var text: text_buf; var ident: ident_buf): boolean;
+begin
+  TextIdentEq := StrCmpTextIdent(text, ident) = 0;
+  if not TextIdentEq then
+    begin
+      if text[0] = #0 then
+        begin
+          TextIdentEq := StrCmpTextIdentTail(text, ident) = 0
+        end
+      else if ident[0] = #0 then
+        begin
+          TextIdentEq := StrCmpTextIdentShifted(text, ident) = 0
+        end
+    end
+end;
+
+function TextEqIgnoreCaseOrTail(var text: text_buf; var expected: text_buf): boolean;
+var i: integer;
+    done: boolean;
+begin
+  TextEqIgnoreCaseOrTail := true;
+  done := false;
+  i := 0;
+  if text[0] = #0 then
+    begin
+      i := 1
+    end;
+  while i <= 255 do
+    begin
+      if done = false then
+        begin
+          if ToLowerChar(text[i]) <> ToLowerChar(expected[i]) then
+            begin
+              TextEqIgnoreCaseOrTail := false;
+              done := true
+            end
+          else if expected[i] = #0 then
+            begin
+              done := true
+            end;
+          i := i + 1
+        end
+      else
+        begin
+          i := 256
+        end
+    end
+end;
+
+function MaybeBuiltinConstName(var name: text_buf): boolean;
+begin
+  MaybeBuiltinConstName := false;
+  if name[0] = 'a' then
+    begin
+      if name[1] = 's' then
+        begin
+          if name[2] = 't' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstName := true
+                end
+            end
+        end
+    end
+  else if name[0] = 't' then
+    begin
+      if name[1] = 'o' then
+        begin
+          if name[2] = 'k' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstName := true
+                end
+            end
+        end
+    end
+  else if name[0] = 'm' then
+    begin
+      if name[1] = 'a' then
+        begin
+          if name[2] = 'x' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstName := true
+                end
+            end
+        end
+    end
+  else if name[0] = 'c' then
+    begin
+      if name[1] = 'a' then
+        begin
+          if name[2] = 'p' then
+            begin
+              if name[3] = 't' then
+                begin
+                  MaybeBuiltinConstName := true
+                end
+            end
+        end
+    end
+  else if name[0] = 'i' then
+    begin
+      if name[1] = 'd' then
+        begin
+          if name[2] = 'e' then
+            begin
+              if name[3] = 'n' then
+                begin
+                  MaybeBuiltinConstName := true
+                end
+            end
+        end
+    end
+  else if name[0] = 'l' then
+    begin
+      if name[1] = 'i' then
+        begin
+          if name[2] = 't' then
+            begin
+              if name[3] = '_' then
+                begin
+                  MaybeBuiltinConstName := true
+                end
+            end
+        end
+    end
+end;
+
+function TryResolveBuiltinConst(var name: text_buf; var value: integer): boolean;
+var expected: text_buf;
+    expected_ident: ident_buf;
+    normalized: text_buf;
+    i: integer;
+begin
+  TryResolveBuiltinConst := false;
+  value := 0;
+  ClearText(normalized);
+  for i := 0 to 255 do
+    begin
+      normalized[i] := ToLowerChar(name[i])
+    end;
+  StrCopy(normalized, name);
+  if not MaybeBuiltinConstName(name) then
+    begin
+      value := 0
+    end
+  else
+
+    begin
+      ClearText(expected);
+      expected := 'ident_last';
+      CopyTextToIdent(expected, expected_ident);
+      if TextEqIgnoreCaseOrTail(name, expected) then
+        begin
+          value := 37;
+          TryResolveBuiltinConst := true
+        end
+      else if TextIdentEq(name, expected_ident) then
+        begin
+          value := 37;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'lit_last';
+      CopyTextToIdent(expected, expected_ident);
+      if TextEqIgnoreCaseOrTail(name, expected) then
+        begin
+          value := 95;
+          TryResolveBuiltinConst := true
+        end
+      else if TextIdentEq(name, expected_ident) then
+        begin
+          value := 95;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_stmt_writeln';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 1;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_stmt_assign';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 2;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_stmt_compound';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 3;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_stmt_if';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 4;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_stmt_while';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 5;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_stmt_repeat';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 6;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_stmt_for';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 7;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_stmt_call';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 8;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_stmt_write';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 9;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_stmt_read';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 10;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_arg_none';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 0;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_arg_int';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 1;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_arg_text';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 2;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_arg_char';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 3;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_arg_bool';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 4;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_arg_ident';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 5;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_arg_expr';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 6;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_none';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 0;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_int';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 1;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_bool';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 2;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_char';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 3;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_ident';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 4;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_binop';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 5;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_unary';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 6;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_field';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 7;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_index';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 8;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_call';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 9;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_deref';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 10;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_type_unknown';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 0;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_type_integer';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 1;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_type_boolean';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 2;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_type_char';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 3;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_type_real';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 4;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_type_record';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 5;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_type_array';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 6;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_decl_none';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 0;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_decl_record';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 1;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_decl_array';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 2;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_routine_none';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 0;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_routine_procedure';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 1;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_routine_function';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 2;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_eof';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 0;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_ident';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 1;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_int';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 2;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_str';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 3;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_lparen';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 10;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_rparen';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 11;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_lbrack';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 12;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_rbrack';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 13;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_semi';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 14;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_colon';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 15;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_comma';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 16;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_dot';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 17;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_dotdot';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 18;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_assign';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 19;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_caret';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 20;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_eq';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 21;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_ne';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 22;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_lt';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 23;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_le';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 24;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_gt';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 25;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_ge';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 26;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_plus';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 27;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_minus';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 28;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_star';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 29;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_slash';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 30;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_program';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 40;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_const';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 41;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_type';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 42;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_var';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 43;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_procedure';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 44;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_function';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 45;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_begin';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 46;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_end';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 47;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_read';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 48;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_readln';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 49;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_write';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 50;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_writeln';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 51;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_for';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 52;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_to';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 53;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_downto';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 54;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_do';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 55;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_case';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 56;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_of';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 57;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_else';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 58;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_if';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 59;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_then';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 60;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_with';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 61;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_while';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 62;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_repeat';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 63;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_until';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 64;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_record';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 65;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_set';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 66;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_array';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 67;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_true';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 68;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_false';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 69;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_nil';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 70;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_in';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 71;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_div';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 72;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_mod';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 73;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_and';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 74;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_or';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 75;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_xor';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 76;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_not';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 77;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_integer';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 78;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_boolean';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 79;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_char';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 80;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_kw_real';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 81;
+          TryResolveBuiltinConst := true
+        end
+    end
+end;
+
 function StrCmpIdentIdent(var a: ident_buf; var b: ident_buf): integer;
 var i: integer;
     done: boolean;
@@ -380,6 +1676,83 @@ begin
           else if a[i] = #0 then
             begin
               done := true
+            end
+        end
+    end
+end;
+
+function StrCmpIdentIdentTail(var a: ident_buf; var b: ident_buf): integer;
+var i: integer;
+    done: boolean;
+begin
+  StrCmpIdentIdentTail := 0;
+  done := false;
+  for i := 1 to IDENT_LAST do
+    begin
+      if done = false then
+        begin
+          if a[i] <> b[i] then
+            begin
+              StrCmpIdentIdentTail := Ord(a[i]) - Ord(b[i]);
+              done := true
+            end
+          else if a[i] = #0 then
+            begin
+              done := true
+            end
+        end
+    end
+end;
+
+function StrCmpIdentIdentShifted(var shifted: ident_buf; var normal: ident_buf): integer;
+var i: integer;
+    done: boolean;
+begin
+  StrCmpIdentIdentShifted := 0;
+  done := false;
+  for i := 0 to IDENT_LAST - 1 do
+    begin
+      if done = false then
+        begin
+          if shifted[i + 1] <> normal[i] then
+            begin
+              StrCmpIdentIdentShifted := Ord(shifted[i + 1]) - Ord(normal[i]);
+              done := true
+            end
+          else if normal[i] = #0 then
+            begin
+              done := true
+            end
+        end
+    end;
+  if done = false then
+    begin
+      if shifted[IDENT_LAST] <> #0 then
+        begin
+          StrCmpIdentIdentShifted := Ord(shifted[IDENT_LAST])
+        end
+    end
+end;
+
+function IdentEq(var a: ident_buf; var b: ident_buf): boolean;
+begin
+  IdentEq := StrCmpIdentIdent(a, b) = 0;
+  if not IdentEq then
+    begin
+      if a[0] = #0 then
+        begin
+          IdentEq := StrCmpIdentIdentTail(a, b) = 0;
+          if not IdentEq then
+            begin
+              IdentEq := StrCmpIdentIdentShifted(a, b) = 0
+            end
+        end
+      else if b[0] = #0 then
+        begin
+          IdentEq := StrCmpIdentIdentTail(b, a) = 0;
+          if not IdentEq then
+            begin
+              IdentEq := StrCmpIdentIdentShifted(b, a) = 0
             end
         end
     end
@@ -422,7 +1795,7 @@ begin
   FindAstRoutineByName := -1;
   while idx < ast_routine_count do
     begin
-      if StrCmpTextIdent(name, ast_routine_name[idx]) = 0 then
+      if TextIdentEq(name, ast_routine_name[idx]) then
         begin
           FindAstRoutineByName := idx;
           idx := ast_routine_count
@@ -441,7 +1814,7 @@ begin
   FindAstRoutineByIdent := -1;
   while idx < ast_routine_count do
     begin
-      if StrCmpIdentIdent(ast_routine_name[idx], name) = 0 then
+      if IdentEq(ast_routine_name[idx], name) then
         begin
           FindAstRoutineByIdent := idx;
           idx := ast_routine_count
@@ -468,6 +1841,7 @@ begin
       CopyTextToIdent(name, ast_var_name[ast_var_count]);
       ast_var_type[ast_var_count] := AST_TYPE_UNKNOWN;
       ast_var_type_ref[ast_var_count] := -1;
+      ast_var_owner_routine[ast_var_count] := ast_current_routine;
       ast_var_count := ast_var_count + 1
     end
 end;
@@ -501,30 +1875,31 @@ begin
   FindAstVar := -1;
   while idx < ast_var_count do
     begin
-      if StrCmpTextIdent(name, ast_var_name[idx]) = 0 then
+      if TextIdentEq(name, ast_var_name[idx]) then
         begin
           FindAstVar := idx;
           idx := ast_var_count
         end
       else
         begin
-          if name[0] = #0 then
-            begin
-              if StrCmpTextIdentTail(name, ast_var_name[idx]) = 0 then
-                begin
-                  FindAstVar := idx;
-                  idx := ast_var_count
-                end
-              else
-                begin
-                  idx := idx + 1
-                end
-            end
-          else
-            begin
-              idx := idx + 1
-            end
+          idx := idx + 1
         end
+    end
+end;
+
+function IsRoutineLocalVar(idx_value: integer): boolean;
+begin
+  if idx_value < 0 then
+    begin
+      IsRoutineLocalVar := false
+    end
+  else if idx_value >= ast_var_count then
+    begin
+      IsRoutineLocalVar := false
+    end
+  else
+    begin
+      IsRoutineLocalVar := ast_var_owner_routine[idx_value] >= 0
     end
 end;
 
@@ -539,7 +1914,7 @@ begin
       limit := ast_var_count;
       while idx < limit do
         begin
-          if StrCmpTextIdent(name, ast_var_name[idx]) = 0 then
+          if TextIdentEq(name, ast_var_name[idx]) then
             begin
               FindScopedAstVar := idx;
               idx := limit
@@ -568,17 +1943,14 @@ begin
   if FindScopedAstVar < 0 then
     begin
       idx := 0;
-      if ast_routine_count > 0 then
-        begin
-          limit := ast_routine_var_start[0]
-        end
-      else
-        begin
-          limit := ast_var_count
-        end;
+      limit := ast_var_count;
       while idx < limit do
         begin
-          if StrCmpTextIdent(name, ast_var_name[idx]) = 0 then
+          if IsRoutineLocalVar(idx) then
+            begin
+              idx := idx + 1
+            end
+          else if TextIdentEq(name, ast_var_name[idx]) then
             begin
               FindScopedAstVar := idx;
               idx := limit
@@ -613,7 +1985,7 @@ begin
   FindAstVarByIdent := -1;
   while idx < ast_var_count do
     begin
-      if StrCmpIdentIdent(ast_var_name[idx], name) = 0 then
+      if IdentEq(ast_var_name[idx], name) then
         begin
           FindAstVarByIdent := idx;
           idx := ast_var_count
@@ -632,7 +2004,7 @@ begin
   FindAstType := -1;
   while idx < ast_type_count do
     begin
-      if StrCmpTextIdent(name, ast_type_name[idx]) = 0 then
+      if TextIdentEq(name, ast_type_name[idx]) then
         begin
           FindAstType := idx;
           idx := ast_type_count
@@ -658,7 +2030,7 @@ begin
       limit := idx + ast_type_field_count[type_idx];
       while idx < limit do
         begin
-          if StrCmpTextIdent(name, ast_field_name[idx]) = 0 then
+          if TextIdentEq(name, ast_field_name[idx]) then
             begin
               FindAstField := idx;
               idx := limit
@@ -685,7 +2057,7 @@ begin
       limit := idx + ast_type_field_count[type_idx];
       while idx < limit do
         begin
-          if StrCmpIdentIdent(ast_field_name[idx], name) = 0 then
+          if IdentEq(ast_field_name[idx], name) then
             begin
               FindAstFieldByIdent := idx;
               idx := limit
@@ -965,6 +2337,12 @@ begin
   captured_writeln_count := 0;
   ast_capture_enabled := true;
   ast_capture_var_names := false;
+  ast_var_count := 0;
+  while ast_var_count <= MAX_AST_VARS - 1 do
+    begin
+      ast_var_owner_routine[ast_var_count] := -1;
+      ast_var_count := ast_var_count + 1
+    end;
   ast_var_count := 0;
   ast_type_count := 0;
   ast_field_count := 0;

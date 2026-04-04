@@ -1,0 +1,56 @@
+2026-04-04 work resume
+
+Summary
+- Investigated the stage1 stop in the preprocessed selfhost chain.
+- Reproduced that `kpsc_main` stage1 self-compile did not finish, while the seed input path did finish.
+- Narrowed the stop point to `EmitProgram()` -> `CanEmitAstProgram()` -> routine validation for `ClassifyIdentifierToken`.
+- Confirmed the trigger was long nested `if ... else if ...` chains in the selfhost AST walk.
+
+Root Cause
+- The selfhost AST is stored as a flat statement array.
+- `CanEmitAstStmtRange` and `EmitAstStmtRange` walked a range with `i := i + 1`.
+- For nested statements, especially `if`/`else if`, this treated subtree members as if they were sibling root statements.
+- That caused repeated re-walking of nested subtrees and led to an effective hang during stage1 self-compilation.
+
+Fix Applied
+- Updated [selfhost/compiler_codegen.inc](/home/kamitani/kpascal/selfhost/compiler_codegen.inc):
+  - Added `AstStmtSpan(stmt_idx)` to compute subtree span for flat AST statements.
+  - Changed `CanEmitAstStmtRange` to advance by subtree span instead of `+1`.
+  - Changed `EmitAstStmtRange` to advance by subtree span instead of `+1`.
+  - Changed `RootHasAstCallStmt` to advance by subtree span instead of `+1`.
+- Did not keep the earlier experimental counting change in `selfhost/compiler_stmt.inc`; the final fix is on the codegen-side walker.
+
+Validation
+- `cargo check` passed.
+- Rebuilt preprocessed `selfhost/kpsc_main.pas`.
+- Re-ran stage1 self-compile and confirmed it completed instead of hanging.
+- Ran:
+  - `bash scripts/check_preprocessed_selfhost_chain.sh`
+- Result:
+  - `stage1 ok: preprocessed kpsc_main -> seed compiler`
+  - sample chain `01_hello` through `23_var_value_mix` passed
+  - final output: `all stages ok`
+
+Important Notes
+- During investigation, `/tmp/kpsc_main_flat.pas` and similar files were used for probes. Those are disposable.
+- There are unrelated local modifications in the repository. Do not revert user changes casually.
+- `git status` during wrap-up showed at least:
+  - modified: `selfhost/compiler_codegen.inc`
+  - untracked: `resume.txt`
+- The current user-visible fix is the subtree-span walk in `selfhost/compiler_codegen.inc`.
+
+Next Priority
+- The next task is to make stage1 complete, not just passing through mixed fallback paths.
+
+Stage1 Completion Goal
+- Reduce dependence on special-case routes in `EmitProgram()`:
+  - direct `sampleNN` emission
+  - `probe`-specific fallback
+  - `captured_writeln` fallback
+- Expand the AST-based path so stage1 behaves as the real compiler path for selfhost input, rather than a mix of bootstrap shortcuts.
+
+Suggested Next Step
+- Review `EmitProgram()` and identify which current selfhost/sample cases still avoid the AST path.
+- Prioritize removing or shrinking special routes only after equivalent AST/codegen support exists.
+- Add regression coverage for the long `else if` chain issue in the preprocessed selfhost path.
+- Treat "stage1 complete" as: selfhost stage1 compiles the intended selfhost/sample surface through the general path, without relying on ad hoc fallback behavior except where explicitly kept as bootstrap policy.
