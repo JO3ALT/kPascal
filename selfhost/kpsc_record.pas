@@ -1,9 +1,18 @@
 program kpsc_record;
-
+type
+  point = record
+    x: integer;
+    y: integer;
+  end;
+var
+  p: point;
 begin
-  WriteLn(': MAIN');
-  WriteLn('  33 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  p.x := 10;
+  p.y := 20;
+  with p do
+  begin
+    x := x + 1;
+    y := y + 2
+  end;
+  WriteLn(p.x + p.y)
 end.

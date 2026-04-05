@@ -1,15 +1,14 @@
 program kpsc_pointer;
-
-procedure ParseProgram;
+type
+  node = record
+    value: integer;
+  end;
+var
+  p: ^node;
 begin
-end;
-
-begin
-  WriteLn(': MAIN');
-  WriteLn('  77 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn('  S" TRUE" TYPE');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  new(p);
+  p^.value := 77;
+  WriteLn(p^.value);
+  dispose(p);
+  WriteLn(p = nil)
 end.

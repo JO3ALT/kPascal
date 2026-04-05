@@ -1,23 +1,10 @@
 program kpsc_hex;
-
-procedure ParseProgram;
+type
+  hexbuf = array[9] of char;
+var
+  s: hexbuf;
 begin
-end;
-
-procedure __I32_TO_HEX_STR;
-begin
-end;
-
-procedure __HEX_TO_I32;
-begin
-end;
-
-begin
-  WriteLn(': MAIN');
-  WriteLn('  S" 000000FF" TYPE');
-  WriteLn('  PWRITELN');
-  WriteLn('  255 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  IntToHex(255, s, 8, true);
+  WriteLn(s);
+  WriteLn(HexToInt(s))
 end.

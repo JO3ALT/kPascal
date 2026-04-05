@@ -271,7 +271,7 @@ end;
 
 procedure ParseRequiredCompoundStmt;
 begin
-  ParseCompoundStmt()
+  ParseStatement()
 end;
 
 procedure ParseCaseLabelList;

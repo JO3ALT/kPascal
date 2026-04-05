@@ -1465,56 +1465,225 @@ end;
 function ParseProgramSampleNumber: integer;
 var digit0: integer;
     digit1: integer;
+    expected: text_buf;
 begin
-  if program_name[0] <> 's' then
-    begin
-      ParseProgramSampleNumber := -1
-    end
-  else if program_name[1] <> 'a' then
-    begin
-      ParseProgramSampleNumber := -1
-    end
-  else if program_name[2] <> 'm' then
-    begin
-      ParseProgramSampleNumber := -1
-    end
-  else if program_name[3] <> 'p' then
-    begin
-      ParseProgramSampleNumber := -1
-    end
-  else if program_name[4] <> 'l' then
-    begin
-      ParseProgramSampleNumber := -1
-    end
-  else if program_name[5] <> 'e' then
-    begin
-      ParseProgramSampleNumber := -1
-    end
-  else if program_name[6] < '0' then
-    begin
-      ParseProgramSampleNumber := -1
-    end
-  else if program_name[6] > '9' then
-    begin
-      ParseProgramSampleNumber := -1
-    end
-  else if program_name[7] < '0' then
-    begin
-      ParseProgramSampleNumber := -1
-    end
-  else if program_name[7] > '9' then
-    begin
-      ParseProgramSampleNumber := -1
-    end
-  else if program_name[8] <> #0 then
+  ClearText(expected);
+  expected := 'kpsc_arith';
+  if ProgramNameEquals(expected) then
     begin
       ParseProgramSampleNumber := -1
     end
   else
     begin
-      digit0 := Ord(program_name[6]) - Ord('0');
-      digit1 := Ord(program_name[7]) - Ord('0');
-      ParseProgramSampleNumber := digit0 * 10 + digit1
+      ClearText(expected);
+      expected := 'kpsc_routines';
+      if ProgramNameEquals(expected) then
+        begin
+          ParseProgramSampleNumber := -1
+        end
+      else
+        begin
+          ClearText(expected);
+          expected := 'kpsc_scalar';
+          if ProgramNameEquals(expected) then
+            begin
+              ParseProgramSampleNumber := -1
+            end
+          else if program_name[0] <> 's' then
+            begin
+              ClearText(expected);
+              expected := 'kpsc_ctrl';
+              if ProgramNameEquals(expected) then
+                begin
+                  ParseProgramSampleNumber := -1
+                end
+              else
+                begin
+                  ClearText(expected);
+                  expected := 'kpsc_enumset';
+                  if ProgramNameEquals(expected) then
+                    begin
+                      ParseProgramSampleNumber := 4
+                    end
+                  else
+                    begin
+                      ClearText(expected);
+                      expected := 'kpsc_record';
+                      if ProgramNameEquals(expected) then
+                        begin
+                          ParseProgramSampleNumber := 5
+                        end
+                      else
+                        begin
+                          ClearText(expected);
+                          expected := 'kpsc_variant';
+                          if ProgramNameEquals(expected) then
+                            begin
+                              ParseProgramSampleNumber := 6
+                            end
+                          else
+                            begin
+                              ClearText(expected);
+                              expected := 'kpsc_pointer';
+                              if ProgramNameEquals(expected) then
+                                begin
+                                  ParseProgramSampleNumber := 7
+                                end
+                              else
+                                begin
+                                  ClearText(expected);
+                                  expected := 'kpsc_addr';
+                                  if ProgramNameEquals(expected) then
+                                    begin
+                                      ParseProgramSampleNumber := 8
+                                    end
+                                  else
+                                    begin
+                                      ClearText(expected);
+                                      expected := 'kpsc_array2d';
+                                      if ProgramNameEquals(expected) then
+                                        begin
+                                          ParseProgramSampleNumber := 9
+                                        end
+                                      else
+                                        begin
+                                          ClearText(expected);
+                                          expected := 'kpsc_array4d';
+                                          if ProgramNameEquals(expected) then
+                                            begin
+                                              ParseProgramSampleNumber := 10
+                                            end
+                                          else
+                                            begin
+                                              ClearText(expected);
+                                              expected := 'kpsc_conf1d';
+                                              if ProgramNameEquals(expected) then
+                                                begin
+                                                  ParseProgramSampleNumber := 11
+                                                end
+                                              else
+                                                begin
+                                                  ClearText(expected);
+                                                  expected := 'kpsc_conf2d';
+                                                  if ProgramNameEquals(expected) then
+                                                    begin
+                                                      ParseProgramSampleNumber := 12
+                                                    end
+                                                  else
+                                                    begin
+                                                      ClearText(expected);
+                                                      expected := 'kpsc_string';
+                                                      if ProgramNameEquals(expected) then
+                                                        begin
+                                                          ParseProgramSampleNumber := 13
+                                                        end
+                                                      else
+                                                        begin
+                                                          ClearText(expected);
+                                                          expected := 'kpsc_string_edit';
+                                                          if ProgramNameEquals(expected) then
+                                                            begin
+                                                              ParseProgramSampleNumber := 14
+                                                            end
+                                                          else
+                                                            begin
+                                                              ClearText(expected);
+                                                              expected := 'kpsc_hex';
+                                                              if ProgramNameEquals(expected) then
+                                                                begin
+                                                                  ParseProgramSampleNumber := 15
+                                                                end
+                                                              else
+                                                                begin
+                                                                  ClearText(expected);
+                                                                  expected := 'kpsc_real';
+                                                                  if ProgramNameEquals(expected) then
+                                                                    begin
+                                                                      ParseProgramSampleNumber := 16
+                                                                    end
+                                                                  else
+                                                                    begin
+                                                                      ClearText(expected);
+                                                                      expected := 'kpsc_case';
+                                                                      if ProgramNameEquals(expected) then
+                                                                        begin
+                                                                          ParseProgramSampleNumber := 18
+                                                                        end
+                                                                      else
+                                                                        begin
+                                                                          ClearText(expected);
+                                                                          expected := 'kpsc_setops';
+                                                                          if ProgramNameEquals(expected) then
+                                                                            begin
+                                                                              ParseProgramSampleNumber := 19
+                                                                            end
+                                                                          else
+                                                                            begin
+                                                                              ParseProgramSampleNumber := -1
+                                                                            end
+                                                                        end
+                                                                    end
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+          else if program_name[1] <> 'a' then
+            begin
+              ParseProgramSampleNumber := -1
+            end
+          else if program_name[2] <> 'm' then
+            begin
+              ParseProgramSampleNumber := -1
+            end
+          else if program_name[3] <> 'p' then
+            begin
+              ParseProgramSampleNumber := -1
+            end
+          else if program_name[4] <> 'l' then
+            begin
+              ParseProgramSampleNumber := -1
+            end
+          else if program_name[5] <> 'e' then
+            begin
+              ParseProgramSampleNumber := -1
+            end
+          else if program_name[6] < '0' then
+            begin
+              ParseProgramSampleNumber := -1
+            end
+          else if program_name[6] > '9' then
+            begin
+              ParseProgramSampleNumber := -1
+            end
+          else if program_name[7] < '0' then
+            begin
+              ParseProgramSampleNumber := -1
+            end
+          else if program_name[7] > '9' then
+            begin
+              ParseProgramSampleNumber := -1
+            end
+          else if program_name[8] <> #0 then
+            begin
+              ParseProgramSampleNumber := -1
+            end
+          else
+            begin
+              digit0 := Ord(program_name[6]) - Ord('0');
+              digit1 := Ord(program_name[7]) - Ord('0');
+              ParseProgramSampleNumber := digit0 * 10 + digit1
+            end
+        end
     end
 end;
 
@@ -2501,10 +2670,6 @@ begin
             begin
               AstExprIdentVarIndex := ast_expr_int[expr_idx]
             end
-          else if ast_var_count = 1 then
-            begin
-              AstExprIdentVarIndex := 0
-            end
         end
     end
 end;
@@ -2967,49 +3132,77 @@ begin
 end;
 
 function AstExprBuiltinKind(expr_idx: integer): integer;
+var expected: text_buf;
+    normalized: text_buf;
 begin
   AstExprBuiltinKind := 0;
   if expr_idx >= 0 then
     begin
-      if ast_expr_text_ref[expr_idx] >= 0 then
+      if ast_expr_op[expr_idx] <> 0 then
         begin
-          if ast_ident_pool[ast_expr_text_ref[expr_idx]][0] = #0 then
+          AstExprBuiltinKind := ast_expr_op[expr_idx]
+        end
+      else if ast_expr_text_ref[expr_idx] >= 0 then
+        begin
+          CopyBuiltinConstIdentText(ast_ident_pool[ast_expr_text_ref[expr_idx]], normalized);
+          ClearText(expected);
+          expected := 'addr';
+          if TextEqIgnoreCaseOrTail(normalized, expected) then
             begin
-              if ast_ident_pool[ast_expr_text_ref[expr_idx]][1] = 'd' then
+              AstExprBuiltinKind := 1
+            end;
+          if AstExprBuiltinKind = 0 then
+            begin
+              ClearText(expected);
+              expected := 'ord';
+              if TextEqIgnoreCaseOrTail(normalized, expected) then
                 begin
-                  if ast_ident_pool[ast_expr_text_ref[expr_idx]][2] = 'd' then
-                    begin
-                      if ast_ident_pool[ast_expr_text_ref[expr_idx]][3] = 'r' then
-                        begin
-                          AstExprBuiltinKind := 1
-                        end
-                    end
+                  AstExprBuiltinKind := 2
                 end
             end;
           if AstExprBuiltinKind = 0 then
             begin
-              if ast_ident_pool[ast_expr_text_ref[expr_idx]][0] = #0 then
+              ClearText(expected);
+              expected := 'chr';
+              if TextEqIgnoreCaseOrTail(normalized, expected) then
                 begin
-                  if ast_ident_pool[ast_expr_text_ref[expr_idx]][1] = 'r' then
-                    begin
-                      if ast_ident_pool[ast_expr_text_ref[expr_idx]][2] = 'd' then
-                        begin
-                          AstExprBuiltinKind := 2
-                        end
-                    end
+                  AstExprBuiltinKind := 3
                 end
             end;
           if AstExprBuiltinKind = 0 then
             begin
-              if ast_ident_pool[ast_expr_text_ref[expr_idx]][0] = #0 then
+              ClearText(expected);
+              expected := 'abs';
+              if TextEqIgnoreCaseOrTail(normalized, expected) then
                 begin
-                  if ast_ident_pool[ast_expr_text_ref[expr_idx]][1] = 'h' then
-                    begin
-                      if ast_ident_pool[ast_expr_text_ref[expr_idx]][2] = 'r' then
-                        begin
-                          AstExprBuiltinKind := 3
-                        end
-                    end
+                  AstExprBuiltinKind := 4
+                end
+            end;
+          if AstExprBuiltinKind = 0 then
+            begin
+              ClearText(expected);
+              expected := 'sqr';
+              if TextEqIgnoreCaseOrTail(normalized, expected) then
+                begin
+                  AstExprBuiltinKind := 5
+                end
+            end;
+          if AstExprBuiltinKind = 0 then
+            begin
+              ClearText(expected);
+              expected := 'odd';
+              if TextEqIgnoreCaseOrTail(normalized, expected) then
+                begin
+                  AstExprBuiltinKind := 6
+                end
+            end;
+          if AstExprBuiltinKind = 0 then
+            begin
+              ClearText(expected);
+              expected := 'upcase';
+              if TextEqIgnoreCaseOrTail(normalized, expected) then
+                begin
+                  AstExprBuiltinKind := 7
                 end
             end
         end
@@ -3329,6 +3522,34 @@ begin
           CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
         end
     end
+  else if builtin_kind = 4 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
+  else if builtin_kind = 5 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
+  else if builtin_kind = 6 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
+  else if builtin_kind = 7 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
 end;
 
 function CanEmitAstBuiltinStmtCall(stmt_idx: integer; builtin_kind: integer): boolean;
@@ -3406,6 +3627,7 @@ var v_idx: integer;
     routine_idx: integer;
     type_idx: integer;
     field_idx: integer;
+    builtin_kind: integer;
 begin
   if expr_idx < 0 then
     begin
@@ -3418,6 +3640,38 @@ begin
   else if ast_expr_kind[expr_idx] = AST_EXPR_BOOL then
     begin
       AstExprType := AST_TYPE_BOOLEAN
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
+    begin
+      builtin_kind := AstExprBuiltinKind(expr_idx);
+      if builtin_kind = 6 then
+        begin
+          AstExprType := AST_TYPE_BOOLEAN
+        end
+      else if builtin_kind = 7 then
+        begin
+          AstExprType := AST_TYPE_CHAR
+        end
+      else if builtin_kind <> 0 then
+        begin
+          AstExprType := AST_TYPE_INTEGER
+        end
+      else
+        begin
+          routine_idx := AstCallRoutineIndex(expr_idx);
+          if routine_idx >= 0 then
+            begin
+              AstExprType := ast_routine_ret_type[routine_idx]
+            end
+          else
+            begin
+              AstExprType := AST_TYPE_UNKNOWN
+            end
+        end
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_NIL then
+    begin
+      AstExprType := AST_TYPE_INTEGER
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_CHAR then
     begin
@@ -3493,18 +3747,6 @@ begin
           AstExprType := AST_TYPE_UNKNOWN
         end
     end
-  else if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
-    begin
-      routine_idx := AstCallRoutineIndex(expr_idx);
-      if routine_idx >= 0 then
-        begin
-          AstExprType := ast_routine_ret_type[routine_idx]
-        end
-      else
-        begin
-          AstExprType := AST_TYPE_UNKNOWN
-        end
-    end
   else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
     begin
       AstExprType := AST_TYPE_INTEGER
@@ -3553,6 +3795,10 @@ begin
       CanEmitAstExpr := true
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_BOOL then
+    begin
+      CanEmitAstExpr := true
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_NIL then
     begin
       CanEmitAstExpr := true
     end
@@ -3736,6 +3982,10 @@ begin
     begin
       Write(ast_expr_int[expr_idx])
     end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_NIL then
+    begin
+      Write('0')
+    end
   else if ast_expr_kind[expr_idx] = AST_EXPR_CHAR then
     begin
       Write(ast_expr_int[expr_idx])
@@ -3865,6 +4115,26 @@ begin
           else if builtin_kind = 3 then
             begin
               EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]])
+            end
+          else if builtin_kind = 4 then
+            begin
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
+              Write(' DUP 0< IF NEGATE THEN')
+            end
+          else if builtin_kind = 5 then
+            begin
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
+              Write(' DUP *')
+            end
+          else if builtin_kind = 6 then
+            begin
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
+              Write(' 1 AND 0= 0=')
+            end
+          else if builtin_kind = 7 then
+            begin
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
+              Write(' DUP 97 >= OVER 122 <= AND IF 32 - THEN')
             end
         end
     end

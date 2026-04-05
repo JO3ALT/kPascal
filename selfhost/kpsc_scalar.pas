@@ -1,21 +1,8 @@
 program kpsc_scalar;
-
-procedure ParseProgram;
 begin
-end;
-
-begin
-  WriteLn(': MAIN');
-  WriteLn('  7 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn('  25 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn('  S" TRUE" TYPE');
-  WriteLn('  PWRITELN');
-  WriteLn('  81 PWRITE-CHAR');
-  WriteLn('  PWRITELN');
-  WriteLn('  66 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  WriteLn(Abs(-7));
+  WriteLn(Sqr(5));
+  WriteLn(Odd(5));
+  WriteLn(UpCase('q'));
+  WriteLn(Ord(Chr(66)))
 end.

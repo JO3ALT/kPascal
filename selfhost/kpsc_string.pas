@@ -1,15 +1,12 @@
 program kpsc_string;
-
-procedure ParseProgram;
+type
+  str16 = array[16] of char;
+var
+  s: str16;
+  needle: str16;
 begin
-end;
-
-begin
-  WriteLn(': MAIN');
-  WriteLn('  S" ABC" TYPE');
-  WriteLn('  PWRITELN');
-  WriteLn('  2 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  s := 'ABC';
+  needle := 'BC';
+  WriteLn(s);
+  WriteLn(Pos(needle, s))
 end.

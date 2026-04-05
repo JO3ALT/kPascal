@@ -1,15 +1,16 @@
 program kpsc_enumset;
-
-procedure ParseProgram;
+type
+  color = (red, green, blue);
+  palette = set of color;
+  small = 1..5;
+var
+  c: color;
+  s: palette;
+  i: small;
 begin
-end;
-
-begin
-  WriteLn(': MAIN');
-  WriteLn('  S" TRUE" TYPE');
-  WriteLn('  PWRITELN');
-  WriteLn('  4 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  c := green;
+  s := [red, green];
+  i := 3;
+  WriteLn(c in s);
+  WriteLn(Ord(c) + i)
 end.

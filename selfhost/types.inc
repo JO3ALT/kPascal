@@ -49,6 +49,7 @@ const
   AST_EXPR_INDEX = 8;
   AST_EXPR_CALL = 9;
   AST_EXPR_DEREF = 10;
+  AST_EXPR_NIL = 11;
   AST_TYPE_UNKNOWN = 0;
   AST_TYPE_INTEGER = 1;
   AST_TYPE_BOOLEAN = 2;
@@ -2174,6 +2175,10 @@ begin
       ast_arg_text_ref[idx] := -1
     end;
   ast_arg_expr[idx] := -1;
+  if ast_stmt_arg_count[stmt_idx] = 0 then
+    begin
+      ast_stmt_arg_start[stmt_idx] := idx
+    end;
   ast_stmt_arg_count[stmt_idx] := ast_stmt_arg_count[stmt_idx] + 1
 end;
 
@@ -2194,6 +2199,10 @@ begin
   ast_arg_int[idx] := 0;
   ast_arg_text_ref[idx] := -1;
   ast_arg_expr[idx] := expr_idx;
+  if ast_stmt_arg_count[stmt_idx] = 0 then
+    begin
+      ast_stmt_arg_start[stmt_idx] := idx
+    end;
   ast_stmt_arg_count[stmt_idx] := ast_stmt_arg_count[stmt_idx] + 1
 end;
 

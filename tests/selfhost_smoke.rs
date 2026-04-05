@@ -814,6 +814,82 @@ end."#;
 }
 
 #[test]
+fn selfhost_kpsc_main_compiles_arithmetic_program_via_ast_without_sample_name() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main arithmetic ast smoke: missing native backend");
+        return;
+    }
+
+    let src = include_str!("../selfhost/kpsc_arith.pas")
+        .replacen("program kpsc_arith;", "program astprobe;", 1);
+    let emitted_forth = run_preprocessed_selfhost_main_for_input("main-ast-arith-stage1", &src);
+    assert!(
+        emitted_forth.contains("CREATE ASRV0 0 ,"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    let got = run_native_forth("main-ast-arith-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "14\n3\n2");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_control_program_via_ast_without_sample_name() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main control ast smoke: missing native backend");
+        return;
+    }
+
+    let src = include_str!("../selfhost/kpsc_ctrl.pas")
+        .replacen("program kpsc_ctrl;", "program astctrl;", 1);
+    let emitted_forth = run_preprocessed_selfhost_main_for_input("main-ast-ctrl-stage1", &src);
+    assert!(
+        emitted_forth.contains("CREATE ASRV0 0 ,"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    let got = run_native_forth("main-ast-ctrl-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "12");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_routine_program_via_ast_without_sample_name() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main routine ast smoke: missing native backend");
+        return;
+    }
+
+    let src = include_str!("../selfhost/kpsc_routines.pas")
+        .replacen("program kpsc_routines;", "program astroutines;", 1);
+    let emitted_forth = run_preprocessed_selfhost_main_for_input("main-ast-routines-stage1", &src);
+    assert!(
+        emitted_forth.contains("CREATE ASRV0 0 ,"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    let got = run_native_forth("main-ast-routines-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "9", "emitted forth:\n{emitted_forth}");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_scalar_program_via_ast_without_sample_name() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main scalar ast smoke: missing native backend");
+        return;
+    }
+
+    let src = include_str!("../selfhost/kpsc_scalar.pas")
+        .replacen("program kpsc_scalar;", "program astscalar;", 1);
+    let emitted_forth = run_preprocessed_selfhost_main_for_input("main-ast-scalar-stage1", &src);
+    assert!(
+        emitted_forth.contains("PWRITE-BOOL"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    let got = run_native_forth("main-ast-scalar-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "7\n25\nTRUE\nQ\n66");
+}
+
+#[test]
 fn selfhost_kpsc_main_compiles_single_source_seed_compiler() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
@@ -1481,8 +1557,7 @@ fn selfhost_kpsc_emits_and_runs_arithmetic_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_arith.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("arith-stage1", &selfhost_forth);
-    let got = run_native_forth("arith-stage2", &emitted_forth);
+    let got = run_native_forth("arith", &selfhost_forth);
     assert_eq!(got.trim_end(), "14\n3\n2");
 }
 
@@ -1496,8 +1571,7 @@ fn selfhost_kpsc_emits_and_runs_control_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_ctrl.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("ctrl-stage1", &selfhost_forth);
-    let got = run_native_forth("ctrl-stage2", &emitted_forth);
+    let got = run_native_forth("ctrl", &selfhost_forth);
     assert_eq!(got.trim_end(), "12");
 }
 
@@ -1511,8 +1585,7 @@ fn selfhost_kpsc_emits_and_runs_routine_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_routines.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("routine-stage1", &selfhost_forth);
-    let got = run_native_forth("routine-stage2", &emitted_forth);
+    let got = run_native_forth("routine", &selfhost_forth);
     assert_eq!(got.trim_end(), "9");
 }
 
@@ -1526,8 +1599,7 @@ fn selfhost_kpsc_emits_and_runs_record_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_record.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("record-stage1", &selfhost_forth);
-    let got = run_native_forth("record-stage2", &emitted_forth);
+    let got = run_native_forth("record", &selfhost_forth);
     assert_eq!(got.trim_end(), "33");
 }
 
@@ -1541,8 +1613,7 @@ fn selfhost_kpsc_emits_and_runs_string_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_string.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("string-stage1", &selfhost_forth);
-    let got = run_native_forth("string-stage2", &emitted_forth);
+    let got = run_native_forth("string", &selfhost_forth);
     assert_eq!(got.trim_end(), "ABC\n2");
 }
 
@@ -1556,8 +1627,7 @@ fn selfhost_kpsc_emits_and_runs_string_edit_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_string_edit.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("string-edit-stage1", &selfhost_forth);
-    let got = run_native_forth("string-edit-stage2", &emitted_forth);
+    let got = run_native_forth("string-edit", &selfhost_forth);
     assert_eq!(got.trim_end(), "ABCD\nAD\nAZD");
 }
 
@@ -1571,8 +1641,7 @@ fn selfhost_kpsc_emits_and_runs_hex_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_hex.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("hex-stage1", &selfhost_forth);
-    let got = run_native_forth("hex-stage2", &emitted_forth);
+    let got = run_native_forth("hex", &selfhost_forth);
     assert_eq!(got.trim_end(), "000000FF\n255");
 }
 
@@ -1586,8 +1655,7 @@ fn selfhost_kpsc_emits_and_runs_real_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_real.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("real-stage1", &selfhost_forth);
-    let got = run_native_forth("real-stage2", &emitted_forth);
+    let got = run_native_forth("real", &selfhost_forth);
     assert_eq!(got.trim_end(), "3.5000\n4\n3");
 }
 
@@ -1601,8 +1669,7 @@ fn selfhost_kpsc_emits_and_runs_case_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_case.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("case-stage1", &selfhost_forth);
-    let got = run_native_forth("case-stage2", &emitted_forth);
+    let got = run_native_forth("case", &selfhost_forth);
     assert_eq!(got.trim_end(), "MID");
 }
 
@@ -1616,8 +1683,7 @@ fn selfhost_kpsc_emits_and_runs_scalar_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_scalar.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("scalar-stage1", &selfhost_forth);
-    let got = run_native_forth("scalar-stage2", &emitted_forth);
+    let got = run_native_forth("scalar", &selfhost_forth);
     assert_eq!(got.trim_end(), "7\n25\nTRUE\nQ\n66");
 }
 
@@ -1631,8 +1697,7 @@ fn selfhost_kpsc_emits_and_runs_array2d_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_array2d.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("array2d-stage1", &selfhost_forth);
-    let got = run_native_forth("array2d-stage2", &emitted_forth);
+    let got = run_native_forth("array2d", &selfhost_forth);
     assert_eq!(got.trim_end(), "9");
 }
 
@@ -1646,8 +1711,7 @@ fn selfhost_kpsc_emits_and_runs_array4d_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_array4d.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("array4d-stage1", &selfhost_forth);
-    let got = run_native_forth("array4d-stage2", &emitted_forth);
+    let got = run_native_forth("array4d", &selfhost_forth);
     assert_eq!(got.trim_end(), "13");
 }
 
@@ -1661,8 +1725,7 @@ fn selfhost_kpsc_emits_and_runs_variant_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_variant.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("variant-stage1", &selfhost_forth);
-    let got = run_native_forth("variant-stage2", &emitted_forth);
+    let got = run_native_forth("variant", &selfhost_forth);
     assert_eq!(got.trim_end(), "42");
 }
 
@@ -1676,8 +1739,7 @@ fn selfhost_kpsc_emits_and_runs_pointer_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_pointer.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("pointer-stage1", &selfhost_forth);
-    let got = run_native_forth("pointer-stage2", &emitted_forth);
+    let got = run_native_forth("pointer", &selfhost_forth);
     assert_eq!(got.trim_end(), "77\nTRUE");
 }
 
@@ -1691,8 +1753,7 @@ fn selfhost_kpsc_emits_and_runs_addr_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_addr.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("addr-stage1", &selfhost_forth);
-    let got = run_native_forth("addr-stage2", &emitted_forth);
+    let got = run_native_forth("addr", &selfhost_forth);
     assert_eq!(got.trim_end(), "456\nTRUE");
 }
 
@@ -1706,8 +1767,7 @@ fn selfhost_kpsc_emits_and_runs_enumset_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_enumset.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("enumset-stage1", &selfhost_forth);
-    let got = run_native_forth("enumset-stage2", &emitted_forth);
+    let got = run_native_forth("enumset", &selfhost_forth);
     assert_eq!(got.trim_end(), "TRUE\n4");
 }
 
@@ -1721,8 +1781,7 @@ fn selfhost_kpsc_emits_and_runs_conf1d_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_conf1d.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("conf1d-stage1", &selfhost_forth);
-    let got = run_native_forth("conf1d-stage2", &emitted_forth);
+    let got = run_native_forth("conf1d", &selfhost_forth);
     assert_eq!(got.trim_end(), "18");
 }
 
@@ -1736,8 +1795,7 @@ fn selfhost_kpsc_emits_and_runs_conf2d_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_conf2d.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("conf2d-stage1", &selfhost_forth);
-    let got = run_native_forth("conf2d-stage2", &emitted_forth);
+    let got = run_native_forth("conf2d", &selfhost_forth);
     assert_eq!(got.trim_end(), "10");
 }
 
@@ -1751,7 +1809,293 @@ fn selfhost_kpsc_emits_and_runs_setops_program() {
 
     let selfhost_src = include_str!("../selfhost/kpsc_setops.pas");
     let selfhost_forth = run_compiler(selfhost_src);
-    let emitted_forth = run_native_forth("setops-stage1", &selfhost_forth);
-    let got = run_native_forth("setops-stage2", &emitted_forth);
+    let got = run_native_forth("setops", &selfhost_forth);
     assert_eq!(got.trim_end(), "TRUE\nTRUE\nTRUE");
+}
+
+// --- selfhost compiler (kpsc_main) compiles each feature program ---
+
+#[test]
+fn selfhost_kpsc_main_compiles_arith_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main arith feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-arith",
+        include_str!("../selfhost/kpsc_arith.pas"),
+    );
+    let got = run_native_forth("main-feat-arith-run", &stage1);
+    assert_eq!(got.trim_end(), "14\n3\n2", "arith feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_ctrl_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main ctrl feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-ctrl",
+        include_str!("../selfhost/kpsc_ctrl.pas"),
+    );
+    let got = run_native_forth("main-feat-ctrl-run", &stage1);
+    assert_eq!(got.trim_end(), "12", "ctrl feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_routines_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main routines feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-routines",
+        include_str!("../selfhost/kpsc_routines.pas"),
+    );
+    let got = run_native_forth("main-feat-routines-run", &stage1);
+    assert_eq!(got.trim_end(), "9", "routines feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_record_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main record feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-record",
+        include_str!("../selfhost/kpsc_record.pas"),
+    );
+    let got = run_native_forth("main-feat-record-run", &stage1);
+    assert_eq!(got.trim_end(), "33", "record feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_variant_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main variant feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-variant",
+        include_str!("../selfhost/kpsc_variant.pas"),
+    );
+    let got = run_native_forth("main-feat-variant-run", &stage1);
+    assert_eq!(got.trim_end(), "42", "variant feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_pointer_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main pointer feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-pointer",
+        include_str!("../selfhost/kpsc_pointer.pas"),
+    );
+    let got = run_native_forth("main-feat-pointer-run", &stage1);
+    assert_eq!(got.trim_end(), "77\nTRUE", "pointer feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_addr_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main addr feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-addr",
+        include_str!("../selfhost/kpsc_addr.pas"),
+    );
+    let got = run_native_forth("main-feat-addr-run", &stage1);
+    assert_eq!(got.trim_end(), "456\nTRUE", "addr feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_array2d_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main array2d feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-array2d",
+        include_str!("../selfhost/kpsc_array2d.pas"),
+    );
+    let got = run_native_forth("main-feat-array2d-run", &stage1);
+    assert_eq!(got.trim_end(), "9", "array2d feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_array4d_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main array4d feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-array4d",
+        include_str!("../selfhost/kpsc_array4d.pas"),
+    );
+    let got = run_native_forth("main-feat-array4d-run", &stage1);
+    assert_eq!(got.trim_end(), "13", "array4d feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_conf1d_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main conf1d feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-conf1d",
+        include_str!("../selfhost/kpsc_conf1d.pas"),
+    );
+    let got = run_native_forth("main-feat-conf1d-run", &stage1);
+    assert_eq!(got.trim_end(), "18", "conf1d feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_conf2d_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main conf2d feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-conf2d",
+        include_str!("../selfhost/kpsc_conf2d.pas"),
+    );
+    let got = run_native_forth("main-feat-conf2d-run", &stage1);
+    assert_eq!(got.trim_end(), "10", "conf2d feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_string_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main string feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-string",
+        include_str!("../selfhost/kpsc_string.pas"),
+    );
+    let got = run_native_forth("main-feat-string-run", &stage1);
+    assert_eq!(got.trim_end(), "ABC\n2", "string feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_string_edit_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main string-edit feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-string-edit",
+        include_str!("../selfhost/kpsc_string_edit.pas"),
+    );
+    let got = run_native_forth("main-feat-string-edit-run", &stage1);
+    assert_eq!(got.trim_end(), "ABCD\nAD\nAZD", "string-edit feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_hex_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main hex feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-hex",
+        include_str!("../selfhost/kpsc_hex.pas"),
+    );
+    let got = run_native_forth("main-feat-hex-run", &stage1);
+    assert_eq!(got.trim_end(), "000000FF\n255", "hex feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_real_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main real feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-real",
+        include_str!("../selfhost/kpsc_real.pas"),
+    );
+    let got = run_native_forth("main-feat-real-run", &stage1);
+    assert_eq!(got.trim_end(), "3.5000\n4\n3", "real feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_case_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main case feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-case",
+        include_str!("../selfhost/kpsc_case.pas"),
+    );
+    let got = run_native_forth("main-feat-case-run", &stage1);
+    assert_eq!(got.trim_end(), "MID", "case feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_enumset_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main enumset feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-enumset",
+        include_str!("../selfhost/kpsc_enumset.pas"),
+    );
+    let got = run_native_forth("main-feat-enumset-run", &stage1);
+    assert_eq!(got.trim_end(), "TRUE\n4", "enumset feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_setops_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main setops feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-setops",
+        include_str!("../selfhost/kpsc_setops.pas"),
+    );
+    let got = run_native_forth("main-feat-setops-run", &stage1);
+    assert_eq!(got.trim_end(), "TRUE\nTRUE\nTRUE", "setops feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_scalar_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main scalar feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-scalar",
+        include_str!("../selfhost/kpsc_scalar.pas"),
+    );
+    let got = run_native_forth("main-feat-scalar-run", &stage1);
+    assert_eq!(got.trim_end(), "7\n25\nTRUE\nQ\n66", "scalar feature via selfhost compiler");
 }

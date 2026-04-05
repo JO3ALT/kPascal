@@ -1,21 +1,19 @@
 program kpsc_routines;
-
 var
-  __CALL_RET: integer;
+  x: integer;
 
-procedure ParseProcedureDecl;
+procedure Bump(var v: integer);
 begin
+  v := v + 2
 end;
 
-function ParseFunctionDecl: integer;
+function AddBase(a: integer): integer;
 begin
-  ParseFunctionDecl := 0
+  AddBase := a + x
 end;
 
 begin
-  WriteLn(': MAIN');
-  WriteLn('  9 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  x := 4;
+  Bump(x);
+  WriteLn(AddBase(3))
 end.

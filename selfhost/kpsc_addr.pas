@@ -1,15 +1,17 @@
 program kpsc_addr;
-
-procedure ParseProgram;
+type
+  cellp = ^integer;
+var
+  p: cellp;
+  q: cellp;
+  addr: integer;
 begin
-end;
-
-begin
-  WriteLn(': MAIN');
-  WriteLn('  456 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn('  S" TRUE" TYPE');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  new(p);
+  p^ := 123;
+  addr := Addr(p^);
+  SetAddr(q, addr);
+  q^ := 456;
+  WriteLn(p^);
+  dispose(p);
+  WriteLn(p = nil)
 end.

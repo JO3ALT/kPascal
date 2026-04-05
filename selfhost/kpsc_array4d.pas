@@ -1,13 +1,10 @@
 program kpsc_array4d;
-
-procedure ParseProgram;
+type
+  cube4 = array[1..2, 1..2, 1..2, 1..2] of integer;
+var
+  a: cube4;
 begin
-end;
-
-begin
-  WriteLn(': MAIN');
-  WriteLn('  13 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  a[1, 1, 2, 1] := 9;
+  a[2, 2, 1, 2] := 4;
+  WriteLn(a[1, 1, 2, 1] + a[2, 2, 1, 2])
 end.

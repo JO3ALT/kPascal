@@ -302,6 +302,72 @@ begin
   ParseRelExpr()
 end;
 
+function BuiltinExprKindByName(var name: text_buf): integer;
+var expected_name: text_buf;
+begin
+  BuiltinExprKindByName := 0;
+  ClearText(expected_name);
+  expected_name := 'addr';
+  if StrCmpIgnoreCase(name, expected_name) = 0 then
+    begin
+      BuiltinExprKindByName := 1
+    end
+  else
+    begin
+      ClearText(expected_name);
+      expected_name := 'ord';
+      if StrCmpIgnoreCase(name, expected_name) = 0 then
+        begin
+          BuiltinExprKindByName := 2
+        end
+      else
+        begin
+          ClearText(expected_name);
+          expected_name := 'chr';
+          if StrCmpIgnoreCase(name, expected_name) = 0 then
+            begin
+              BuiltinExprKindByName := 3
+            end
+          else
+            begin
+              ClearText(expected_name);
+              expected_name := 'abs';
+              if StrCmpIgnoreCase(name, expected_name) = 0 then
+                begin
+                  BuiltinExprKindByName := 4
+                end
+              else
+                begin
+                  ClearText(expected_name);
+                  expected_name := 'sqr';
+                  if StrCmpIgnoreCase(name, expected_name) = 0 then
+                    begin
+                      BuiltinExprKindByName := 5
+                    end
+                  else
+                    begin
+                      ClearText(expected_name);
+                      expected_name := 'odd';
+                      if StrCmpIgnoreCase(name, expected_name) = 0 then
+                        begin
+                          BuiltinExprKindByName := 6
+                        end
+                      else
+                        begin
+                          ClearText(expected_name);
+                          expected_name := 'upcase';
+                          if StrCmpIgnoreCase(name, expected_name) = 0 then
+                            begin
+                              BuiltinExprKindByName := 7
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end;
+
 function BuildAstPrimaryExpr: integer;
 var expr_idx: integer;
     index_idx: integer;
@@ -349,6 +415,13 @@ begin
       NextToken();
       BuildAstPrimaryExpr := expr_idx
     end
+  else if token_kind = TOK_KW_NIL then
+    begin
+      expr_idx := NewAstExpr(AST_EXPR_NIL);
+      ast_expr_int[expr_idx] := 0;
+      NextToken();
+      BuildAstPrimaryExpr := expr_idx
+    end
   else if token_kind = TOK_LPAREN then
     begin
       NextToken();
@@ -364,6 +437,7 @@ begin
       if token_kind = TOK_LPAREN then
         begin
           expr_idx := NewAstExpr(AST_EXPR_CALL);
+          ast_expr_op[expr_idx] := BuiltinExprKindByName(temp_text);
           ast_expr_text_ref[expr_idx] := NewAstIdent(temp_text);
           BuildAstCallArgs(expr_idx);
           BuildAstPrimaryExpr := expr_idx

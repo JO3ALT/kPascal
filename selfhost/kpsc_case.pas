@@ -1,16 +1,12 @@
 program kpsc_case;
-
 var
-  __CASE_MATCH: integer;
-
-procedure ParseProgram;
+  i: integer;
 begin
-end;
-
-begin
-  WriteLn(': MAIN');
-  WriteLn('  S" MID" TYPE');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  i := 3;
+  case i of
+    1, 2: WriteLn('LOW');
+    3..5: WriteLn('MID')
+  else
+    WriteLn('HIGH')
+  end
 end.

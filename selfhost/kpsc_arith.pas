@@ -1,13 +1,9 @@
 program kpsc_arith;
-
+var
+  i: integer;
 begin
-  WriteLn(': MAIN');
-  WriteLn('  14 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn('  3 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn('  2 PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  i := 2 + 3 * 4;
+  WriteLn(i);
+  WriteLn(17 div 5);
+  WriteLn(17 mod 5)
 end.
