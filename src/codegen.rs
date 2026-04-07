@@ -1940,9 +1940,29 @@ impl<'a> ForthGen<'a> {
             .get(name)
             .ok_or_else(|| format!("unknown routine in scope: {name}"))?;
         let (word, sig) = self.resolve_call_target(ctx, name)?;
+        // Collect frame slots that are passed by VAR reference in this call.
+        // Those slots must NOT be saved/restored: the callee is supposed to write
+        // back through the passed address, and restoring the old value would
+        // silently discard those writes.
+        let mut var_out_slots: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for (arg, p) in args.iter().zip(&sig.params) {
+            if p.by_ref {
+                if let Some(lv) = expr_to_lvalue(arg) {
+                    if let Ok(a) = self.resolve_lvalue_addr_ctx(&lv, ctx) {
+                        // Simple local variable: no offset, no dynamic indirection.
+                        if a.dynamic_addr_expr.is_none() && a.offset == 0 {
+                            var_out_slots.insert(a.base_expr.clone());
+                        }
+                    }
+                }
+            }
+        }
         let mut parts = vec![];
         for slot in &ctx.current_frame_slots {
-            parts.push(format!("{slot} PVAR@ >R"));
+            if !var_out_slots.contains(slot) {
+                parts.push(format!("{slot} PVAR@ >R"));
+            }
         }
         let argc = self.gen_call_args_inline(name, args, ctx)?;
         if !argc.is_empty() {
@@ -1953,7 +1973,9 @@ impl<'a> ForthGen<'a> {
             parts.push("__CALL_RET PVAR!".into());
         }
         for slot in ctx.current_frame_slots.iter().rev() {
-            parts.push(format!("R> {slot} PVAR!"));
+            if !var_out_slots.contains(slot) {
+                parts.push(format!("R> {slot} PVAR!"));
+            }
         }
         if sig.ret.is_some() {
             parts.push("__CALL_RET PVAR@".into());
@@ -2788,7 +2810,17 @@ impl<'a> ForthGen<'a> {
                 slots.extend(self.runtime_param_slots(&scoped, std::slice::from_ref(prm)));
             }
             for lv in &block.vars {
-                slots.push(self.slot_name(&scoped, &lv.name));
+                // Skip aggregate (array, record) local variables from save/restore:
+                // they are allocated at fixed addresses via ALLOT, so only their first
+                // cell would be saved/restored, which corrupts writes done by callees
+                // (e.g. StrCopy writing into a local text_buf).
+                let is_aggregate = match self.ty_of_typeref(&lv.ty) {
+                    Ok(TypeInfo::Array(_)) | Ok(TypeInfo::Record(_)) => true,
+                    _ => false,
+                };
+                if !is_aggregate {
+                    slots.push(self.slot_name(&scoped, &lv.name));
+                }
             }
             if let Some(ret) = ret_name {
                 slots.push(self.slot_name(&scoped, ret));
