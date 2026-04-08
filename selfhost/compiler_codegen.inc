@@ -2462,6 +2462,12 @@ begin
   Write(slot_idx)
 end;
 
+procedure EmitAstTextLitSlot(text_ref: integer);
+begin
+  Write('ASTS');
+  Write(text_ref)
+end;
+
 procedure EmitAstRoutineWord(routine_idx: integer);
 var slot_idx: integer;
 begin
@@ -3512,14 +3518,40 @@ begin
     begin
       if ast_expr_right[expr_idx] = 2 then
         begin
-          CanEmitAstBuiltinExprCall := CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx]]) and CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx] + 1])
+          CanEmitAstBuiltinExprCall := false;
+          if ast_expr_kind[ast_arg_expr[ast_expr_left[expr_idx]]] = AST_EXPR_STR then
+            begin
+              CanEmitAstBuiltinExprCall := ast_expr_text_ref[ast_arg_expr[ast_expr_left[expr_idx]]] >= 0
+            end
+          else
+            begin
+              CanEmitAstBuiltinExprCall := CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+            end;
+          if CanEmitAstBuiltinExprCall then
+            begin
+              if ast_expr_kind[ast_arg_expr[ast_expr_left[expr_idx] + 1]] = AST_EXPR_STR then
+                begin
+                  CanEmitAstBuiltinExprCall := ast_expr_text_ref[ast_arg_expr[ast_expr_left[expr_idx] + 1]] >= 0
+                end
+              else
+                begin
+                  CanEmitAstBuiltinExprCall := CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx] + 1])
+                end
+            end
         end
     end
   else if builtin_kind = 9 then
     begin
       if ast_expr_right[expr_idx] = 1 then
         begin
-          CanEmitAstBuiltinExprCall := CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+          if ast_expr_kind[ast_arg_expr[ast_expr_left[expr_idx]]] = AST_EXPR_STR then
+            begin
+              CanEmitAstBuiltinExprCall := ast_expr_text_ref[ast_arg_expr[ast_expr_left[expr_idx]]] >= 0
+            end
+          else
+            begin
+              CanEmitAstBuiltinExprCall := CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+            end
         end
     end
   else if builtin_kind = 10 then
@@ -3718,6 +3750,10 @@ begin
     begin
       AstExprType := AST_TYPE_REAL
     end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_STR then
+    begin
+      AstExprType := AST_TYPE_UNKNOWN
+    end
   else if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
     begin
       builtin_kind := AstExprBuiltinKind(expr_idx);
@@ -3873,6 +3909,10 @@ begin
   else if ast_expr_kind[expr_idx] = AST_EXPR_REAL then
     begin
       CanEmitAstExpr := ast_expr_text_ref[expr_idx] >= 0
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_STR then
+    begin
+      CanEmitAstExpr := false
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
     begin
@@ -4173,6 +4213,32 @@ begin
     end
 end;
 
+function AstTextLitLen(text_ref: integer): integer;
+var text_idx: integer;
+begin
+  AstTextLitLen := 0;
+  if text_ref >= 0 then
+    begin
+      text_idx := 0;
+      while text_idx <= LIT_LAST do
+        begin
+          if ast_text_lit[text_ref][text_idx] = #0 then
+            begin
+              AstTextLitLen := text_idx + 1;
+              text_idx := LIT_LAST + 1
+            end
+          else
+            begin
+              text_idx := text_idx + 1
+            end
+        end;
+      if AstTextLitLen = 0 then
+        begin
+          AstTextLitLen := 1
+        end
+    end
+end;
+
 procedure EmitAstExprInline(expr_idx: integer);
 var v_idx: integer;
     param_idx: integer;
@@ -4339,30 +4405,54 @@ begin
             end
           else if builtin_kind = 8 then
             begin
-              EmitAstLValueAddress(ast_arg_expr[ast_expr_left[expr_idx]]);
+              if ast_expr_kind[ast_arg_expr[ast_expr_left[expr_idx]]] = AST_EXPR_STR then
+                begin
+                  EmitAstTextLitSlot(ast_expr_text_ref[ast_arg_expr[ast_expr_left[expr_idx]]])
+                end
+              else
+                begin
+                  EmitAstLValueAddress(ast_arg_expr[ast_expr_left[expr_idx]])
+                end;
               Write(' __STR_A PVAR! ');
-              EmitAstLValueAddress(ast_arg_expr[ast_expr_left[expr_idx] + 1]);
+              if ast_expr_kind[ast_arg_expr[ast_expr_left[expr_idx] + 1]] = AST_EXPR_STR then
+                begin
+                  EmitAstTextLitSlot(ast_expr_text_ref[ast_arg_expr[ast_expr_left[expr_idx] + 1]])
+                end
+              else
+                begin
+                  EmitAstLValueAddress(ast_arg_expr[ast_expr_left[expr_idx] + 1])
+                end;
               Write(' __STR_B PVAR! __STRPOS')
             end
           else if builtin_kind = 9 then
             begin
-              v_idx := AstExprIdentVarIndex(ast_arg_expr[ast_expr_left[expr_idx]]);
-              const_value := 1;
-              if v_idx >= 0 then
+              if ast_expr_kind[ast_arg_expr[ast_expr_left[expr_idx]]] = AST_EXPR_STR then
                 begin
-                  if ast_var_type_ref[v_idx] >= 0 then
+                  EmitAstTextLitSlot(ast_expr_text_ref[ast_arg_expr[ast_expr_left[expr_idx]]]);
+                  Write(' __HEX_PTR PVAR! ');
+                  Write(AstTextLitLen(ast_expr_text_ref[ast_arg_expr[ast_expr_left[expr_idx]]]));
+                  Write(' __HEX_LEN PVAR! __HEX_TO_I32')
+                end
+              else
+                begin
+                  v_idx := AstExprIdentVarIndex(ast_arg_expr[ast_expr_left[expr_idx]]);
+                  const_value := 1;
+                  if v_idx >= 0 then
                     begin
-                      const_value := ast_type_array_size[ast_var_type_ref[v_idx]];
-                      if const_value < 1 then
+                      if ast_var_type_ref[v_idx] >= 0 then
                         begin
-                          const_value := 1
+                          const_value := ast_type_array_size[ast_var_type_ref[v_idx]];
+                          if const_value < 1 then
+                            begin
+                              const_value := 1
+                            end
                         end
-                    end
-                end;
-              EmitAstLValueAddress(ast_arg_expr[ast_expr_left[expr_idx]]);
-              Write(' __HEX_PTR PVAR! ');
-              Write(const_value);
-              Write(' __HEX_LEN PVAR! __HEX_TO_I32')
+                    end;
+                  EmitAstLValueAddress(ast_arg_expr[ast_expr_left[expr_idx]]);
+                  Write(' __HEX_PTR PVAR! ');
+                  Write(const_value);
+                  Write(' __HEX_LEN PVAR! __HEX_TO_I32')
+                end
             end
           else if builtin_kind = 10 then
             begin
@@ -5873,6 +5963,44 @@ begin
     end
 end;
 
+procedure EmitAstTextLitStorage(text_ref: integer);
+var cell_count: integer;
+begin
+  Write('CREATE ');
+  EmitAstTextLitSlot(text_ref);
+  WriteLn(' 0 ,');
+  cell_count := AstTextLitLen(text_ref);
+  if cell_count > 1 then
+    begin
+      Write((cell_count - 1) * 4);
+      WriteLn(' ALLOT')
+    end
+end;
+
+procedure EmitAstTextLitInit(text_ref: integer; depth: integer);
+var text_idx: integer;
+begin
+  text_idx := 0;
+  while text_idx <= LIT_LAST do
+    begin
+      EmitAstIndent(depth);
+      Write(Ord(ast_text_lit[text_ref][text_idx]));
+      Write(' ');
+      EmitAstTextLitSlot(text_ref);
+      Write(' ');
+      Write(text_idx);
+      WriteLn(' 4 * + PVAR!');
+      if ast_text_lit[text_ref][text_idx] = #0 then
+        begin
+          text_idx := LIT_LAST + 1
+        end
+      else
+        begin
+          text_idx := text_idx + 1
+        end
+    end
+end;
+
 procedure EmitAstWriteLnStrExpr(expr_idx: integer; depth: integer);
 begin
   EmitAstIndent(depth);
@@ -6156,6 +6284,12 @@ procedure EmitAstProgram;
 var i: integer;
 begin
   i := 0;
+  while i < ast_text_lit_count do
+    begin
+      EmitAstTextLitStorage(i);
+      i := i + 1
+    end;
+  i := 0;
   while i < ast_var_count do
     begin
       EmitAstVarAllot(i);
@@ -6183,6 +6317,12 @@ begin
   EmitAstRuntimeHelpers();
   EmitAstRoutineDefs();
   EmitDirectHeader();
+  i := 0;
+  while i < ast_text_lit_count do
+    begin
+      EmitAstTextLitInit(i, 1);
+      i := i + 1
+    end;
   EmitAstStmtRange(ast_root_stmt_start, ast_root_stmt_count, 1);
   EmitDirectFooter()
 end;

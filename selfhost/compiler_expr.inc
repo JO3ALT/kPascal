@@ -516,9 +516,10 @@ begin
         end
       else
         begin
-          bootstrap_capture_failed := true;
-          parse_error_reason := 201;
-          FailParse()
+          expr_idx := NewAstExpr(AST_EXPR_STR);
+          ast_expr_text_ref[expr_idx] := NewAstTextLit(token_text);
+          NextToken();
+          BuildAstPrimaryExpr := expr_idx
         end
     end
   else if token_kind = TOK_KW_TRUE then

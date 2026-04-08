@@ -17,6 +17,7 @@ const
   MAX_AST_TEXT_LITS = 16384;
   MAX_AST_IDENTS = 65536;
   MAX_AST_ENUM_CONSTS = 8192;
+  MAX_AST_CONSTS = 8192;
   CAPTURE_KIND_NONE = 0;
   CAPTURE_KIND_INT = 1;
   CAPTURE_KIND_TEXT = 2;
@@ -52,6 +53,7 @@ const
   AST_EXPR_DEREF = 10;
   AST_EXPR_NIL = 11;
   AST_EXPR_REAL = 12;
+  AST_EXPR_STR = 13;
   AST_TYPE_UNKNOWN = 0;
   AST_TYPE_INTEGER = 1;
   AST_TYPE_BOOLEAN = 2;
@@ -229,6 +231,9 @@ var
   ast_enum_const_name: array[0..8191] of ident_buf;
   ast_enum_const_value: array[0..8191] of integer;
   ast_enum_const_type_ref: array[0..8191] of integer;
+  ast_const_count: integer;
+  ast_const_name: array[0..8191] of ident_buf;
+  ast_const_value: array[0..8191] of integer;
   ast_field_count: integer;
   ast_field_name: array[0..16383] of ident_buf;
   ast_field_type: array[0..16383] of integer;
@@ -2283,6 +2288,25 @@ begin
     end
 end;
 
+function FindAstConst(var name: text_buf): integer;
+var idx: integer;
+begin
+  idx := 0;
+  FindAstConst := -1;
+  while idx < ast_const_count do
+    begin
+      if TextIdentEq(name, ast_const_name[idx]) then
+        begin
+          FindAstConst := idx;
+          idx := ast_const_count
+        end
+      else
+        begin
+          idx := idx + 1
+        end
+    end
+end;
+
 function AstTypeCellCount(type_code: integer; type_ref: integer): integer;
 begin
   AstTypeCellCount := 1;
@@ -2347,6 +2371,29 @@ begin
   CopyTextToIdent(name, ast_enum_const_name[idx]);
   ast_enum_const_value[idx] := value;
   ast_enum_const_type_ref[idx] := type_idx
+end;
+
+procedure AppendAstConst(var name: text_buf; value: integer);
+var idx: integer;
+begin
+  if ast_const_count >= MAX_AST_CONSTS then
+    begin
+      bootstrap_capture_failed := true;
+      parse_error_reason := 111;
+      FailParse()
+    end;
+  idx := FindAstConst(name);
+  if idx >= 0 then
+    begin
+      ast_const_value[idx] := value
+    end
+  else
+    begin
+      idx := ast_const_count;
+      ast_const_count := ast_const_count + 1;
+      CopyTextToIdent(name, ast_const_name[idx]);
+      ast_const_value[idx] := value
+    end
 end;
 
 procedure AppendAstFieldLayout(type_idx: integer; var name: text_buf; field_type: integer; field_type_ref: integer; offset_cells: integer);
@@ -2635,6 +2682,7 @@ begin
   ast_type_count := 0;
   ast_field_count := 0;
   ast_enum_const_count := 0;
+  ast_const_count := 0;
   ast_root_stmt_start := 0;
   ast_root_stmt_count := 0;
   ast_stmt_count := 0;

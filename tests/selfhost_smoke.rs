@@ -1980,6 +1980,239 @@ fn selfhost_kpsc_main_compiles_subrange_named_bounds_feature() {
 }
 
 #[test]
+fn selfhost_kpsc_main_compiles_subrange_arithmetic_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange arithmetic bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program subrangearith;
+type
+  small = 1 + 1 .. 2 * 3;
+var
+  s: set of small;
+begin
+  s := [2, 6];
+  WriteLn(2 in s);
+  WriteLn(6 in s)
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-arith-bounds", src);
+    let got = run_native_forth("main-feat-subrange-arith-bounds-run", &stage1);
+    assert_eq!(got.trim_end(), "TRUE\nTRUE", "subrange arithmetic bounds via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_array_arithmetic_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main array arithmetic bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program arrayarith;
+type
+  arr = array[1 + 1 .. 2 * 2] of integer;
+var
+  a: arr;
+begin
+  a[2] := 10;
+  a[4] := 20;
+  WriteLn(Low(a));
+  WriteLn(High(a));
+  WriteLn(a[2] + a[4])
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-array-arith-bounds", src);
+    let got = run_native_forth("main-feat-array-arith-bounds-run", &stage1);
+    assert_eq!(got.trim_end(), "2\n4\n30", "array arithmetic bounds via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_const_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange const bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program subrangeconst;
+const
+  lo = 2;
+  hi = 6;
+type
+  small = lo .. hi;
+var
+  s: set of small;
+begin
+  s := [2, 6];
+  WriteLn(2 in s);
+  WriteLn(6 in s)
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-const-bounds", src);
+    let got = run_native_forth("main-feat-subrange-const-bounds-run", &stage1);
+    assert_eq!(got.trim_end(), "TRUE\nTRUE", "subrange const bounds via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_array_const_arithmetic_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main array const arithmetic bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program arrayconstarith;
+const
+  base = 1;
+  span = 2;
+type
+  arr = array[base + 1 .. span * 2] of integer;
+var
+  a: arr;
+begin
+  a[2] := 10;
+  a[4] := 20;
+  WriteLn(Low(a));
+  WriteLn(High(a));
+  WriteLn(a[2] + a[4])
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-array-const-arith-bounds", src);
+    let got = run_native_forth("main-feat-array-const-arith-bounds-run", &stage1);
+    assert_eq!(got.trim_end(), "2\n4\n30", "array const arithmetic bounds via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_ord_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange ord bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program subrangeord;
+const
+  base = 1;
+type
+  small = base + 1 .. (Ord(Chr(54)) - 48);
+var
+  s: set of small;
+begin
+  s := [2, 6];
+  WriteLn(2 in s);
+  WriteLn(6 in s)
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-ord-bounds", src);
+    let got = run_native_forth("main-feat-subrange-ord-bounds-run", &stage1);
+    assert_eq!(got.trim_end(), "TRUE\nTRUE", "subrange ord bounds via selfhost compiler");
+}
+
+#[test]
+#[ignore = "leading-parenthesized subrange type syntax is still ambiguous with enum parsing in selfhost"]
+fn selfhost_kpsc_main_compiles_subrange_parenthesized_ord_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange parenthesized ord bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program subrangeparenord;
+type
+  small = (1 + 1) .. (Ord(Chr(54)) - 48);
+var
+  s: set of small;
+begin
+  s := [2, 6];
+  WriteLn(2 in s);
+  WriteLn(6 in s)
+end."#;
+    let stage1 =
+        cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-paren-ord-bounds", src);
+    let got = run_native_forth("main-feat-subrange-paren-ord-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange parenthesized ord bounds via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_array_parenthesized_ord_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main array parenthesized ord bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program arrayord;
+type
+  arr = array[(1 + 1) .. (Ord(Chr(52)) - 48)] of integer;
+var
+  a: arr;
+begin
+  a[2] := 10;
+  a[4] := 20;
+  WriteLn(Low(a));
+  WriteLn(High(a));
+  WriteLn(a[2] + a[4])
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-array-paren-ord-bounds", src);
+    let got = run_native_forth("main-feat-array-paren-ord-bounds-run", &stage1);
+    assert_eq!(got.trim_end(), "2\n4\n30", "array parenthesized ord bounds via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_const_ord_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange const ord bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program subrangeconstord;
+const
+  lo = (1 + 1);
+  hi = Ord(Chr(54)) - 48;
+type
+  small = lo .. hi;
+var
+  s: set of small;
+begin
+  s := [2, 6];
+  WriteLn(2 in s);
+  WriteLn(6 in s)
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-const-ord-bounds", src);
+    let got = run_native_forth("main-feat-subrange-const-ord-bounds-run", &stage1);
+    assert_eq!(got.trim_end(), "TRUE\nTRUE", "subrange const ord bounds via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_array_const_parenthesized_ord_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main array const parenthesized ord bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program arrayconstparenord;
+const
+  base = (1 + 1);
+  limit = Ord(Chr(52)) - 48;
+type
+  arr = array[base .. limit] of integer;
+var
+  a: arr;
+begin
+  a[2] := 10;
+  a[4] := 20;
+  WriteLn(Low(a));
+  WriteLn(High(a));
+  WriteLn(a[2] + a[4])
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-array-const-paren-ord-bounds",
+        src,
+    );
+    let got = run_native_forth("main-feat-array-const-paren-ord-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "2\n4\n30",
+        "array const parenthesized ord bounds via selfhost compiler"
+    );
+}
+
+#[test]
 fn selfhost_kpsc_main_compiles_real_large_exponent_feature() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
@@ -2112,6 +2345,38 @@ fn selfhost_kpsc_main_compiles_string_edit_feature() {
     );
     let got = run_native_forth("main-feat-string-edit-run", &stage1);
     assert_eq!(got.trim_end(), "ABCD\nAD\nAZD", "string-edit feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_string_literal_hextoint_expr_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main string literal HexToInt expr feature: missing native backend");
+        return;
+    }
+    let src = r#"program lithextoint;
+begin
+  WriteLn(HexToInt('00FF'))
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-lit-hextoint", src);
+    let got = run_native_forth("main-feat-lit-hextoint-run", &stage1);
+    assert_eq!(got.trim_end(), "255", "string literal HexToInt expr via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_string_literal_pos_expr_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main string literal Pos expr feature: missing native backend");
+        return;
+    }
+    let src = r#"program litpos;
+begin
+  WriteLn(Pos('BC', 'ABCD'))
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-lit-pos", src);
+    let got = run_native_forth("main-feat-lit-pos-run", &stage1);
+    assert_eq!(got.trim_end(), "2", "string literal Pos expr via selfhost compiler");
 }
 
 #[test]

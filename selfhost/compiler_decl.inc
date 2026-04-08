@@ -389,6 +389,366 @@ begin
     end
 end;
 
+function ResolveCapturedOrdinalConstIdent(var type_name: text_buf; prefer_high: boolean; var value: integer): boolean;
+var enum_const_idx: integer;
+    named_type_idx: integer;
+    const_idx: integer;
+begin
+  ResolveCapturedOrdinalConstIdent := false;
+  enum_const_idx := FindAstEnumConst(type_name);
+  if enum_const_idx >= 0 then
+    begin
+      value := ast_enum_const_value[enum_const_idx];
+      ResolveCapturedOrdinalConstIdent := true
+    end
+  else if TryResolveBuiltinConst(type_name, value) then
+    begin
+      ResolveCapturedOrdinalConstIdent := true
+    end
+  else
+    begin
+      const_idx := FindAstConst(type_name);
+      if const_idx >= 0 then
+        begin
+          value := ast_const_value[const_idx];
+          ResolveCapturedOrdinalConstIdent := true
+        end
+      else
+        begin
+          named_type_idx := FindAstType(type_name);
+          if named_type_idx >= 0 then
+            begin
+              if ast_type_kind[named_type_idx] = AST_DECL_SUBRANGE then
+                begin
+                  if prefer_high then
+                    begin
+                      value := ast_type_array_high[named_type_idx]
+                    end
+                  else
+                    begin
+                      value := ast_type_array_low[named_type_idx]
+                    end;
+                  ResolveCapturedOrdinalConstIdent := true
+                end
+            end
+        end
+    end
+end;
+
+function EvalCapturedOrdinalAstExpr(expr_idx: integer; prefer_high: boolean; var value: integer): boolean;
+var left_value: integer;
+    right_value: integer;
+    inner_value: integer;
+    const_idx: integer;
+    type_name: text_buf;
+    type_idx: integer;
+    arg_idx: integer;
+    text_idx: integer;
+begin
+  EvalCapturedOrdinalAstExpr := false;
+  if expr_idx < 0 then
+    begin
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_INT then
+    begin
+      value := ast_expr_int[expr_idx];
+      EvalCapturedOrdinalAstExpr := true
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_BOOL then
+    begin
+      value := ast_expr_int[expr_idx];
+      EvalCapturedOrdinalAstExpr := true
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_CHAR then
+    begin
+      value := ast_expr_int[expr_idx];
+      EvalCapturedOrdinalAstExpr := true
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
+    begin
+      if ast_expr_text_ref[expr_idx] >= 0 then
+        begin
+          ClearText(type_name);
+          text_idx := 0;
+          while text_idx <= IDENT_LAST do
+            begin
+              type_name[text_idx] := ast_ident_pool[ast_expr_text_ref[expr_idx]][text_idx];
+              text_idx := text_idx + 1
+            end;
+          const_idx := FindAstConst(type_name);
+          if const_idx >= 0 then
+            begin
+              value := ast_const_value[const_idx];
+              EvalCapturedOrdinalAstExpr := true
+            end
+          else
+            begin
+              type_idx := FindAstType(type_name);
+              if type_idx >= 0 then
+                begin
+                  if ast_type_kind[type_idx] = AST_DECL_SUBRANGE then
+                    begin
+                      if prefer_high then
+                        begin
+                          value := ast_type_array_high[type_idx]
+                        end
+                      else
+                        begin
+                          value := ast_type_array_low[type_idx]
+                        end;
+                      EvalCapturedOrdinalAstExpr := true
+                    end
+                end
+            end
+        end
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_UNARY then
+    begin
+      if EvalCapturedOrdinalAstExpr(ast_expr_left[expr_idx], prefer_high, inner_value) then
+        begin
+          if ast_expr_op[expr_idx] = TOK_PLUS then
+            begin
+              value := inner_value;
+              EvalCapturedOrdinalAstExpr := true
+            end
+          else if ast_expr_op[expr_idx] = TOK_MINUS then
+            begin
+              value := -inner_value;
+              EvalCapturedOrdinalAstExpr := true
+            end
+        end
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_BINOP then
+    begin
+      if EvalCapturedOrdinalAstExpr(ast_expr_left[expr_idx], prefer_high, left_value) then
+        begin
+          if EvalCapturedOrdinalAstExpr(ast_expr_right[expr_idx], prefer_high, right_value) then
+            begin
+              if ast_expr_op[expr_idx] = TOK_PLUS then
+                begin
+                  value := left_value + right_value;
+                  EvalCapturedOrdinalAstExpr := true
+                end
+              else if ast_expr_op[expr_idx] = TOK_MINUS then
+                begin
+                  value := left_value - right_value;
+                  EvalCapturedOrdinalAstExpr := true
+                end
+              else if ast_expr_op[expr_idx] = TOK_STAR then
+                begin
+                  value := left_value * right_value;
+                  EvalCapturedOrdinalAstExpr := true
+                end
+              else if ast_expr_op[expr_idx] = TOK_KW_DIV then
+                begin
+                  value := left_value div right_value;
+                  EvalCapturedOrdinalAstExpr := true
+                end
+              else if ast_expr_op[expr_idx] = TOK_KW_MOD then
+                begin
+                  value := left_value mod right_value;
+                  EvalCapturedOrdinalAstExpr := true
+                end
+            end
+        end
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          arg_idx := ast_arg_expr[ast_expr_left[expr_idx]];
+          if EvalCapturedOrdinalAstExpr(arg_idx, prefer_high, inner_value) then
+            begin
+              if ast_expr_op[expr_idx] = 2 then
+                begin
+                  value := inner_value;
+                  EvalCapturedOrdinalAstExpr := true
+                end
+              else if ast_expr_op[expr_idx] = 3 then
+                begin
+                  value := inner_value;
+                  EvalCapturedOrdinalAstExpr := true
+                end
+            end
+        end
+    end
+end;
+
+function ParseCapturedOrdinalBoundExpr(prefer_high: boolean; var value: integer): boolean;
+var expr_idx: integer;
+begin
+  expr_idx := BuildAstExpr();
+  ParseCapturedOrdinalBoundExpr := EvalCapturedOrdinalAstExpr(expr_idx, prefer_high, value)
+end;
+
+function IsCapturedOrdinalMulOp: boolean;
+begin
+  if token_kind = TOK_STAR then
+    begin
+      IsCapturedOrdinalMulOp := true
+    end
+  else if token_kind = TOK_KW_DIV then
+    begin
+      IsCapturedOrdinalMulOp := true
+    end
+  else if token_kind = TOK_KW_MOD then
+    begin
+      IsCapturedOrdinalMulOp := true
+    end
+  else
+    begin
+      IsCapturedOrdinalMulOp := false
+    end
+end;
+
+function IsCapturedOrdinalAddOp: boolean;
+begin
+  if token_kind = TOK_PLUS then
+    begin
+      IsCapturedOrdinalAddOp := true
+    end
+  else if token_kind = TOK_MINUS then
+    begin
+      IsCapturedOrdinalAddOp := true
+    end
+  else
+    begin
+      IsCapturedOrdinalAddOp := false
+    end
+end;
+
+function ParseCapturedOrdinalConstPrimary(prefer_high: boolean; var value: integer): boolean;
+var type_name: text_buf;
+begin
+  ParseCapturedOrdinalConstPrimary := false;
+  if token_kind = TOK_INT then
+    begin
+      value := token_value;
+      NextToken();
+      ParseCapturedOrdinalConstPrimary := true
+    end
+  else if token_kind = TOK_STR then
+    begin
+      if token_text[1] = #0 then
+        begin
+          value := Ord(token_text[0]);
+          NextToken();
+          ParseCapturedOrdinalConstPrimary := true
+        end
+    end
+  else if token_kind = TOK_KW_TRUE then
+    begin
+      value := 1;
+      NextToken();
+      ParseCapturedOrdinalConstPrimary := true
+    end
+  else if token_kind = TOK_KW_FALSE then
+    begin
+      value := 0;
+      NextToken();
+      ParseCapturedOrdinalConstPrimary := true
+    end
+  else if token_kind = TOK_IDENT then
+    begin
+      ClearText(type_name);
+      StrCopy(token_text, type_name);
+      NextToken();
+      ParseCapturedOrdinalConstPrimary := ResolveCapturedOrdinalConstIdent(type_name, prefer_high, value)
+    end
+end;
+
+function ParseCapturedOrdinalConstUnary(prefer_high: boolean; var value: integer): boolean;
+var inner_value: integer;
+begin
+  ParseCapturedOrdinalConstUnary := false;
+  if token_kind = TOK_PLUS then
+    begin
+      NextToken();
+      if ParseCapturedOrdinalConstUnary(prefer_high, inner_value) then
+        begin
+          value := inner_value;
+          ParseCapturedOrdinalConstUnary := true
+        end
+    end
+  else if token_kind = TOK_MINUS then
+    begin
+      NextToken();
+      if ParseCapturedOrdinalConstUnary(prefer_high, inner_value) then
+        begin
+          value := -inner_value;
+          ParseCapturedOrdinalConstUnary := true
+        end
+    end
+  else
+    begin
+      ParseCapturedOrdinalConstUnary := ParseCapturedOrdinalConstPrimary(prefer_high, value)
+    end
+end;
+
+function ParseCapturedOrdinalConstMul(prefer_high: boolean; var value: integer): boolean;
+var rhs_value: integer;
+    op_kind: integer;
+begin
+  ParseCapturedOrdinalConstMul := ParseCapturedOrdinalConstUnary(prefer_high, value);
+  if ParseCapturedOrdinalConstMul then
+    begin
+      while IsCapturedOrdinalMulOp() do
+        begin
+          op_kind := token_kind;
+          NextToken();
+          if ParseCapturedOrdinalConstUnary(prefer_high, rhs_value) then
+            begin
+              if op_kind = TOK_STAR then
+                begin
+                  value := value * rhs_value
+                end
+              else if op_kind = TOK_KW_DIV then
+                begin
+                  value := value div rhs_value
+                end
+              else
+                begin
+                  value := value mod rhs_value
+                end
+            end
+          else
+            begin
+              ParseCapturedOrdinalConstMul := false
+            end
+        end
+    end
+end;
+
+function ParseCapturedOrdinalConstExpr(prefer_high: boolean; var value: integer): boolean;
+var rhs_value: integer;
+    op_kind: integer;
+begin
+  ParseCapturedOrdinalConstExpr := ParseCapturedOrdinalConstMul(prefer_high, value);
+  if ParseCapturedOrdinalConstExpr then
+    begin
+      while IsCapturedOrdinalAddOp() do
+        begin
+          op_kind := token_kind;
+          NextToken();
+          if ParseCapturedOrdinalConstMul(prefer_high, rhs_value) then
+            begin
+              if op_kind = TOK_PLUS then
+                begin
+                  value := value + rhs_value
+                end
+              else
+                begin
+                  value := value - rhs_value
+                end
+            end
+          else
+            begin
+              ParseCapturedOrdinalConstExpr := false
+            end
+        end
+    end
+end;
+
 procedure ParseCapturedArrayTypeSpec(type_idx: integer);
 var low_vals: array[0..7] of integer;
     high_vals: array[0..7] of integer;
@@ -419,19 +779,17 @@ begin
     begin
       lo_val := 0;
       hi_val := 0;
-      if token_kind = TOK_INT then
+      if not ParseCapturedOrdinalBoundExpr(false, lo_val) then
         begin
-          lo_val := token_value
+          bootstrap_capture_failed := true
         end;
-      ParseExpr();
       if token_kind = TOK_DOTDOT then
         begin
           NextToken();
-          if token_kind = TOK_INT then
+          if not ParseCapturedOrdinalBoundExpr(true, hi_val) then
             begin
-              hi_val := token_value
-            end;
-          ParseExpr()
+              bootstrap_capture_failed := true
+            end
         end
       else
         begin
@@ -589,95 +947,18 @@ end;
 procedure ParseCapturedSubrangeTypeSpec(type_idx: integer);
 var low_value: integer;
     high_value: integer;
-    type_name: text_buf;
-    enum_const_idx: integer;
-    named_type_idx: integer;
 begin
   low_value := 0;
   high_value := 0;
-  if token_kind = TOK_INT then
-    begin
-      low_value := token_value
-    end
-  else if token_kind = TOK_IDENT then
-    begin
-      ClearText(type_name);
-      StrCopy(token_text, type_name);
-      enum_const_idx := FindAstEnumConst(type_name);
-      if enum_const_idx >= 0 then
-        begin
-          low_value := ast_enum_const_value[enum_const_idx]
-        end
-      else if TryResolveBuiltinConst(type_name, low_value) then
-        begin
-        end
-      else
-        begin
-          named_type_idx := FindAstType(type_name);
-          if named_type_idx >= 0 then
-            begin
-              if ast_type_kind[named_type_idx] = AST_DECL_SUBRANGE then
-                begin
-                  low_value := ast_type_array_low[named_type_idx]
-                end
-              else
-                begin
-                  bootstrap_capture_failed := true
-                end
-            end
-          else
-            begin
-              bootstrap_capture_failed := true
-            end
-        end
-    end
-  else
+  if not ParseCapturedOrdinalBoundExpr(false, low_value) then
     begin
       bootstrap_capture_failed := true
     end;
-  ParseExpr();
   ExpectKind(TOK_DOTDOT);
-  if token_kind = TOK_INT then
-    begin
-      high_value := token_value
-    end
-  else if token_kind = TOK_IDENT then
-    begin
-      ClearText(type_name);
-      StrCopy(token_text, type_name);
-      enum_const_idx := FindAstEnumConst(type_name);
-      if enum_const_idx >= 0 then
-        begin
-          high_value := ast_enum_const_value[enum_const_idx]
-        end
-      else if TryResolveBuiltinConst(type_name, high_value) then
-        begin
-        end
-      else
-        begin
-          named_type_idx := FindAstType(type_name);
-          if named_type_idx >= 0 then
-            begin
-              if ast_type_kind[named_type_idx] = AST_DECL_SUBRANGE then
-                begin
-                  high_value := ast_type_array_high[named_type_idx]
-                end
-              else
-                begin
-                  bootstrap_capture_failed := true
-                end
-            end
-          else
-            begin
-              bootstrap_capture_failed := true
-            end
-        end
-    end
-  else
+  if not ParseCapturedOrdinalBoundExpr(true, high_value) then
     begin
       bootstrap_capture_failed := true
     end;
-  ParseExpr();
   ast_type_array_low[type_idx] := low_value;
   ast_type_array_high[type_idx] := high_value
 end;
@@ -860,11 +1141,15 @@ begin
 end;
 
 procedure ParseConstDecl;
+var const_name: text_buf;
+    const_value: integer;
+    can_capture: boolean;
 begin
   if token_kind <> TOK_IDENT then
     begin
       FailParse()
     end;
+  StrCopy(token_text, const_name);
   NextToken();
   if token_kind = TOK_COLON then
     begin
@@ -872,7 +1157,12 @@ begin
       ParseTypeRef()
     end;
   ExpectKind(TOK_EQ);
-  ParseExpr();
+  const_value := 0;
+  can_capture := ParseCapturedOrdinalBoundExpr(false, const_value);
+  if can_capture then
+    begin
+      AppendAstConst(const_name, const_value)
+    end;
   ExpectKind(TOK_SEMI)
 end;
 

@@ -18,10 +18,27 @@ NEXT INSTRUCTION (2026-04-08):
 
 Current State
 - `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
-  - result: `34 passed / 0 failed`
+  - result before string-literal expr work: `34 passed / 0 failed`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result after string-literal expr + arithmetic-bounds work: `38 passed / 0 failed`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result after decl-time const-name bounds work: `40 passed / 0 failed`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result after decl-time `const` builtin/parenthesized bound tests: `44 passed / 0 failed`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result after documenting leading-parenthesized subrange gap: `44 passed / 0 failed / 1 ignored`
 - `cargo test selfhost_preprocessed_kpsc_main_direct_suite_covers_sample_set -- --nocapture`
   - result: pass
 - Stage1 now covers and passes:
+  - multi-character string literals in expression position for `HexToInt` and `Pos`
+  - arithmetic constant folding in captured subrange bounds
+  - arithmetic constant folding in captured array bounds
+  - user-defined `const` names in captured subrange bounds
+  - user-defined `const` names in captured array bounds, including direct arithmetic
+  - parenthesized arithmetic and `Ord/Chr` inside ordinal `const` declarations
+    consumed by captured subrange/array bounds
+  - nearby covered cases are locked while leading-parenthesized subrange type
+    syntax remains explicitly ignored as unresolved
   - generic/mixed/exponent/large-exponent `real`
   - set literal range
   - subrange-set range
@@ -30,6 +47,17 @@ Current State
   - subrange enum/named bounds
 
 What Changed In This Round
+- Added multi-character string-literal AST/codegen support for expression
+  position in selfhost.
+- Added captured ordinal arithmetic evaluation for array/subrange bounds in
+  selfhost type parsing.
+- Added a lightweight selfhost const table so decl-time bound capture can
+  resolve user-defined ordinal `const` names.
+- Confirmed decl-time ordinal `const` capture across parenthesized arithmetic
+  and `Ord/Chr(...)` forms used later by array/subrange bounds.
+- Added an explicit ignored regression for leading-parenthesized subrange type
+  syntax so the unresolved enum/subrange ambiguity stays visible without
+  destabilizing stage1.
 - Removed most normal-program special-case emit logic from
   `selfhost/compiler_codegen.inc`.
 - Added real overlapping variant-record layout instead of pure flat field-count
@@ -54,6 +82,12 @@ Key Selfhost Delta
     treating variant cases as a pure flattened append-only list.
   - subrange capture now accepts major ordinal-constant paths:
     integer literals, enum consts, builtin consts, and existing subrange types.
+  - captured array/subrange bounds now also evaluate arithmetic forms using
+    `+`, `-`, `*`, `div`, and `mod` over supported ordinal constants.
+  - `const` declarations now feed a lightweight ordinal const table used by
+    captured declaration-bound evaluation.
+- `selfhost/types.inc`
+  - now stores selfhost user-defined const names/values for decl-time lookup.
 - `selfhost/types.inc`
   - record size is now tracked as actual cell count via
     `ast_type_record_size`.
@@ -61,10 +95,21 @@ Key Selfhost Delta
 - `selfhost/compiler_expr.inc`
   - continues to carry `AST_EXPR_REAL` and set-range AST support added in this
     stage1 pass.
+  - now accepts multi-character `TOK_STR` in expression position as
+    `AST_EXPR_STR`.
 - `selfhost/compiler_lexer.inc`
   - continues to preserve decimal/exponent real literals as single tokens.
 - `tests/selfhost_smoke.rs`
   - suite extended with:
+    - `string_literal_hextoint_expr`
+    - `string_literal_pos_expr`
+    - `subrange_arithmetic_bounds`
+    - `array_arithmetic_bounds`
+    - `subrange_const_bounds`
+    - `array_const_arithmetic_bounds`
+    - `subrange_const_ord_bounds`
+    - `array_const_parenthesized_ord_bounds`
+    - ignored: `subrange_parenthesized_ord_bounds`
     - `24_real_generic`
     - `25_real_mixed`
     - `26_set_literal_range`
@@ -78,6 +123,14 @@ Key Selfhost Delta
 
 Verified Tests On This Worktree
 - Focused tests run and passing:
+  - `cargo test selfhost_kpsc_main_compiles_string_literal_hextoint_expr_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_string_literal_pos_expr_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_subrange_arithmetic_bounds_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_array_arithmetic_bounds_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_subrange_const_bounds_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_array_const_arithmetic_bounds_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_subrange_const_ord_bounds_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_array_const_parenthesized_ord_bounds_feature -- --nocapture`
   - `cargo test selfhost_kpsc_main_compiles_real_feature -- --nocapture`
   - `cargo test selfhost_kpsc_main_compiles_generic_real_feature -- --nocapture`
   - `cargo test selfhost_kpsc_main_compiles_mixed_real_feature -- --nocapture`
@@ -92,7 +145,7 @@ Verified Tests On This Worktree
   - `cargo test selfhost_preprocessed_kpsc_main_direct_suite_covers_sample_set -- --nocapture`
 - Full stage1 confirmation:
   - `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
-  - result: `34 passed / 0 failed`
+  - result: `44 passed / 0 failed / 1 ignored`
 
 Stage1 Debts Still Present
 - Bootstrap-only seed mode still exists.
@@ -100,15 +153,16 @@ Stage1 Debts Still Present
     `selfhost/compiler_codegen.inc`.
   - This is now isolated from normal program compilation, but it is still a
     special bootstrap path.
-- String literal expressions are still incomplete.
-  - In `selfhost/compiler_expr.inc`, `TOK_STR` is still only accepted as a
-    single-character expression.
-  - Multi-character string literals in expression position still fail with
-    `parse_error_reason := 201`.
 - Subrange bounds are more general, but not yet full constant-expression
   evaluation.
-  - Current support covers major ordinal constant paths, but not arbitrary Rust-
-    equivalent const folding.
+  - Current support now covers major ordinal constant paths plus direct
+    arithmetic over them in captured array/subrange bounds, plus ordinal
+    `const` declarations built from parenthesized arithmetic and `Ord/Chr`.
+  - It still does not provide broad Rust-equivalent const folding, especially
+    for leading-parenthesized subrange type syntax, richer builtin forms, and
+    non-ordinal/general const usage.
+  - A direct regression for the leading-parenthesized subrange syntax is now
+    present but intentionally ignored until parser disambiguation is designed.
 - Real strictness improved at the literal-parsing boundary, but remaining
   backend/semantic parity should still be audited.
   - Literal parsing now goes through `READ-F32`, which is much closer to Rust.
@@ -120,11 +174,34 @@ Interpretation
   - green in the suite
   - materially stricter than before
   - still not fully complete
-- The biggest remaining known user-visible semantic gap is multi-character
-  string literals in expression position.
+- The biggest remaining known semantic gap is now broader const-evaluation
+  parity in declarations, plus the remaining bootstrap-only seed path.
 - The next completeness pass should focus on auditing for other remaining
   shortcuts, adding tests first where behavior is still uncertain, and only
   then resuming stage2.
+
+Remaining Work Estimate
+- Remaining stage1 work should be treated as late-stage completion work, not an
+  open-ended rebuild.
+- Rough estimate:
+  - about 15% to 25% of the stage1 completion effort still remains
+  - enough work for several focused iterations, but no longer an early-stage
+    unknown
+- Heaviest remaining tasks:
+  - audit for any remaining semantic shortcuts or bypass paths
+  - expand subrange handling further if Rust-side const-expression parity is
+    required
+  - audit broader real-operation parity beyond literal decoding
+
+Next Work Instruction
+- Next concrete task should be:
+  1. audit remaining decl-time const gaps beyond direct arithmetic
+  2. add regression tests for whichever unsupported const forms are still
+     required
+  3. audit real comparison/operation parity beyond literal decoding
+  4. re-run `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+- After that, continue a structured audit for remaining stage1 shortcuts rather
+  than jumping to stage2.
 
 Relevant Files
 - `/home/kamitani/kpascal/resume.txt`
