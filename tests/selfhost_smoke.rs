@@ -2099,3 +2099,76 @@ fn selfhost_kpsc_main_compiles_scalar_feature() {
     let got = run_native_forth("main-feat-scalar-run", &stage1);
     assert_eq!(got.trim_end(), "7\n25\nTRUE\nQ\n66", "scalar feature via selfhost compiler");
 }
+
+// ---------------------------------------------------------------------------
+// Stage2: selfhost compiler compiled by stage1
+// ---------------------------------------------------------------------------
+
+fn cached_stage2_forth() -> String {
+    let selfhost_src = preprocess_pascal_file("selfhost/kpsc_main.pas");
+    cached_preprocessed_selfhost_main_stage1_output("stage2-compiler", &selfhost_src)
+}
+
+#[test]
+fn selfhost_stage2_compiles_feature_programs() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping stage2 feature suite: missing native backend");
+        return;
+    }
+
+    let stage2_forth = cached_stage2_forth();
+    assert!(
+        stage2_forth.contains(": MAIN"),
+        "stage2 did not emit a Forth entrypoint\n{}",
+        &stage2_forth[..stage2_forth.len().min(2000)]
+    );
+
+    let (_work_dir, stage2_bin) = build_native_forth_binary("stage2-compiler-bin", &stage2_forth);
+
+    let cases = [
+        ("arith",        include_str!("../selfhost/kpsc_arith.pas"),    "14"),
+        ("scalar",       include_str!("../selfhost/kpsc_scalar.pas"),   "7\n25\nTRUE\nQ\n66"),
+        ("ctrl",         include_str!("../selfhost/kpsc_ctrl.pas"),     "1\n2\n3"),
+        ("routines",     include_str!("../selfhost/kpsc_routines.pas"), "9"),
+        ("record",       include_str!("../selfhost/kpsc_record.pas"),   "33"),
+        ("string",       include_str!("../selfhost/kpsc_string.pas"),   "ABC\n2"),
+    ];
+
+    for (label, src, expected) in cases {
+        eprintln!("stage2 compiling: {label}");
+        let encoded = encode_ascii_program(src);
+        let emitted_forth = run_native_binary_with_input(&stage2_bin, &encoded);
+        let got = run_native_forth(&format!("stage2-feat-{label}"), &emitted_forth);
+        assert_eq!(got.trim_end(), expected, "stage2 failed case: {label}");
+    }
+}
+
+#[test]
+fn selfhost_stage2_compiles_sample_programs() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping stage2 sample suite: missing native backend");
+        return;
+    }
+
+    let stage2_forth = cached_stage2_forth();
+    let (_work_dir, stage2_bin) = build_native_forth_binary("stage2-samples-bin", &stage2_forth);
+
+    let cases = [
+        ("hello",   include_str!("samples/01_hello.pas"),              "HELLO"),
+        ("arith",   include_str!("samples/02_arithmetic.pas"),         "14\n3\n2"),
+        ("control", include_str!("samples/03_control_flow.pas"),       "12"),
+        ("record",  include_str!("samples/05_record_with.pas"),        "33"),
+        ("routine", include_str!("samples/17_nested_routines.pas"),    "9"),
+        ("scalar",  include_str!("samples/20_scalar_builtins.pas"),    "7\n25\nTRUE\nQ\n66"),
+    ];
+
+    for (label, src, expected) in cases {
+        eprintln!("stage2 sample: {label}");
+        let encoded = encode_ascii_program(src);
+        let emitted_forth = run_native_binary_with_input(&stage2_bin, &encoded);
+        let got = run_native_forth(&format!("stage2-sample-{label}"), &emitted_forth);
+        assert_eq!(got.trim_end(), expected, "stage2 sample failed: {label}");
+    }
+}

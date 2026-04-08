@@ -360,6 +360,60 @@ begin
                             begin
                               BuiltinExprKindByName := 7
                             end
+                          else
+                            begin
+                              ClearText(expected_name);
+                              expected_name := 'pos';
+                              if StrCmpIgnoreCase(name, expected_name) = 0 then
+                                begin
+                                  BuiltinExprKindByName := 8
+                                end
+                              else
+                                begin
+                                  ClearText(expected_name);
+                                  expected_name := 'hextoint';
+                                  if StrCmpIgnoreCase(name, expected_name) = 0 then
+                                    begin
+                                      BuiltinExprKindByName := 9
+                                    end
+                                  else
+                                    begin
+                                      ClearText(expected_name);
+                                      expected_name := 'low';
+                                      if StrCmpIgnoreCase(name, expected_name) = 0 then
+                                        begin
+                                          BuiltinExprKindByName := 10
+                                        end
+                                  else
+                                    begin
+                                      ClearText(expected_name);
+                                      expected_name := 'high';
+                                      if StrCmpIgnoreCase(name, expected_name) = 0 then
+                                        begin
+                                          BuiltinExprKindByName := 11
+                                        end
+                                      else
+                                        begin
+                                          ClearText(expected_name);
+                                          expected_name := 'round';
+                                          if StrCmpIgnoreCase(name, expected_name) = 0 then
+                                            begin
+                                              BuiltinExprKindByName := 13
+                                            end
+                                          else
+                                            begin
+                                              ClearText(expected_name);
+                                              expected_name := 'trunc';
+                                              if StrCmpIgnoreCase(name, expected_name) = 0 then
+                                                begin
+                                                  BuiltinExprKindByName := 14
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                                end
+                            end
                         end
                     end
                 end
@@ -372,13 +426,62 @@ function BuildAstPrimaryExpr: integer;
 var expr_idx: integer;
     index_idx: integer;
     field_idx: integer;
+    with_base_idx: integer;
     const_value: integer;
-    const_candidate: boolean;
-    name_idx: integer;
+    enum_const_idx: integer;
     temp_text: text_buf;
+    set_expr_idx: integer;
+    zero_expr_idx: integer;
 begin
   BuildAstPrimaryExpr := -1;
-  if token_kind = TOK_INT then
+  if token_kind = TOK_LBRACK then
+    begin
+      NextToken();
+      zero_expr_idx := NewAstExpr(AST_EXPR_INT);
+      ast_expr_int[zero_expr_idx] := 0;
+      set_expr_idx := zero_expr_idx;
+      while token_kind <> TOK_RBRACK do
+        begin
+          expr_idx := NewAstExpr(AST_EXPR_CALL);
+          ast_expr_op[expr_idx] := 12;
+          ast_expr_left[expr_idx] := ast_arg_count;
+          ast_expr_right[expr_idx] := 0;
+          AppendAstCallExprArg(expr_idx, BuildAstExpr());
+          if token_kind = TOK_DOTDOT then
+            begin
+              bootstrap_capture_failed := true;
+              parse_error_reason := 206;
+              FailParse()
+            end;
+          if set_expr_idx = zero_expr_idx then
+            begin
+              set_expr_idx := expr_idx
+            end
+          else
+            begin
+              set_expr_idx := BuildAstBinOpExpr(set_expr_idx, TOK_KW_OR, expr_idx)
+            end;
+          if token_kind = TOK_COMMA then
+            begin
+              NextToken()
+            end
+        end;
+      ExpectKind(TOK_RBRACK);
+      BuildAstPrimaryExpr := set_expr_idx
+    end
+  else if token_kind = TOK_REAL_LIT then
+    begin
+      expr_idx := NewAstExpr(AST_EXPR_CALL);
+      ast_expr_op[expr_idx] := 15;
+      ast_expr_left[expr_idx] := ast_arg_count;
+      ast_expr_right[expr_idx] := 0;
+      index_idx := NewAstExpr(AST_EXPR_INT);
+      ast_expr_int[index_idx] := token_value;
+      AppendAstCallExprArg(expr_idx, index_idx);
+      NextToken();
+      BuildAstPrimaryExpr := expr_idx
+    end
+  else if token_kind = TOK_INT then
     begin
       expr_idx := NewAstExpr(AST_EXPR_INT);
       ast_expr_int[expr_idx] := token_value;
@@ -444,49 +547,38 @@ begin
         end
       else
         begin
-          const_candidate := false;
-          name_idx := 0;
-          while name_idx <= 255 do
-            begin
-              if temp_text[name_idx] = #0 then
-                begin
-                  name_idx := 256
-                end
-              else
-                begin
-                  if temp_text[name_idx] = '_' then
-                    begin
-                      const_candidate := true;
-                      name_idx := 256
-                    end
-                  else if temp_text[name_idx] >= 'A' then
-                    begin
-                      if temp_text[name_idx] <= 'Z' then
-                        begin
-                          const_candidate := true;
-                          name_idx := 256
-                        end
-                      else
-                        begin
-                          name_idx := name_idx + 1
-                        end
-                    end
-                  else
-                    begin
-                      name_idx := name_idx + 1
-                    end
-                end
-            end;
-          if const_candidate and TryResolveBuiltinConst(temp_text, const_value) then
+          if TryResolveBuiltinConst(temp_text, const_value) then
             begin
               expr_idx := NewAstExpr(AST_EXPR_INT);
               ast_expr_int[expr_idx] := const_value
             end
           else
             begin
-              expr_idx := NewAstExpr(AST_EXPR_IDENT);
-              ast_expr_int[expr_idx] := FindScopedAstVar(temp_text);
-              ast_expr_text_ref[expr_idx] := NewAstIdent(temp_text)
+              enum_const_idx := FindAstEnumConst(temp_text);
+              if enum_const_idx >= 0 then
+                begin
+                  expr_idx := NewAstExpr(AST_EXPR_INT);
+                  ast_expr_int[expr_idx] := ast_enum_const_value[enum_const_idx]
+                end
+              else
+                begin
+                  expr_idx := NewAstExpr(AST_EXPR_IDENT);
+                  ast_expr_int[expr_idx] := FindScopedAstVar(temp_text);
+                  ast_expr_text_ref[expr_idx] := NewAstIdent(temp_text);
+                  if ast_expr_int[expr_idx] < 0 then
+                    begin
+                      if ast_with_type_ref >= 0 then
+                        begin
+                          if FindAstFieldByIdent(ast_with_type_ref, ast_ident_pool[ast_expr_text_ref[expr_idx]]) >= 0 then
+                            begin
+                              with_base_idx := NewAstExpr(AST_EXPR_IDENT);
+                              ast_expr_int[with_base_idx] := ast_with_var;
+                              ast_expr_kind[expr_idx] := AST_EXPR_FIELD;
+                              ast_expr_left[expr_idx] := with_base_idx
+                            end
+                        end
+                    end
+                end
             end;
           while IsSelectorToken() do
             begin
@@ -508,11 +600,20 @@ begin
                 begin
                   NextToken();
                   index_idx := BuildAstExpr();
-                  ExpectKind(TOK_RBRACK);
                   field_idx := NewAstExpr(AST_EXPR_INDEX);
                   ast_expr_left[field_idx] := expr_idx;
                   ast_expr_right[field_idx] := index_idx;
-                  expr_idx := field_idx
+                  expr_idx := field_idx;
+                  while token_kind = TOK_COMMA do
+                    begin
+                      NextToken();
+                      index_idx := BuildAstExpr();
+                      field_idx := NewAstExpr(AST_EXPR_INDEX);
+                      ast_expr_left[field_idx] := expr_idx;
+                      ast_expr_right[field_idx] := index_idx;
+                      expr_idx := field_idx
+                    end;
+                  ExpectKind(TOK_RBRACK)
                 end
               else
                 begin
@@ -540,6 +641,22 @@ begin
       parse_error_reason := 203;
       FailParse()
     end
+end;
+
+function BuildAstSetMembershipExpr(left_idx: integer; right_idx: integer): integer;
+var bit_expr_idx: integer;
+    and_expr_idx: integer;
+    zero_expr_idx: integer;
+begin
+  bit_expr_idx := NewAstExpr(AST_EXPR_CALL);
+  ast_expr_op[bit_expr_idx] := 12;
+  ast_expr_left[bit_expr_idx] := ast_arg_count;
+  ast_expr_right[bit_expr_idx] := 0;
+  AppendAstCallExprArg(bit_expr_idx, left_idx);
+  and_expr_idx := BuildAstBinOpExpr(right_idx, TOK_KW_AND, bit_expr_idx);
+  zero_expr_idx := NewAstExpr(AST_EXPR_INT);
+  ast_expr_int[zero_expr_idx] := 0;
+  BuildAstSetMembershipExpr := BuildAstBinOpExpr(and_expr_idx, TOK_NE, zero_expr_idx)
 end;
 
 function BuildAstUnaryExpr: integer;
@@ -616,7 +733,14 @@ begin
       op_kind := token_kind;
       NextToken();
       right_idx := BuildAstAddExpr();
-      expr_idx := BuildAstBinOpExpr(expr_idx, op_kind, right_idx)
+      if op_kind = TOK_KW_IN then
+        begin
+          expr_idx := BuildAstSetMembershipExpr(expr_idx, right_idx)
+        end
+      else
+        begin
+          expr_idx := BuildAstBinOpExpr(expr_idx, op_kind, right_idx)
+        end
     end;
   BuildAstRelExpr := expr_idx
 end;

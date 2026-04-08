@@ -251,9 +251,14 @@ end;
 
 procedure ReadNumberToken;
 var i: integer;
+    frac_value: integer;
+    frac_nonzero: boolean;
+    peek_char: char;
 begin
   ClearToken();
   i := 0;
+  frac_value := 0;
+  frac_nonzero := false;
   while i < 100000 do
     begin
       if stream_eof then
@@ -271,7 +276,52 @@ begin
           i := 100000
         end
     end;
-  token_kind := TOK_INT
+  if stream_current_char = '.' then
+    begin
+      AdvanceSourceStream();
+      if IsDigit(stream_current_char) then
+        begin
+          while i < 100000 do
+            begin
+              if stream_eof then
+                begin
+                  i := 100000
+                end
+              else if IsDigit(stream_current_char) then
+                begin
+                  frac_value := frac_value * 10 + Ord(stream_current_char) - Ord('0');
+                  if stream_current_char <> '0' then
+                    begin
+                      frac_nonzero := true
+                    end;
+                  i := i + 1;
+                  AdvanceSourceStream()
+                end
+              else
+                begin
+                  i := 100000
+                end
+            end;
+          token_kind := TOK_REAL_LIT;
+          if frac_nonzero then
+            begin
+              bootstrap_capture_failed := true
+            end
+        end
+      else
+        begin
+          peek_char := stream_current_char;
+          source_buffered_char := peek_char;
+          source_has_buffered_char := true;
+          stream_current_char := '.';
+          stream_eof := false;
+          token_kind := TOK_INT
+        end
+    end
+  else
+    begin
+      token_kind := TOK_INT
+    end
 end;
 
 procedure ReadCharCodeToken;

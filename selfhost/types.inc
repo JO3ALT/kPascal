@@ -16,6 +16,7 @@ const
   MAX_AST_PARAMS = 16384;
   MAX_AST_TEXT_LITS = 16384;
   MAX_AST_IDENTS = 65536;
+  MAX_AST_ENUM_CONSTS = 8192;
   CAPTURE_KIND_NONE = 0;
   CAPTURE_KIND_INT = 1;
   CAPTURE_KIND_TEXT = 2;
@@ -57,9 +58,13 @@ const
   AST_TYPE_REAL = 4;
   AST_TYPE_RECORD = 5;
   AST_TYPE_ARRAY = 6;
+  AST_TYPE_POINTER = 7;
   AST_DECL_NONE = 0;
   AST_DECL_RECORD = 1;
   AST_DECL_ARRAY = 2;
+  AST_DECL_ENUM = 3;
+  AST_DECL_SET = 4;
+  AST_DECL_SUBRANGE = 5;
   AST_ROUTINE_NONE = 0;
   AST_ROUTINE_PROCEDURE = 1;
   AST_ROUTINE_FUNCTION = 2;
@@ -130,6 +135,7 @@ const
   TOK_KW_BOOLEAN = 79;
   TOK_KW_CHAR = 80;
   TOK_KW_REAL = 81;
+  TOK_REAL_LIT = 82;
 
 var
   token_text: text_buf;
@@ -181,6 +187,8 @@ var
   stream_eof: boolean;
   stream_remaining: integer;
   source_next_code: integer;
+  source_buffered_char: char;
+  source_has_buffered_char: boolean;
   token_kind: integer;
   token_value: integer;
   saw_probe_read_prefix: boolean;
@@ -200,6 +208,8 @@ var
   captured_writeln_text: array[0..127] of text_buf;
   ast_capture_enabled: boolean;
   ast_capture_var_names: boolean;
+  ast_with_var: integer;
+  ast_with_type_ref: integer;
   ast_var_count: integer;
   ast_var_name: array[0..8191] of ident_buf;
   ast_var_type: array[0..8191] of integer;
@@ -209,8 +219,17 @@ var
   ast_type_name: array[0..2047] of ident_buf;
   ast_type_kind: array[0..2047] of integer;
   ast_type_elem_type: array[0..2047] of integer;
+  ast_type_elem_type_ref: array[0..2047] of integer;
+  ast_type_array_low: array[0..2047] of integer;
+  ast_type_array_high: array[0..2047] of integer;
+  ast_type_array_len: array[0..2047] of integer;
+  ast_type_array_size: array[0..2047] of integer;
   ast_type_field_start: array[0..2047] of integer;
   ast_type_field_count: array[0..2047] of integer;
+  ast_enum_const_count: integer;
+  ast_enum_const_name: array[0..8191] of ident_buf;
+  ast_enum_const_value: array[0..8191] of integer;
+  ast_enum_const_type_ref: array[0..8191] of integer;
   ast_field_count: integer;
   ast_field_name: array[0..16383] of ident_buf;
   ast_field_type: array[0..16383] of integer;
@@ -258,6 +277,9 @@ var
   ast_param_type: array[0..16383] of integer;
   ast_param_type_ref: array[0..16383] of integer;
   ast_param_by_ref: array[0..16383] of integer;
+  ast_param_hidden: array[0..16383] of integer;
+  ast_param_conformant_bound_start: array[0..16383] of integer;
+  ast_param_conformant_dim_count: array[0..16383] of integer;
   ast_text_lit_count: integer;
   ast_text_lit: array[0..16383] of lit_buf;
   ast_ident_count: integer;
@@ -2071,6 +2093,69 @@ begin
     end
 end;
 
+function FindAstEnumConst(var name: text_buf): integer;
+var idx: integer;
+begin
+  idx := 0;
+  FindAstEnumConst := -1;
+  while idx < ast_enum_const_count do
+    begin
+      if TextIdentEq(name, ast_enum_const_name[idx]) then
+        begin
+          FindAstEnumConst := idx;
+          idx := ast_enum_const_count
+        end
+      else
+        begin
+          idx := idx + 1
+        end
+    end
+end;
+
+function FindAstEnumConstByIdent(var name: ident_buf): integer;
+var idx: integer;
+begin
+  idx := 0;
+  FindAstEnumConstByIdent := -1;
+  while idx < ast_enum_const_count do
+    begin
+      if IdentEq(ast_enum_const_name[idx], name) then
+        begin
+          FindAstEnumConstByIdent := idx;
+          idx := ast_enum_const_count
+        end
+      else
+        begin
+          idx := idx + 1
+        end
+    end
+end;
+
+function AstTypeCellCount(type_code: integer; type_ref: integer): integer;
+begin
+  AstTypeCellCount := 1;
+  if type_code = AST_TYPE_ARRAY then
+    begin
+      if type_ref >= 0 then
+        begin
+          if ast_type_array_size[type_ref] > 0 then
+            begin
+              AstTypeCellCount := ast_type_array_size[type_ref]
+            end
+        end
+    end
+  else if type_code = AST_TYPE_RECORD then
+    begin
+      if type_ref >= 0 then
+        begin
+          if ast_type_field_count[type_ref] > 0 then
+            begin
+              AstTypeCellCount := ast_type_field_count[type_ref]
+            end
+        end
+    end
+end;
+
 function NewAstType(var name: text_buf; kind: integer): integer;
 var idx: integer;
 begin
@@ -2085,9 +2170,30 @@ begin
   CopyTextToIdent(name, ast_type_name[idx]);
   ast_type_kind[idx] := kind;
   ast_type_elem_type[idx] := AST_TYPE_UNKNOWN;
+  ast_type_elem_type_ref[idx] := -1;
+  ast_type_array_low[idx] := 0;
+  ast_type_array_high[idx] := 0;
+  ast_type_array_len[idx] := 0;
+  ast_type_array_size[idx] := 0;
   ast_type_field_start[idx] := ast_field_count;
   ast_type_field_count[idx] := 0;
   NewAstType := idx
+end;
+
+procedure AppendAstEnumConst(type_idx: integer; var name: text_buf; value: integer);
+var idx: integer;
+begin
+  if ast_enum_const_count >= MAX_AST_ENUM_CONSTS then
+    begin
+      bootstrap_capture_failed := true;
+      parse_error_reason := 110;
+      FailParse()
+    end;
+  idx := ast_enum_const_count;
+  ast_enum_const_count := ast_enum_const_count + 1;
+  CopyTextToIdent(name, ast_enum_const_name[idx]);
+  ast_enum_const_value[idx] := value;
+  ast_enum_const_type_ref[idx] := type_idx
 end;
 
 procedure AppendAstField(type_idx: integer; var name: text_buf; field_type: integer);
@@ -2263,6 +2369,9 @@ begin
   CopyTextToIdent(name, ast_param_name[idx]);
   ast_param_type[idx] := type_code;
   ast_param_type_ref[idx] := -1;
+  ast_param_hidden[idx] := 0;
+  ast_param_conformant_bound_start[idx] := -1;
+  ast_param_conformant_dim_count[idx] := 0;
   if by_ref then
     begin
       ast_param_by_ref[idx] := 1
@@ -2330,6 +2439,8 @@ begin
   stream_eof := false;
   stream_remaining := 0;
   source_next_code := 0;
+  source_buffered_char := #0;
+  source_has_buffered_char := false;
   token_kind := TOK_EOF;
   token_value := 0;
   saw_probe_read_prefix := false;
@@ -2346,6 +2457,8 @@ begin
   captured_writeln_count := 0;
   ast_capture_enabled := true;
   ast_capture_var_names := false;
+  ast_with_var := -1;
+  ast_with_type_ref := -1;
   ast_var_count := 0;
   while ast_var_count <= MAX_AST_VARS - 1 do
     begin
@@ -2354,13 +2467,32 @@ begin
     end;
   ast_var_count := 0;
   ast_type_count := 0;
+  while ast_type_count <= MAX_AST_TYPES - 1 do
+    begin
+      ast_type_elem_type_ref[ast_type_count] := -1;
+      ast_type_array_low[ast_type_count] := 0;
+      ast_type_array_high[ast_type_count] := 0;
+      ast_type_array_len[ast_type_count] := 0;
+      ast_type_array_size[ast_type_count] := 0;
+      ast_type_count := ast_type_count + 1
+    end;
+  ast_type_count := 0;
   ast_field_count := 0;
+  ast_enum_const_count := 0;
   ast_root_stmt_start := 0;
   ast_root_stmt_count := 0;
   ast_stmt_count := 0;
   ast_arg_count := 0;
   ast_expr_count := 0;
   ast_routine_count := 0;
+  ast_param_count := 0;
+  while ast_param_count <= MAX_AST_PARAMS - 1 do
+    begin
+      ast_param_hidden[ast_param_count] := 0;
+      ast_param_conformant_bound_start[ast_param_count] := -1;
+      ast_param_conformant_dim_count[ast_param_count] := 0;
+      ast_param_count := ast_param_count + 1
+    end;
   ast_param_count := 0;
   ast_text_lit_count := 0;
   ast_ident_count := 0;

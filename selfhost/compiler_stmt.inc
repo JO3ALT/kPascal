@@ -102,6 +102,7 @@ end;
 function BuildAstTargetExprFromFirstName(var first_name: text_buf): integer;
 var expr_idx: integer;
     next_idx: integer;
+    index_idx: integer;
     temp_text: text_buf;
 begin
   expr_idx := NewAstExpr(AST_EXPR_IDENT);
@@ -127,10 +128,20 @@ begin
       else if token_kind = TOK_LBRACK then
         begin
           NextToken();
+          index_idx := BuildAstExpr();
           next_idx := NewAstExpr(AST_EXPR_INDEX);
           ast_expr_left[next_idx] := expr_idx;
-          ast_expr_right[next_idx] := BuildAstExpr();
+          ast_expr_right[next_idx] := index_idx;
           expr_idx := next_idx;
+          while token_kind = TOK_COMMA do
+            begin
+              NextToken();
+              index_idx := BuildAstExpr();
+              next_idx := NewAstExpr(AST_EXPR_INDEX);
+              ast_expr_left[next_idx] := expr_idx;
+              ast_expr_right[next_idx] := index_idx;
+              expr_idx := next_idx
+            end;
           ExpectKind(TOK_RBRACK)
         end
       else
@@ -280,7 +291,35 @@ begin
   while token_kind = TOK_COMMA do
     begin
       ReadToken();
-      ParseExpr()
+        ParseExpr()
+    end
+end;
+
+function CaseStmtSpan(stmt_idx: integer): integer;
+begin
+  if ast_stmt_kind[stmt_idx] = AST_STMT_IF then
+    begin
+      CaseStmtSpan := 1 + ast_stmt_child_count[stmt_idx] + ast_stmt_else_count[stmt_idx]
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_COMPOUND then
+    begin
+      CaseStmtSpan := 1 + ast_stmt_child_count[stmt_idx]
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_WHILE then
+    begin
+      CaseStmtSpan := 1 + ast_stmt_child_count[stmt_idx]
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_REPEAT then
+    begin
+      CaseStmtSpan := 1 + ast_stmt_child_count[stmt_idx]
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_FOR then
+    begin
+      CaseStmtSpan := 1 + ast_stmt_child_count[stmt_idx]
+    end
+  else
+    begin
+      CaseStmtSpan := 1
     end
 end;
 
@@ -337,7 +376,9 @@ begin
       stmt_idx := NewAstStmt(AST_STMT_COMPOUND)
     end;
   ExpectKind(TOK_KW_BEGIN);
-  ParseCapturedStmtList(child_start, child_count);
+  child_start := ast_stmt_count;
+  ParseStmtList();
+  child_count := ast_stmt_count - child_start;
   if stmt_idx >= 0 then
     begin
       ast_stmt_child_start[stmt_idx] := child_start;
@@ -392,6 +433,8 @@ var saw_selector: boolean;
     expected_name: text_buf;
     stmt_idx: integer;
     expr_idx: integer;
+    lhs_expr_idx: integer;
+    with_base_idx: integer;
     call_routine_idx: integer;
     captured_simple_assign: boolean;
 begin
@@ -411,10 +454,22 @@ begin
     end;
   NextToken();
   saw_selector := false;
-  while IsSelectorToken() do
+  lhs_expr_idx := -1;
+  if ast_capture_enabled then
     begin
-      saw_selector := true;
-      ParseSelectorSuffixes()
+      if IsSelectorToken() then
+        begin
+          saw_selector := true;
+          lhs_expr_idx := BuildAstTargetExprFromFirstName(first_name)
+        end
+    end
+  else
+    begin
+      while IsSelectorToken() do
+        begin
+          saw_selector := true;
+          ParseSelectorSuffixes()
+        end
     end;
   if token_kind = TOK_ASSIGN then
     begin
@@ -441,13 +496,26 @@ begin
           stmt_idx := NewAstStmt(AST_STMT_ASSIGN);
           if saw_selector then
             begin
-              ast_stmt_expr[stmt_idx] := BuildAstTargetExprFromFirstName(first_name)
+              ast_stmt_expr[stmt_idx] := lhs_expr_idx
             end
           else
             begin
               expr_idx := NewAstExpr(AST_EXPR_IDENT);
               ast_expr_int[expr_idx] := FindScopedAstVar(first_name);
               ast_expr_text_ref[expr_idx] := NewAstIdent(first_name);
+              if ast_expr_int[expr_idx] < 0 then
+                begin
+                  if ast_with_type_ref >= 0 then
+                    begin
+                      if FindAstFieldByIdent(ast_with_type_ref, ast_ident_pool[ast_expr_text_ref[expr_idx]]) >= 0 then
+                        begin
+                          with_base_idx := NewAstExpr(AST_EXPR_IDENT);
+                          ast_expr_int[with_base_idx] := ast_with_var;
+                          ast_expr_kind[expr_idx] := AST_EXPR_FIELD;
+                          ast_expr_left[expr_idx] := with_base_idx
+                        end
+                    end
+                end;
               ast_stmt_expr[stmt_idx] := expr_idx
             end;
           CopyTextToIdent(first_name, ast_stmt_name[stmt_idx]);
@@ -703,35 +771,137 @@ begin
 end;
 
 procedure ParseCaseStmt;
+var case_expr_idx: integer;
+    first_if_idx: integer;
+    current_if_idx: integer;
+    if_idx: integer;
+    cond_expr_idx: integer;
+    then_start: integer;
+    then_count: integer;
+    else_start: integer;
+    else_count: integer;
 begin
   NoteNonWriteLnStatement();
+  case_expr_idx := -1;
+  first_if_idx := -1;
+  current_if_idx := -1;
+  ExpectKind(TOK_KW_CASE);
   if ast_capture_enabled then
     begin
-      bootstrap_capture_failed := true;
-      if parse_error_reason = 0 then
-        begin
-          parse_error_reason := 330
-        end
+      case_expr_idx := BuildAstExpr()
+    end
+  else
+    begin
+      ParseExpr()
     end;
-  ExpectKind(TOK_KW_CASE);
-  ParseExpr();
   ExpectKind(TOK_KW_OF);
   while token_kind <> TOK_KW_END do
     begin
       if token_kind = TOK_KW_ELSE then
         begin
           NextToken();
-          ParseStatement()
+          else_start := ast_stmt_count;
+          ParseStatement();
+          else_count := ast_stmt_count - else_start;
+          if current_if_idx >= 0 then
+            begin
+              ast_stmt_else_start[current_if_idx] := else_start;
+              ast_stmt_else_count[current_if_idx] := else_count
+            end
         end
       else
         begin
-          ParseCaseLabelList();
+          if ast_capture_enabled then
+            begin
+              cond_expr_idx := BuildAstExpr();
+              if token_kind = TOK_DOTDOT then
+                begin
+                  NextToken();
+                  cond_expr_idx := BuildAstBinOpExpr(
+                    BuildAstBinOpExpr(case_expr_idx, TOK_GE, cond_expr_idx),
+                    TOK_KW_AND,
+                    BuildAstBinOpExpr(case_expr_idx, TOK_LE, BuildAstExpr())
+                  )
+                end
+              else
+                begin
+                  cond_expr_idx := BuildAstBinOpExpr(case_expr_idx, TOK_EQ, cond_expr_idx)
+                end;
+              while token_kind = TOK_COMMA do
+                begin
+                  NextToken();
+                  else_start := BuildAstExpr();
+                  if token_kind = TOK_DOTDOT then
+                    begin
+                      NextToken();
+                      else_start := BuildAstBinOpExpr(
+                        BuildAstBinOpExpr(case_expr_idx, TOK_GE, else_start),
+                        TOK_KW_AND,
+                        BuildAstBinOpExpr(case_expr_idx, TOK_LE, BuildAstExpr())
+                      )
+                    end
+                  else
+                    begin
+                      else_start := BuildAstBinOpExpr(case_expr_idx, TOK_EQ, else_start)
+                    end;
+                  cond_expr_idx := BuildAstBinOpExpr(cond_expr_idx, TOK_KW_OR, else_start)
+                end;
+              if_idx := NewAstStmt(AST_STMT_IF);
+              ast_stmt_expr[if_idx] := cond_expr_idx;
+              if first_if_idx < 0 then
+                begin
+                  first_if_idx := if_idx
+                end
+              else
+                begin
+                  ast_stmt_else_start[current_if_idx] := if_idx;
+                  ast_stmt_else_count[current_if_idx] := CaseStmtSpan(if_idx)
+                end;
+              current_if_idx := if_idx
+            end
+          else
+            begin
+              ParseCaseLabelList()
+            end;
           ExpectKind(TOK_COLON);
-          ParseStatement()
+          then_start := ast_stmt_count;
+          ParseStatement();
+          then_count := ast_stmt_count - then_start;
+          if current_if_idx >= 0 then
+            begin
+              ast_stmt_child_start[current_if_idx] := then_start;
+              ast_stmt_child_count[current_if_idx] := then_count
+            end
         end;
       if token_kind = TOK_SEMI then
         begin
           NextToken()
+        end
+    end;
+  if ast_capture_enabled then
+    begin
+      if first_if_idx >= 0 then
+        begin
+          current_if_idx := first_if_idx;
+          while current_if_idx >= 0 do
+            begin
+              if ast_stmt_else_start[current_if_idx] > 0 then
+                begin
+                  ast_stmt_else_count[current_if_idx] := CaseStmtSpan(ast_stmt_else_start[current_if_idx]);
+                  if ast_stmt_kind[ast_stmt_else_start[current_if_idx]] = AST_STMT_IF then
+                    begin
+                      current_if_idx := ast_stmt_else_start[current_if_idx]
+                    end
+                  else
+                    begin
+                      current_if_idx := -1
+                    end
+                end
+              else
+                begin
+                  current_if_idx := -1
+                end
+            end
         end
     end;
   ExpectKind(TOK_KW_END)
@@ -783,21 +953,39 @@ begin
 end;
 
 procedure ParseWithStmt;
+var with_name: text_buf;
+    with_v_idx: integer;
 begin
   NoteNonWriteLnStatement();
-  if ast_capture_enabled then
-    begin
-      bootstrap_capture_failed := true
-    end;
   ExpectKind(TOK_KW_WITH);
+  ClearText(with_name);
+  if token_kind = TOK_IDENT then
+    begin
+      StrCopy(token_text, with_name)
+    end;
   BuildLValue();
   while token_kind = TOK_COMMA do
     begin
       NextToken();
       BuildLValue()
     end;
+  if ast_capture_enabled then
+    begin
+      with_v_idx := FindScopedAstVar(with_name);
+      if with_v_idx >= 0 then
+        begin
+          ast_with_var := with_v_idx;
+          ast_with_type_ref := ast_var_type_ref[with_v_idx]
+        end
+      else
+        begin
+          bootstrap_capture_failed := true
+        end
+    end;
   ExpectKind(TOK_KW_DO);
-  ParseRequiredCompoundStmt()
+  ParseRequiredCompoundStmt();
+  ast_with_var := -1;
+  ast_with_type_ref := -1
 end;
 
 procedure ParseWhileStmt;

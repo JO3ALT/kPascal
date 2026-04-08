@@ -1463,228 +1463,8 @@ begin
 end;
 
 function ParseProgramSampleNumber: integer;
-var digit0: integer;
-    digit1: integer;
-    expected: text_buf;
 begin
-  ClearText(expected);
-  expected := 'kpsc_arith';
-  if ProgramNameEquals(expected) then
-    begin
-      ParseProgramSampleNumber := -1
-    end
-  else
-    begin
-      ClearText(expected);
-      expected := 'kpsc_routines';
-      if ProgramNameEquals(expected) then
-        begin
-          ParseProgramSampleNumber := -1
-        end
-      else
-        begin
-          ClearText(expected);
-          expected := 'kpsc_scalar';
-          if ProgramNameEquals(expected) then
-            begin
-              ParseProgramSampleNumber := -1
-            end
-          else if program_name[0] <> 's' then
-            begin
-              ClearText(expected);
-              expected := 'kpsc_ctrl';
-              if ProgramNameEquals(expected) then
-                begin
-                  ParseProgramSampleNumber := -1
-                end
-              else
-                begin
-                  ClearText(expected);
-                  expected := 'kpsc_enumset';
-                  if ProgramNameEquals(expected) then
-                    begin
-                      ParseProgramSampleNumber := 4
-                    end
-                  else
-                    begin
-                      ClearText(expected);
-                      expected := 'kpsc_record';
-                      if ProgramNameEquals(expected) then
-                        begin
-                          ParseProgramSampleNumber := 5
-                        end
-                      else
-                        begin
-                          ClearText(expected);
-                          expected := 'kpsc_variant';
-                          if ProgramNameEquals(expected) then
-                            begin
-                              ParseProgramSampleNumber := 6
-                            end
-                          else
-                            begin
-                              ClearText(expected);
-                              expected := 'kpsc_pointer';
-                              if ProgramNameEquals(expected) then
-                                begin
-                                  ParseProgramSampleNumber := 7
-                                end
-                              else
-                                begin
-                                  ClearText(expected);
-                                  expected := 'kpsc_addr';
-                                  if ProgramNameEquals(expected) then
-                                    begin
-                                      ParseProgramSampleNumber := 8
-                                    end
-                                  else
-                                    begin
-                                      ClearText(expected);
-                                      expected := 'kpsc_array2d';
-                                      if ProgramNameEquals(expected) then
-                                        begin
-                                          ParseProgramSampleNumber := 9
-                                        end
-                                      else
-                                        begin
-                                          ClearText(expected);
-                                          expected := 'kpsc_array4d';
-                                          if ProgramNameEquals(expected) then
-                                            begin
-                                              ParseProgramSampleNumber := 10
-                                            end
-                                          else
-                                            begin
-                                              ClearText(expected);
-                                              expected := 'kpsc_conf1d';
-                                              if ProgramNameEquals(expected) then
-                                                begin
-                                                  ParseProgramSampleNumber := 11
-                                                end
-                                              else
-                                                begin
-                                                  ClearText(expected);
-                                                  expected := 'kpsc_conf2d';
-                                                  if ProgramNameEquals(expected) then
-                                                    begin
-                                                      ParseProgramSampleNumber := 12
-                                                    end
-                                                  else
-                                                    begin
-                                                      ClearText(expected);
-                                                      expected := 'kpsc_string';
-                                                      if ProgramNameEquals(expected) then
-                                                        begin
-                                                          ParseProgramSampleNumber := 13
-                                                        end
-                                                      else
-                                                        begin
-                                                          ClearText(expected);
-                                                          expected := 'kpsc_string_edit';
-                                                          if ProgramNameEquals(expected) then
-                                                            begin
-                                                              ParseProgramSampleNumber := 14
-                                                            end
-                                                          else
-                                                            begin
-                                                              ClearText(expected);
-                                                              expected := 'kpsc_hex';
-                                                              if ProgramNameEquals(expected) then
-                                                                begin
-                                                                  ParseProgramSampleNumber := 15
-                                                                end
-                                                              else
-                                                                begin
-                                                                  ClearText(expected);
-                                                                  expected := 'kpsc_real';
-                                                                  if ProgramNameEquals(expected) then
-                                                                    begin
-                                                                      ParseProgramSampleNumber := 16
-                                                                    end
-                                                                  else
-                                                                    begin
-                                                                      ClearText(expected);
-                                                                      expected := 'kpsc_case';
-                                                                      if ProgramNameEquals(expected) then
-                                                                        begin
-                                                                          ParseProgramSampleNumber := 18
-                                                                        end
-                                                                      else
-                                                                        begin
-                                                                          ClearText(expected);
-                                                                          expected := 'kpsc_setops';
-                                                                          if ProgramNameEquals(expected) then
-                                                                            begin
-                                                                              ParseProgramSampleNumber := 19
-                                                                            end
-                                                                          else
-                                                                            begin
-                                                                              ParseProgramSampleNumber := -1
-                                                                            end
-                                                                        end
-                                                                    end
-                                                                end
-                                                            end
-                                                        end
-                                                    end
-                                                end
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-          else if program_name[1] <> 'a' then
-            begin
-              ParseProgramSampleNumber := -1
-            end
-          else if program_name[2] <> 'm' then
-            begin
-              ParseProgramSampleNumber := -1
-            end
-          else if program_name[3] <> 'p' then
-            begin
-              ParseProgramSampleNumber := -1
-            end
-          else if program_name[4] <> 'l' then
-            begin
-              ParseProgramSampleNumber := -1
-            end
-          else if program_name[5] <> 'e' then
-            begin
-              ParseProgramSampleNumber := -1
-            end
-          else if program_name[6] < '0' then
-            begin
-              ParseProgramSampleNumber := -1
-            end
-          else if program_name[6] > '9' then
-            begin
-              ParseProgramSampleNumber := -1
-            end
-          else if program_name[7] < '0' then
-            begin
-              ParseProgramSampleNumber := -1
-            end
-          else if program_name[7] > '9' then
-            begin
-              ParseProgramSampleNumber := -1
-            end
-          else if program_name[8] <> #0 then
-            begin
-              ParseProgramSampleNumber := -1
-            end
-          else
-            begin
-              digit0 := Ord(program_name[6]) - Ord('0');
-              digit1 := Ord(program_name[7]) - Ord('0');
-              ParseProgramSampleNumber := digit0 * 10 + digit1
-            end
-        end
-    end
+  ParseProgramSampleNumber := -1
 end;
 
 function CanEmitDirectSampleNumber(sample_no: integer): boolean;
@@ -2988,102 +2768,258 @@ begin
     end
 end;
 
-function EmitAstIndexStrideByIdent(var name: ident_buf): integer;
-var text_name: text_buf;
+function GetAstExprTypeRef(expr_idx: integer): integer;
+var v_idx: integer;
+    param_idx: integer;
+    type_idx: integer;
 begin
-  ClearText(text_name);
-  text_name := 'captured_writeln_text';
-  if TextIdentEq(text_name, name) then
+  GetAstExprTypeRef := -1;
+  if expr_idx >= 0 then
     begin
-      EmitAstIndexStrideByIdent := 1024
-    end
-  else
-    begin
-      ClearText(text_name);
-      text_name := 'ast_text_lit';
-      if TextIdentEq(text_name, name) then
+      if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
         begin
-          EmitAstIndexStrideByIdent := 384
-        end
-      else
-        begin
-          ClearText(text_name);
-          text_name := 'ast_var_name';
-          if TextIdentEq(text_name, name) then
+          v_idx := AstExprIdentVarIndex(expr_idx);
+          if v_idx >= 0 then
             begin
-              EmitAstIndexStrideByIdent := 152
+              GetAstExprTypeRef := ast_var_type_ref[v_idx]
             end
           else
             begin
-              ClearText(text_name);
-              text_name := 'ast_type_name';
-              if TextIdentEq(text_name, name) then
+              param_idx := AstExprIdentParamIndex(expr_idx);
+              if param_idx >= 0 then
                 begin
-                  EmitAstIndexStrideByIdent := 152
+                  GetAstExprTypeRef := ast_param_type_ref[param_idx]
+                end
+            end
+        end
+      else if ast_expr_kind[expr_idx] = AST_EXPR_INDEX then
+        begin
+          type_idx := GetAstExprTypeRef(ast_expr_left[expr_idx]);
+          if type_idx >= 0 then
+            begin
+              if ast_type_kind[type_idx] = AST_DECL_ARRAY then
+                begin
+                  GetAstExprTypeRef := ast_type_elem_type_ref[type_idx]
+                end
+            end
+        end
+      else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
+        begin
+          GetAstExprTypeRef := GetAstExprTypeRef(ast_expr_left[expr_idx])
+        end
+    end
+end;
+
+function AstRoutineVisibleParamCount(routine_idx: integer): integer;
+var idx: integer;
+    limit: integer;
+begin
+  AstRoutineVisibleParamCount := 0;
+  if routine_idx >= 0 then
+    begin
+      idx := ast_routine_param_start[routine_idx];
+      limit := idx + ast_routine_param_count[routine_idx];
+      while idx < limit do
+        begin
+          if ast_param_hidden[idx] = 0 then
+            begin
+              AstRoutineVisibleParamCount := AstRoutineVisibleParamCount + 1
+            end;
+          idx := idx + 1
+        end
+    end
+end;
+
+function AstRoutineVisibleParamIndex(routine_idx: integer; visible_arg_idx: integer): integer;
+var idx: integer;
+    limit: integer;
+    visible_idx: integer;
+begin
+  AstRoutineVisibleParamIndex := -1;
+  if routine_idx >= 0 then
+    begin
+      idx := ast_routine_param_start[routine_idx];
+      limit := idx + ast_routine_param_count[routine_idx];
+      visible_idx := 0;
+      while idx < limit do
+        begin
+          if ast_param_hidden[idx] = 0 then
+            begin
+              if visible_idx = visible_arg_idx then
+                begin
+                  AstRoutineVisibleParamIndex := idx;
+                  idx := limit
                 end
               else
                 begin
-                  ClearText(text_name);
-                  text_name := 'ast_field_name';
-                  if TextIdentEq(text_name, name) then
-                    begin
-                      EmitAstIndexStrideByIdent := 152
-                    end
-                  else
-                    begin
-                      ClearText(text_name);
-                      text_name := 'ast_stmt_name';
-                      if TextIdentEq(text_name, name) then
-                        begin
-                          EmitAstIndexStrideByIdent := 152
-                        end
-                      else
-                        begin
-                          ClearText(text_name);
-                          text_name := 'ast_routine_name';
-                          if TextIdentEq(text_name, name) then
-                            begin
-                              EmitAstIndexStrideByIdent := 152
-                            end
-                          else
-                            begin
-                              ClearText(text_name);
-                              text_name := 'ast_param_name';
-                              if TextIdentEq(text_name, name) then
-                                begin
-                                  EmitAstIndexStrideByIdent := 152
-                                end
-                              else
-                                begin
-                                  ClearText(text_name);
-                                  text_name := 'ast_ident_pool';
-                                  if TextIdentEq(text_name, name) then
-                                    begin
-                                      EmitAstIndexStrideByIdent := 152
-                                    end
-                                  else
-                                    begin
-                                      EmitAstIndexStrideByIdent := 4
-                                    end
-                                end
-                            end
-                        end
-                    end
+                  visible_idx := visible_idx + 1;
+                  idx := idx + 1
                 end
+            end
+          else
+            begin
+              idx := idx + 1
             end
         end
     end
 end;
 
-function EmitAstIndexStride(expr_idx: integer): integer;
+function AstConformantRootParamIndex(expr_idx: integer): integer;
 begin
-  if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
+  AstConformantRootParamIndex := -1;
+  if expr_idx >= 0 then
     begin
-      EmitAstIndexStride := EmitAstIndexStrideByIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]])
+      if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
+        begin
+          AstConformantRootParamIndex := AstExprIdentParamIndex(expr_idx);
+          if AstConformantRootParamIndex >= 0 then
+            begin
+              if ast_param_conformant_dim_count[AstConformantRootParamIndex] <= 0 then
+                begin
+                  AstConformantRootParamIndex := -1
+                end
+            end
+        end
+      else if ast_expr_kind[expr_idx] = AST_EXPR_INDEX then
+        begin
+          AstConformantRootParamIndex := AstConformantRootParamIndex(ast_expr_left[expr_idx])
+        end
+    end
+end;
+
+function AstArrayIndexDepth(expr_idx: integer): integer;
+begin
+  if expr_idx >= 0 then
+    begin
+      if ast_expr_kind[expr_idx] = AST_EXPR_INDEX then
+        begin
+          AstArrayIndexDepth := AstArrayIndexDepth(ast_expr_left[expr_idx]) + 1
+        end
+      else
+        begin
+          AstArrayIndexDepth := 0
+        end
     end
   else
     begin
-      EmitAstIndexStride := 4
+      AstArrayIndexDepth := 0
+    end
+end;
+
+procedure EmitAstParamValueExpr(param_idx: integer);
+begin
+  EmitAstParamSlot(param_idx);
+  Write(' PVAR@')
+end;
+
+procedure EmitAstConformantStride(param_idx: integer; type_ref: integer; depth: integer);
+var bound_idx: integer;
+begin
+  if type_ref >= 0 then
+    begin
+      if ast_type_kind[type_ref] = AST_DECL_ARRAY then
+        begin
+          if ast_type_elem_type[type_ref] = AST_TYPE_ARRAY then
+            begin
+              if depth + 1 < ast_param_conformant_dim_count[param_idx] then
+                begin
+                  bound_idx := ast_param_conformant_bound_start[param_idx] + (depth + 1) * 2;
+                  EmitAstParamValueExpr(bound_idx + 1);
+                  Write(' ');
+                  EmitAstParamValueExpr(bound_idx);
+                  Write(' - 1 + ');
+                  EmitAstConformantStride(param_idx, ast_type_elem_type_ref[type_ref], depth + 1);
+                  Write(' *')
+                end
+              else
+                begin
+                  Write(AstTypeCellCount(ast_type_elem_type[type_ref], ast_type_elem_type_ref[type_ref]) * 4)
+                end
+            end
+          else
+            begin
+              Write(AstTypeCellCount(ast_type_elem_type[type_ref], ast_type_elem_type_ref[type_ref]) * 4)
+            end
+        end
+    end
+  else
+    begin
+      Write('1')
+    end
+end;
+
+procedure EmitAstArrayLowExpr(base_expr_idx: integer);
+var param_idx: integer;
+    depth: integer;
+    bound_idx: integer;
+    type_ref: integer;
+begin
+  param_idx := AstConformantRootParamIndex(base_expr_idx);
+  depth := AstArrayIndexDepth(base_expr_idx);
+  if param_idx >= 0 then
+    begin
+      if depth < ast_param_conformant_dim_count[param_idx] then
+        begin
+          bound_idx := ast_param_conformant_bound_start[param_idx] + depth * 2;
+          EmitAstParamValueExpr(bound_idx)
+        end
+      else
+        begin
+          type_ref := GetAstExprTypeRef(base_expr_idx);
+          if type_ref >= 0 then
+            begin
+              Write(ast_type_array_low[type_ref])
+            end
+          else
+            begin
+              Write('0')
+            end
+        end
+    end
+  else
+    begin
+      type_ref := GetAstExprTypeRef(base_expr_idx);
+      if type_ref >= 0 then
+        begin
+          Write(ast_type_array_low[type_ref])
+        end
+      else
+        begin
+          Write('0')
+        end
+    end
+end;
+
+procedure EmitAstArrayStrideExpr(base_expr_idx: integer);
+var param_idx: integer;
+    depth: integer;
+    type_ref: integer;
+begin
+  type_ref := GetAstExprTypeRef(base_expr_idx);
+  param_idx := AstConformantRootParamIndex(base_expr_idx);
+  depth := AstArrayIndexDepth(base_expr_idx);
+  if param_idx >= 0 then
+    begin
+      if depth < ast_param_conformant_dim_count[param_idx] then
+        begin
+          EmitAstConformantStride(param_idx, type_ref, depth)
+        end
+      else if type_ref >= 0 then
+        begin
+          Write(AstTypeCellCount(ast_type_elem_type[type_ref], ast_type_elem_type_ref[type_ref]) * 4)
+        end
+      else
+        begin
+          Write('4')
+        end
+    end
+  else if type_ref >= 0 then
+    begin
+      Write(AstTypeCellCount(ast_type_elem_type[type_ref], ast_type_elem_type_ref[type_ref]) * 4)
+    end
+  else
+    begin
+      Write('4')
     end
 end;
 
@@ -3099,7 +3035,18 @@ begin
     begin
       v_idx := AstExprIdentVarIndex(expr_idx);
       param_idx := AstExprIdentParamIndex(expr_idx);
-      CanEmitAstLValueExpr := (v_idx >= 0) or (param_idx >= 0) or AstExprIsCurrentResult(expr_idx)
+      if v_idx >= 0 then
+        begin
+          CanEmitAstLValueExpr := true
+        end
+      else if param_idx >= 0 then
+        begin
+          CanEmitAstLValueExpr := true
+        end
+      else
+        begin
+          CanEmitAstLValueExpr := AstExprIsCurrentResult(expr_idx)
+        end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_FIELD then
     begin
@@ -3107,7 +3054,15 @@ begin
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_INDEX then
     begin
-      CanEmitAstLValueExpr := CanEmitAstLValueExpr(ast_expr_left[expr_idx]) and CanEmitAstExpr(ast_expr_right[expr_idx])
+      CanEmitAstLValueExpr := CanEmitAstLValueExpr(ast_expr_left[expr_idx]) and CanEmitAstExpr(ast_expr_right[expr_idx]);
+      if CanEmitAstLValueExpr then
+        begin
+          CanEmitAstLValueExpr := AstExprType(ast_expr_left[expr_idx]) = AST_TYPE_ARRAY;
+          if CanEmitAstLValueExpr then
+            begin
+              CanEmitAstLValueExpr := GetAstExprTypeRef(ast_expr_left[expr_idx]) >= 0
+            end
+        end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
     begin
@@ -3214,7 +3169,7 @@ begin
   AstStmtBuiltinKind := 0;
   if stmt_idx >= 0 then
     begin
-      if ast_stmt_name[stmt_idx][0] = #0 then
+      if ast_stmt_name[stmt_idx][0] = 's' then
         begin
           if ast_stmt_name[stmt_idx][1] = 'e' then
             begin
@@ -3229,6 +3184,114 @@ begin
                               if ast_stmt_name[stmt_idx][6] = 'r' then
                                 begin
                                   AstStmtBuiltinKind := 1
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+      else if ast_stmt_name[stmt_idx][0] = 'n' then
+        begin
+          if ast_stmt_name[stmt_idx][1] = 'e' then
+            begin
+              if ast_stmt_name[stmt_idx][2] = 'w' then
+                begin
+                  if ast_stmt_name[stmt_idx][3] = #0 then
+                    begin
+                      AstStmtBuiltinKind := 2
+                    end
+                end
+            end
+        end
+      else if ast_stmt_name[stmt_idx][0] = 'd' then
+        begin
+          if ast_stmt_name[stmt_idx][1] = 'i' then
+            begin
+              if ast_stmt_name[stmt_idx][2] = 's' then
+                begin
+                  if ast_stmt_name[stmt_idx][3] = 'p' then
+                    begin
+                      if ast_stmt_name[stmt_idx][4] = 'o' then
+                        begin
+                          if ast_stmt_name[stmt_idx][5] = 's' then
+                            begin
+                              if ast_stmt_name[stmt_idx][6] = 'e' then
+                                begin
+                                  AstStmtBuiltinKind := 3
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+          else if ast_stmt_name[stmt_idx][1] = 'e' then
+            begin
+              if ast_stmt_name[stmt_idx][2] = 'l' then
+                begin
+                  if ast_stmt_name[stmt_idx][3] = 'e' then
+                    begin
+                      if ast_stmt_name[stmt_idx][4] = 't' then
+                        begin
+                          if ast_stmt_name[stmt_idx][5] = 'e' then
+                            begin
+                              AstStmtBuiltinKind := 5
+                            end
+                        end
+                    end
+                end
+            end
+        end
+      else if ast_stmt_name[stmt_idx][0] = 'c' then
+        begin
+          if ast_stmt_name[stmt_idx][1] = 'o' then
+            begin
+              if ast_stmt_name[stmt_idx][2] = 'n' then
+                begin
+                  if ast_stmt_name[stmt_idx][3] = 'c' then
+                    begin
+                      if ast_stmt_name[stmt_idx][4] = 'a' then
+                        begin
+                          if ast_stmt_name[stmt_idx][5] = 't' then
+                            begin
+                              AstStmtBuiltinKind := 4
+                            end
+                        end
+                    end
+                end
+            end
+        end
+      else if ast_stmt_name[stmt_idx][0] = 'i' then
+        begin
+          if ast_stmt_name[stmt_idx][1] = 'n' then
+            begin
+              if ast_stmt_name[stmt_idx][2] = 's' then
+                begin
+                  if ast_stmt_name[stmt_idx][3] = 'e' then
+                    begin
+                      if ast_stmt_name[stmt_idx][4] = 'r' then
+                        begin
+                          if ast_stmt_name[stmt_idx][5] = 't' then
+                            begin
+                              AstStmtBuiltinKind := 6
+                            end
+                        end
+                    end
+                end
+              else if ast_stmt_name[stmt_idx][2] = 't' then
+                begin
+                  if ast_stmt_name[stmt_idx][3] = 't' then
+                    begin
+                      if ast_stmt_name[stmt_idx][4] = 'o' then
+                        begin
+                          if ast_stmt_name[stmt_idx][5] = 'h' then
+                            begin
+                              if ast_stmt_name[stmt_idx][6] = 'e' then
+                                begin
+                                  if ast_stmt_name[stmt_idx][7] = 'x' then
+                                    begin
+                                      AstStmtBuiltinKind := 7
+                                    end
                                 end
                             end
                         end
@@ -3550,6 +3613,70 @@ begin
           CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
         end
     end
+  else if builtin_kind = 8 then
+    begin
+      if ast_expr_right[expr_idx] = 2 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx]]) and CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx] + 1])
+        end
+    end
+  else if builtin_kind = 9 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
+  else if builtin_kind = 10 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx]]);
+          if CanEmitAstBuiltinExprCall then
+            begin
+              CanEmitAstBuiltinExprCall := AstExprType(ast_arg_expr[ast_expr_left[expr_idx]]) = AST_TYPE_ARRAY
+            end
+        end
+    end
+  else if builtin_kind = 11 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstLValueExpr(ast_arg_expr[ast_expr_left[expr_idx]]);
+          if CanEmitAstBuiltinExprCall then
+            begin
+              CanEmitAstBuiltinExprCall := AstExprType(ast_arg_expr[ast_expr_left[expr_idx]]) = AST_TYPE_ARRAY
+            end
+        end
+    end
+  else if builtin_kind = 12 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
+  else if builtin_kind = 13 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
+  else if builtin_kind = 14 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
+  else if builtin_kind = 15 then
+    begin
+      if ast_expr_right[expr_idx] = 1 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+        end
+    end
 end;
 
 function CanEmitAstBuiltinStmtCall(stmt_idx: integer; builtin_kind: integer): boolean;
@@ -3562,24 +3689,68 @@ begin
           CanEmitAstBuiltinStmtCall := CanEmitAstLValueExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]) and CanEmitAstExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1])
         end
     end
+  else if builtin_kind = 2 then
+    begin
+      if ast_stmt_arg_count[stmt_idx] = 1 then
+        begin
+          CanEmitAstBuiltinStmtCall := CanEmitAstLValueExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx]])
+        end
+    end
+  else if builtin_kind = 3 then
+    begin
+      if ast_stmt_arg_count[stmt_idx] = 1 then
+        begin
+          CanEmitAstBuiltinStmtCall := CanEmitAstLValueExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx]])
+        end
+    end
+  else if builtin_kind = 4 then
+    begin
+      if ast_stmt_arg_count[stmt_idx] = 3 then
+        begin
+          CanEmitAstBuiltinStmtCall := CanEmitAstLValueExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]) and CanEmitAstLValueExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1]) and CanEmitAstLValueExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 2])
+        end
+    end
+  else if builtin_kind = 5 then
+    begin
+      if ast_stmt_arg_count[stmt_idx] = 3 then
+        begin
+          CanEmitAstBuiltinStmtCall := CanEmitAstLValueExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]) and CanEmitAstExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1]) and CanEmitAstExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 2])
+        end
+    end
+  else if builtin_kind = 6 then
+    begin
+      if ast_stmt_arg_count[stmt_idx] = 3 then
+        begin
+          CanEmitAstBuiltinStmtCall := CanEmitAstLValueExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]) and CanEmitAstLValueExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1]) and CanEmitAstExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 2])
+        end
+    end
+  else if builtin_kind = 7 then
+    begin
+      if ast_stmt_arg_count[stmt_idx] = 4 then
+        begin
+          CanEmitAstBuiltinStmtCall := CanEmitAstExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]) and CanEmitAstLValueExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1]) and CanEmitAstExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 2]) and CanEmitAstExpr(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 3])
+        end
+    end
 end;
 
 function CanEmitAstCallArgs(call_expr_idx: integer; routine_idx: integer): boolean;
 var arg_idx: integer;
     param_idx: integer;
     arg_end: integer;
+    visible_idx: integer;
 begin
   CanEmitAstCallArgs := false;
   if routine_idx >= 0 then
     begin
-      if ast_expr_right[call_expr_idx] = ast_routine_param_count[routine_idx] then
+      if ast_expr_right[call_expr_idx] = AstRoutineVisibleParamCount(routine_idx) then
         begin
           CanEmitAstCallArgs := true;
           arg_idx := ast_expr_left[call_expr_idx];
-          param_idx := ast_routine_param_start[routine_idx];
           arg_end := arg_idx + ast_expr_right[call_expr_idx];
+          visible_idx := 0;
           while arg_idx < arg_end do
             begin
+              param_idx := AstRoutineVisibleParamIndex(routine_idx, visible_idx);
               if ast_param_by_ref[param_idx] <> 0 then
                 begin
                   if not CanEmitAstLValueExpr(ast_arg_expr[arg_idx]) then
@@ -3594,7 +3765,7 @@ begin
                   arg_idx := arg_end
                 end;
               arg_idx := arg_idx + 1;
-              param_idx := param_idx + 1
+              visible_idx := visible_idx + 1
             end
         end
     end
@@ -3652,6 +3823,10 @@ begin
         begin
           AstExprType := AST_TYPE_CHAR
         end
+      else if builtin_kind = 15 then
+        begin
+          AstExprType := AST_TYPE_REAL
+        end
       else if builtin_kind <> 0 then
         begin
           AstExprType := AST_TYPE_INTEGER
@@ -3703,48 +3878,27 @@ begin
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_FIELD then
     begin
-      if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
+      type_idx := GetAstExprTypeRef(ast_expr_left[expr_idx]);
+      field_idx := FindAstFieldByIdent(type_idx, ast_ident_pool[ast_expr_text_ref[expr_idx]]);
+      if field_idx < 0 then
         begin
-          if EmitAstIdentType(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]) <> AST_TYPE_RECORD then
-            begin
-              AstExprType := AST_TYPE_UNKNOWN
-            end
-          else
-            begin
-              type_idx := EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]);
-              field_idx := FindAstFieldByIdent(type_idx, ast_ident_pool[ast_expr_text_ref[expr_idx]]);
-              if field_idx < 0 then
-                begin
-                  AstExprType := AST_TYPE_UNKNOWN
-                end
-              else
-                begin
-                  AstExprType := ast_field_type[field_idx]
-                end
-            end
+          AstExprType := AST_TYPE_UNKNOWN
         end
       else
         begin
-          AstExprType := AST_TYPE_UNKNOWN
+          AstExprType := ast_field_type[field_idx]
         end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_INDEX then
     begin
-      if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
+      type_idx := GetAstExprTypeRef(ast_expr_left[expr_idx]);
+      if type_idx < 0 then
         begin
-          if EmitAstIdentType(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]) <> AST_TYPE_ARRAY then
-            begin
-              AstExprType := AST_TYPE_UNKNOWN
-            end
-          else
-            begin
-              type_idx := EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]);
-              AstExprType := ast_type_elem_type[type_idx]
-            end
+          AstExprType := AST_TYPE_UNKNOWN
         end
       else
         begin
-          AstExprType := AST_TYPE_UNKNOWN
+          AstExprType := ast_type_elem_type[type_idx]
         end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
@@ -3828,42 +3982,11 @@ begin
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_FIELD then
     begin
-      CanEmitAstExpr := false;
-      if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
-        begin
-          if EmitAstIdentType(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]) = AST_TYPE_RECORD then
-            begin
-              CanEmitAstExpr := FindAstFieldByIdent(EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]), ast_ident_pool[ast_expr_text_ref[expr_idx]]) >= 0
-            end
-        end
+      CanEmitAstExpr := FindAstFieldByIdent(GetAstExprTypeRef(ast_expr_left[expr_idx]), ast_ident_pool[ast_expr_text_ref[expr_idx]]) >= 0
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_INDEX then
     begin
-      CanEmitAstExpr := false;
-      if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
-        begin
-          if CanEmitAstExpr(ast_expr_right[expr_idx]) then
-            begin
-              v_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
-              param_idx := AstExprIdentParamIndex(ast_expr_left[expr_idx]);
-              if v_idx >= 0 then
-                begin
-                  CanEmitAstExpr := true
-                end
-              else if param_idx >= 0 then
-                begin
-                  CanEmitAstExpr := true
-                end
-              else if AstExprType(ast_expr_left[expr_idx]) = AST_TYPE_ARRAY then
-                begin
-                  CanEmitAstExpr := true
-                end
-              else if EmitAstIdentType(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]) = AST_TYPE_ARRAY then
-                begin
-                  CanEmitAstExpr := true
-                end
-            end
-        end
+      CanEmitAstExpr := CanEmitAstLValueExpr(expr_idx)
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
     begin
@@ -3903,67 +4026,170 @@ begin
     end
 end;
 
-procedure EmitAstBinOp(op_kind: integer);
+function AstExprIsSetLike(expr_idx: integer): boolean;
+var type_ref: integer;
+    is_set: boolean;
 begin
-  if op_kind = TOK_PLUS then
+  is_set := false;
+  if expr_idx >= 0 then
     begin
-      Write(' +')
-    end
-  else if op_kind = TOK_MINUS then
+      type_ref := GetAstExprTypeRef(expr_idx);
+      if type_ref >= 0 then
+        begin
+          is_set := ast_type_kind[type_ref] = AST_DECL_SET
+        end;
+      if not is_set then
+        begin
+          if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
+            begin
+              is_set := AstExprBuiltinKind(expr_idx) = 12
+            end
+        end;
+      if not is_set then
+        begin
+          if ast_expr_kind[expr_idx] = AST_EXPR_BINOP then
+            begin
+              is_set := AstExprIsSetLike(ast_expr_left[expr_idx]) or AstExprIsSetLike(ast_expr_right[expr_idx])
+            end
+        end
+    end;
+  AstExprIsSetLike := is_set
+end;
+
+function AstExprIsRealLike(expr_idx: integer): boolean;
+begin
+  AstExprIsRealLike := AstExprType(expr_idx) = AST_TYPE_REAL
+end;
+
+procedure EmitAstBinOpExpr(expr_idx: integer);
+var op_kind: integer;
+begin
+  op_kind := ast_expr_op[expr_idx];
+  if AstExprIsSetLike(expr_idx) then
     begin
-      Write(' -')
-    end
-  else if op_kind = TOK_STAR then
+      if op_kind = TOK_PLUS then
+        begin
+          Write(' OR')
+        end
+      else if op_kind = TOK_STAR then
+        begin
+          Write(' AND')
+        end
+      else if op_kind = TOK_MINUS then
+        begin
+          Write(' SWAP INVERT AND')
+        end
+      else if op_kind = TOK_SLASH then
+        begin
+          Write(' /')
+        end
+      else if op_kind = TOK_KW_DIV then
+        begin
+          Write(' /')
+        end
+      else if op_kind = TOK_KW_MOD then
+        begin
+          Write(' MOD')
+        end
+      else if op_kind = TOK_KW_AND then
+        begin
+          Write(' AND')
+        end
+      else if op_kind = TOK_KW_OR then
+        begin
+          Write(' OR')
+        end
+      else if op_kind = TOK_KW_XOR then
+        begin
+          Write(' XOR')
+        end
+      else if op_kind = TOK_EQ then
+        begin
+          Write(' =')
+        end
+      else if op_kind = TOK_NE then
+        begin
+          Write(' <>')
+        end
+      else if op_kind = TOK_LT then
+        begin
+          Write(' <')
+        end
+      else if op_kind = TOK_LE then
+        begin
+          Write(' <=')
+        end
+      else if op_kind = TOK_GT then
+        begin
+          Write(' >')
+        end
+      else if op_kind = TOK_GE then
+        begin
+          Write(' >=')
+        end
+    end;
+  if not AstExprIsSetLike(expr_idx) then
     begin
-      Write(' *')
-    end
-  else if op_kind = TOK_SLASH then
-    begin
-      Write(' /')
-    end
-  else if op_kind = TOK_KW_DIV then
-    begin
-      Write(' /')
-    end
-  else if op_kind = TOK_KW_MOD then
-    begin
-      Write(' MOD')
-    end
-  else if op_kind = TOK_KW_AND then
-    begin
-      Write(' AND')
-    end
-  else if op_kind = TOK_KW_OR then
-    begin
-      Write(' OR')
-    end
-  else if op_kind = TOK_KW_XOR then
-    begin
-      Write(' XOR')
-    end
-  else if op_kind = TOK_EQ then
-    begin
-      Write(' =')
-    end
-  else if op_kind = TOK_NE then
-    begin
-      Write(' <>')
-    end
-  else if op_kind = TOK_LT then
-    begin
-      Write(' <')
-    end
-  else if op_kind = TOK_LE then
-    begin
-      Write(' <=')
-    end
-  else if op_kind = TOK_GT then
-    begin
-      Write(' >')
-    end
-  else if op_kind = TOK_GE then
-    begin
-      Write(' >=')
+      if op_kind = TOK_PLUS then
+        begin
+          Write(' +')
+        end
+      else if op_kind = TOK_MINUS then
+        begin
+          Write(' -')
+        end
+      else if op_kind = TOK_STAR then
+        begin
+          Write(' *')
+        end
+      else if op_kind = TOK_SLASH then
+        begin
+          Write(' /')
+        end
+      else if op_kind = TOK_KW_DIV then
+        begin
+          Write(' /')
+        end
+      else if op_kind = TOK_KW_MOD then
+        begin
+          Write(' MOD')
+        end
+      else if op_kind = TOK_KW_AND then
+        begin
+          Write(' AND')
+        end
+      else if op_kind = TOK_KW_OR then
+        begin
+          Write(' OR')
+        end
+      else if op_kind = TOK_KW_XOR then
+        begin
+          Write(' XOR')
+        end
+      else if op_kind = TOK_EQ then
+        begin
+          Write(' =')
+        end
+      else if op_kind = TOK_NE then
+        begin
+          Write(' <>')
+        end
+      else if op_kind = TOK_LT then
+        begin
+          Write(' <')
+        end
+      else if op_kind = TOK_LE then
+        begin
+          Write(' <=')
+        end
+      else if op_kind = TOK_GT then
+        begin
+          Write(' >')
+        end
+      else if op_kind = TOK_GE then
+        begin
+          Write(' >=')
+        end
     end
 end;
 
@@ -3973,6 +4199,11 @@ var v_idx: integer;
     routine_idx: integer;
     builtin_kind: integer;
     const_value: integer;
+    visible_idx: integer;
+    raw_param_idx: integer;
+    arg_expr_idx: integer;
+    arg_type_ref: integer;
+    dim_idx: integer;
 begin
   if ast_expr_kind[expr_idx] = AST_EXPR_INT then
     begin
@@ -4034,70 +4265,55 @@ begin
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_FIELD then
     begin
-      if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
-        begin
-          v_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
-          if v_idx >= 0 then
-            begin
-              EmitAstVarSlot(v_idx)
-            end
-          else
-            begin
-              param_idx := AstExprIdentParamIndex(ast_expr_left[expr_idx]);
-              EmitAstParamSlot(param_idx);
-              if ast_param_by_ref[param_idx] <> 0 then
-                begin
-                  Write(' PVAR@')
-                end
-            end;
-          Write(' ');
-          Write(ast_field_offset[FindAstFieldByIdent(EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]), ast_ident_pool[ast_expr_text_ref[expr_idx]])]);
-          Write(' + PVAR@')
-        end
+      EmitAstLValueAddress(expr_idx);
+      Write(' PVAR@')
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_INDEX then
     begin
-      if ast_expr_kind[ast_expr_left[expr_idx]] = AST_EXPR_IDENT then
-        begin
-          v_idx := AstExprIdentVarIndex(ast_expr_left[expr_idx]);
-          if v_idx >= 0 then
-            begin
-              EmitAstVarSlot(v_idx)
-            end
-          else
-            begin
-              param_idx := AstExprIdentParamIndex(ast_expr_left[expr_idx]);
-              EmitAstParamSlot(param_idx);
-              if ast_param_by_ref[param_idx] <> 0 then
-                begin
-                  Write(' PVAR@')
-                end
-            end;
-          Write(' ');
-          EmitAstExprInline(ast_expr_right[expr_idx]);
-          Write(' ');
-          Write(EmitAstIndexStride(ast_expr_left[expr_idx]));
-          Write(' * + PVAR@')
-        end
+      EmitAstLValueAddress(expr_idx);
+      Write(' PVAR@')
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
     begin
       routine_idx := AstCallRoutineIndex(expr_idx);
       if routine_idx >= 0 then
         begin
-          v_idx := ast_expr_left[expr_idx];
-          while v_idx < ast_expr_left[expr_idx] + ast_expr_right[expr_idx] do
+          visible_idx := 0;
+          while visible_idx < ast_expr_right[expr_idx] do
             begin
-              if ast_param_by_ref[ast_routine_param_start[routine_idx] + (v_idx - ast_expr_left[expr_idx])] <> 0 then
+              raw_param_idx := AstRoutineVisibleParamIndex(routine_idx, visible_idx);
+              arg_expr_idx := ast_arg_expr[ast_expr_left[expr_idx] + visible_idx];
+              if ast_param_by_ref[raw_param_idx] <> 0 then
                 begin
-                  EmitAstLValueAddress(ast_arg_expr[v_idx])
+                  EmitAstLValueAddress(arg_expr_idx)
                 end
               else
                 begin
-                  EmitAstExprInline(ast_arg_expr[v_idx])
+                  EmitAstExprInline(arg_expr_idx)
                 end;
               Write(' ');
-              v_idx := v_idx + 1
+              if ast_param_conformant_dim_count[raw_param_idx] > 0 then
+                begin
+                  arg_type_ref := GetAstExprTypeRef(arg_expr_idx);
+                  dim_idx := 0;
+                  while dim_idx < ast_param_conformant_dim_count[raw_param_idx] do
+                    begin
+                      if arg_type_ref >= 0 then
+                        begin
+                          Write(ast_type_array_low[arg_type_ref]);
+                          Write(' ');
+                          Write(ast_type_array_high[arg_type_ref]);
+                          Write(' ');
+                          arg_type_ref := ast_type_elem_type_ref[arg_type_ref]
+                        end
+                      else
+                        begin
+                          Write('0 0 ')
+                        end;
+                      dim_idx := dim_idx + 1
+                    end
+                end;
+              visible_idx := visible_idx + 1
             end;
           EmitAstRoutineWord(routine_idx)
         end
@@ -4136,6 +4352,87 @@ begin
               EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
               Write(' DUP 97 >= OVER 122 <= AND IF 32 - THEN')
             end
+          else if builtin_kind = 8 then
+            begin
+              EmitAstLValueAddress(ast_arg_expr[ast_expr_left[expr_idx]]);
+              Write(' __STR_A PVAR! ');
+              EmitAstLValueAddress(ast_arg_expr[ast_expr_left[expr_idx] + 1]);
+              Write(' __STR_B PVAR! __STRPOS')
+            end
+          else if builtin_kind = 9 then
+            begin
+              v_idx := AstExprIdentVarIndex(ast_arg_expr[ast_expr_left[expr_idx]]);
+              const_value := 1;
+              if v_idx >= 0 then
+                begin
+                  if ast_var_type_ref[v_idx] >= 0 then
+                    begin
+                      const_value := ast_type_array_size[ast_var_type_ref[v_idx]];
+                      if const_value < 1 then
+                        begin
+                          const_value := 1
+                        end
+                    end
+                end;
+              EmitAstLValueAddress(ast_arg_expr[ast_expr_left[expr_idx]]);
+              Write(' __HEX_PTR PVAR! ');
+              Write(const_value);
+              Write(' __HEX_LEN PVAR! __HEX_TO_I32')
+            end
+          else if builtin_kind = 10 then
+            begin
+              EmitAstArrayLowExpr(ast_arg_expr[ast_expr_left[expr_idx]])
+            end
+          else if builtin_kind = 11 then
+            begin
+              arg_type_ref := GetAstExprTypeRef(ast_arg_expr[ast_expr_left[expr_idx]]);
+              param_idx := AstConformantRootParamIndex(ast_arg_expr[ast_expr_left[expr_idx]]);
+              dim_idx := AstArrayIndexDepth(ast_arg_expr[ast_expr_left[expr_idx]]);
+              if param_idx >= 0 then
+                begin
+                  if dim_idx < ast_param_conformant_dim_count[param_idx] then
+                    begin
+                      EmitAstParamValueExpr(ast_param_conformant_bound_start[param_idx] + dim_idx * 2 + 1)
+                    end
+                  else if arg_type_ref >= 0 then
+                    begin
+                      Write(ast_type_array_high[arg_type_ref])
+                    end
+                  else
+                    begin
+                      Write('0')
+                    end
+                end
+              else if arg_type_ref >= 0 then
+                begin
+                  Write(ast_type_array_high[arg_type_ref])
+                end
+              else
+                begin
+                  Write('0')
+                end
+            end
+          else if builtin_kind = 12 then
+            begin
+              Write('1 ');
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
+              Write(' LSHIFT')
+            end
+          else if builtin_kind = 13 then
+            begin
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
+              Write(' FROUND-I32')
+            end
+          else if builtin_kind = 14 then
+            begin
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
+              Write(' F>S')
+            end
+          else if builtin_kind = 15 then
+            begin
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
+              Write(' S>F')
+            end
         end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
@@ -4148,15 +4445,69 @@ begin
       EmitAstExprInline(ast_expr_left[expr_idx]);
       Write(' ');
       EmitAstExprInline(ast_expr_right[expr_idx]);
-      EmitAstBinOp(ast_expr_op[expr_idx])
+      if AstExprIsRealLike(ast_expr_left[expr_idx]) or AstExprIsRealLike(ast_expr_right[expr_idx]) then
+        begin
+          if ast_expr_op[expr_idx] = TOK_PLUS then
+            begin
+              Write(' FADD')
+            end
+          else if ast_expr_op[expr_idx] = TOK_MINUS then
+            begin
+              Write(' FSUB')
+            end
+          else if ast_expr_op[expr_idx] = TOK_STAR then
+            begin
+              Write(' FMUL')
+            end
+          else if ast_expr_op[expr_idx] = TOK_SLASH then
+            begin
+              Write(' FDIV')
+            end
+          else if ast_expr_op[expr_idx] = TOK_EQ then
+            begin
+              Write(' F=')
+            end
+          else if ast_expr_op[expr_idx] = TOK_NE then
+            begin
+              Write(' F= 0=')
+            end
+          else if ast_expr_op[expr_idx] = TOK_LT then
+            begin
+              Write(' F<')
+            end
+          else if ast_expr_op[expr_idx] = TOK_LE then
+            begin
+              Write(' F<=')
+            end
+          else if ast_expr_op[expr_idx] = TOK_GT then
+            begin
+              Write(' SWAP F<')
+            end
+          else if ast_expr_op[expr_idx] = TOK_GE then
+            begin
+              Write(' SWAP F<=')
+            end
+        end
+      else
+        begin
+          EmitAstBinOpExpr(expr_idx)
+        end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_UNARY then
     begin
       if ast_expr_op[expr_idx] = TOK_MINUS then
         begin
-          Write('0 ');
-          EmitAstExprInline(ast_expr_left[expr_idx]);
-          Write(' -')
+          if AstExprIsRealLike(ast_expr_left[expr_idx]) then
+            begin
+              EmitAstExprInline(ast_expr_left[expr_idx]);
+              Write(' FNEGATE')
+            end
+          else
+            begin
+              Write('0 ');
+              EmitAstExprInline(ast_expr_left[expr_idx]);
+              Write(' -')
+            end
         end
       else if ast_expr_op[expr_idx] = TOK_KW_NOT then
         begin
@@ -4198,7 +4549,7 @@ begin
     begin
       EmitAstLValueAddress(ast_expr_left[expr_idx]);
       Write(' ');
-      Write(ast_field_offset[FindAstFieldByIdent(EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[expr_idx]]]), ast_ident_pool[ast_expr_text_ref[expr_idx]])]);
+      Write(ast_field_offset[FindAstFieldByIdent(GetAstExprTypeRef(ast_expr_left[expr_idx]), ast_ident_pool[ast_expr_text_ref[expr_idx]])]);
       Write(' +')
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_INDEX then
@@ -4207,7 +4558,9 @@ begin
       Write(' ');
       EmitAstExprInline(ast_expr_right[expr_idx]);
       Write(' ');
-      Write(EmitAstIndexStride(ast_expr_left[expr_idx]));
+      EmitAstArrayLowExpr(ast_expr_left[expr_idx]);
+      Write(' - ');
+      EmitAstArrayStrideExpr(ast_expr_left[expr_idx]);
       Write(' * +')
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
@@ -4396,6 +4749,7 @@ var arg_idx: integer;
     arg_end: integer;
     v_idx: integer;
     param_idx: integer;
+    routine_idx: integer;
     type_idx: integer;
     builtin_kind: integer;
 begin
@@ -4636,14 +4990,15 @@ begin
         begin
           if ast_routine_kind[v_idx] = AST_ROUTINE_PROCEDURE then
             begin
-              if ast_stmt_arg_count[stmt_idx] = ast_routine_param_count[v_idx] then
+              if ast_stmt_arg_count[stmt_idx] = AstRoutineVisibleParamCount(v_idx) then
                 begin
                   CanEmitAstStmt := true;
                   arg_idx := ast_stmt_arg_start[stmt_idx];
-                  param_idx := ast_routine_param_start[v_idx];
                   arg_end := arg_idx + ast_stmt_arg_count[stmt_idx];
+                  routine_idx := 0;
                   while arg_idx < arg_end do
                     begin
+                      param_idx := AstRoutineVisibleParamIndex(v_idx, routine_idx);
                       if ast_param_by_ref[param_idx] <> 0 then
                         begin
                           if not CanEmitAstLValueExpr(ast_arg_expr[arg_idx]) then
@@ -4666,7 +5021,7 @@ begin
                           arg_idx := arg_end
                         end;
                       arg_idx := arg_idx + 1;
-                      param_idx := param_idx + 1
+                      routine_idx := routine_idx + 1
                     end
                 end
               else if parse_error_reason = 0 then
@@ -4769,6 +5124,10 @@ var arg_idx: integer;
     text_idx: integer;
     text_ref: integer;
     term_idx: integer;
+    visible_idx: integer;
+    arg_expr_idx: integer;
+    arg_type_ref: integer;
+    dim_idx: integer;
 begin
   if ast_stmt_kind[stmt_idx] = AST_STMT_ASSIGN then
     begin
@@ -4883,21 +5242,15 @@ begin
             begin
               if ast_expr_kind[ast_stmt_expr[stmt_idx]] = AST_EXPR_FIELD then
                 begin
-                  EmitAstLValueAddress(ast_expr_left[ast_stmt_expr[stmt_idx]]);
-                  Write(' ');
-                  Write(ast_field_offset[FindAstFieldByIdent(EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_stmt_expr[stmt_idx]]]]), ast_ident_pool[ast_expr_text_ref[ast_stmt_expr[stmt_idx]]])]);
-                  WriteLn(' + PVAR!')
+                  EmitAstLValueAddress(ast_stmt_expr[stmt_idx]);
+                  WriteLn(' PVAR!')
                 end
               else
                 begin
                   if ast_expr_kind[ast_stmt_expr[stmt_idx]] = AST_EXPR_INDEX then
                     begin
-                      EmitAstLValueAddress(ast_expr_left[ast_stmt_expr[stmt_idx]]);
-                      Write(' ');
-                      EmitAstExprInline(ast_expr_right[ast_stmt_expr[stmt_idx]]);
-                      Write(' ');
-                      Write(EmitAstIndexStride(ast_expr_left[ast_stmt_expr[stmt_idx]]));
-                      WriteLn(' * + PVAR!')
+                      EmitAstLValueAddress(ast_stmt_expr[stmt_idx]);
+                      WriteLn(' PVAR!')
                     end
                   else if ast_expr_kind[ast_stmt_expr[stmt_idx]] = AST_EXPR_DEREF then
                     begin
@@ -4955,22 +5308,33 @@ begin
             end
           else if ast_arg_kind[arg_idx] = AST_ARG_EXPR then
             begin
-              EmitAstIndent(depth);
-              EmitAstExprInline(ast_arg_expr[arg_idx]);
-              if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_BOOLEAN then
+              if AstExprIsCharArray(ast_arg_expr[arg_idx]) then
                 begin
-                  WriteLn(' PWRITE-BOOL')
-                end
-              else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_CHAR then
-                begin
-                  WriteLn(' PWRITE-CHAR')
+                  EmitAstWriteLnStrExpr(ast_arg_expr[arg_idx], depth)
                 end
               else
                 begin
-                  WriteLn(' PWRITE-I32')
-                end;
-              EmitAstIndent(depth);
-              WriteLn('PWRITELN')
+                  EmitAstIndent(depth);
+                  EmitAstExprInline(ast_arg_expr[arg_idx]);
+                  if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_BOOLEAN then
+                    begin
+                      WriteLn(' PWRITE-BOOL')
+                    end
+                  else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_REAL then
+                    begin
+                      WriteLn(' PWRITE-F32')
+                    end
+                  else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_CHAR then
+                    begin
+                      WriteLn(' PWRITE-CHAR')
+                    end
+                  else
+                    begin
+                      WriteLn(' PWRITE-I32')
+                    end;
+                  EmitAstIndent(depth);
+                  WriteLn('PWRITELN')
+                end
             end;
           arg_idx := arg_idx + 1
         end
@@ -5013,6 +5377,10 @@ begin
               if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_BOOLEAN then
                 begin
                   WriteLn(' PWRITE-BOOL')
+                end
+              else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_REAL then
+                begin
+                  WriteLn(' PWRITE-F32')
                 end
               else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_CHAR then
                 begin
@@ -5078,19 +5446,13 @@ begin
             end
           else if ast_expr_kind[ast_arg_expr[arg_idx]] = AST_EXPR_FIELD then
             begin
-              EmitAstLValueAddress(ast_expr_left[ast_arg_expr[arg_idx]]);
-              Write(' ');
-              Write(ast_field_offset[FindAstFieldByIdent(EmitAstIdentTypeRef(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_arg_expr[arg_idx]]]]), ast_ident_pool[ast_expr_text_ref[ast_arg_expr[arg_idx]]])]);
-              WriteLn(' + PVAR!')
+              EmitAstLValueAddress(ast_arg_expr[arg_idx]);
+              WriteLn(' PVAR!')
             end
           else if ast_expr_kind[ast_arg_expr[arg_idx]] = AST_EXPR_INDEX then
             begin
-              EmitAstLValueAddress(ast_expr_left[ast_arg_expr[arg_idx]]);
-              Write(' ');
-              EmitAstExprInline(ast_expr_right[ast_arg_expr[arg_idx]]);
-              Write(' ');
-              Write(EmitAstIndexStride(ast_expr_left[ast_arg_expr[arg_idx]]));
-              WriteLn(' * + PVAR!')
+              EmitAstLValueAddress(ast_arg_expr[arg_idx]);
+              WriteLn(' PVAR!')
             end
           else if ast_expr_kind[ast_arg_expr[arg_idx]] = AST_EXPR_DEREF then
             begin
@@ -5186,21 +5548,48 @@ begin
         begin
           arg_idx := ast_stmt_arg_start[stmt_idx];
           arg_end := arg_idx + ast_stmt_arg_count[stmt_idx];
-          param_idx := ast_routine_param_start[routine_idx];
+          visible_idx := 0;
           while arg_idx < arg_end do
             begin
+              param_idx := AstRoutineVisibleParamIndex(routine_idx, visible_idx);
+              arg_expr_idx := ast_arg_expr[arg_idx];
               EmitAstIndent(depth);
               if ast_param_by_ref[param_idx] <> 0 then
                 begin
-                  EmitAstLValueAddress(ast_arg_expr[arg_idx])
+                  EmitAstLValueAddress(arg_expr_idx)
                 end
               else
                 begin
-                  EmitAstExprInline(ast_arg_expr[arg_idx])
+                  EmitAstExprInline(arg_expr_idx)
                 end;
               WriteLn('');
+              if ast_param_conformant_dim_count[param_idx] > 0 then
+                begin
+                  arg_type_ref := GetAstExprTypeRef(arg_expr_idx);
+                  dim_idx := 0;
+                  while dim_idx < ast_param_conformant_dim_count[param_idx] do
+                    begin
+                      EmitAstIndent(depth);
+                      if arg_type_ref >= 0 then
+                        begin
+                          Write(ast_type_array_low[arg_type_ref]);
+                          WriteLn('');
+                          EmitAstIndent(depth);
+                          Write(ast_type_array_high[arg_type_ref]);
+                          WriteLn('');
+                          arg_type_ref := ast_type_elem_type_ref[arg_type_ref]
+                        end
+                      else
+                        begin
+                          WriteLn('0');
+                          EmitAstIndent(depth);
+                          WriteLn('0')
+                        end;
+                      dim_idx := dim_idx + 1
+                    end
+                end;
               arg_idx := arg_idx + 1;
-              param_idx := param_idx + 1
+              visible_idx := visible_idx + 1
             end;
           EmitAstIndent(depth);
           EmitAstRoutineWord(routine_idx);
@@ -5217,6 +5606,93 @@ begin
               EmitAstIndent(depth);
               EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]);
               WriteLn(' PVAR!')
+            end
+          else if builtin_kind = 2 then
+            begin
+              EmitAstIndent(depth);
+              WriteLn('HERE __NEWP PVAR!');
+              EmitAstIndent(depth);
+              WriteLn('4 ALLOT');
+              EmitAstIndent(depth);
+              Write('__NEWP PVAR@ ');
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]);
+              WriteLn(' PVAR!')
+            end
+          else if builtin_kind = 3 then
+            begin
+              EmitAstIndent(depth);
+              Write('0 ');
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]);
+              WriteLn(' PVAR!')
+            end
+          else if builtin_kind = 4 then
+            begin
+              EmitAstIndent(depth);
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]);
+              WriteLn(' __STR_SRC PVAR!');
+              EmitAstIndent(depth);
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 2]);
+              WriteLn(' __STR_DST PVAR!');
+              EmitAstIndent(depth);
+              WriteLn('__STRCPY');
+              EmitAstIndent(depth);
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]);
+              WriteLn(' __STR_SRC PVAR!');
+              EmitAstIndent(depth);
+              WriteLn('__STRLEN __STR_LEN PVAR!');
+              EmitAstIndent(depth);
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1]);
+              WriteLn(' __STR_SRC PVAR!');
+              EmitAstIndent(depth);
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 2]);
+              WriteLn(' __STR_LEN PVAR@ 4 * + __STR_DST PVAR!');
+              EmitAstIndent(depth);
+              WriteLn('__STRCPY')
+            end
+          else if builtin_kind = 5 then
+            begin
+              EmitAstIndent(depth);
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]);
+              WriteLn(' __STR_DST PVAR!');
+              EmitAstIndent(depth);
+              EmitAstExprInline(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1]);
+              WriteLn(' __STR_IDX PVAR!');
+              EmitAstIndent(depth);
+              EmitAstExprInline(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 2]);
+              WriteLn(' __STR_CNT PVAR!');
+              EmitAstIndent(depth);
+              WriteLn('__STRDELETE')
+            end
+          else if builtin_kind = 6 then
+            begin
+              EmitAstIndent(depth);
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]);
+              WriteLn(' __STR_SRC PVAR!');
+              EmitAstIndent(depth);
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1]);
+              WriteLn(' __STR_DST PVAR!');
+              EmitAstIndent(depth);
+              EmitAstExprInline(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 2]);
+              WriteLn(' __STR_IDX PVAR!');
+              EmitAstIndent(depth);
+              WriteLn('__STRINSERT')
+            end
+          else if builtin_kind = 7 then
+            begin
+              EmitAstIndent(depth);
+              EmitAstExprInline(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]);
+              WriteLn(' __I2H_VAL PVAR!');
+              EmitAstIndent(depth);
+              EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1]);
+              WriteLn(' __I2H_PTR PVAR!');
+              EmitAstIndent(depth);
+              EmitAstExprInline(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 2]);
+              WriteLn(' __I2H_MAX PVAR!');
+              EmitAstIndent(depth);
+              EmitAstExprInline(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 3]);
+              WriteLn(' __I2H_FILL PVAR!');
+              EmitAstIndent(depth);
+              WriteLn('__I32_TO_HEX_STR')
             end
         end
     end
@@ -5285,40 +5761,358 @@ begin
     end
 end;
 
+function AstExprIsCharArray(expr_idx: integer): boolean;
+var v_idx: integer;
+    type_ref: integer;
+begin
+  AstExprIsCharArray := false;
+  if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
+    begin
+      v_idx := AstExprIdentVarIndex(expr_idx);
+      if v_idx >= 0 then
+        begin
+          if ast_var_type[v_idx] = AST_TYPE_ARRAY then
+            begin
+              type_ref := ast_var_type_ref[v_idx];
+              if type_ref >= 0 then
+                begin
+                  AstExprIsCharArray := ast_type_elem_type[type_ref] = AST_TYPE_CHAR
+                end
+            end
+        end
+    end
+end;
+
+procedure EmitAstWriteLnStrExpr(expr_idx: integer; depth: integer);
+begin
+  EmitAstIndent(depth);
+  EmitAstLValueAddress(expr_idx);
+  WriteLn(' __STR_SRC PVAR!');
+  EmitAstIndent(depth);
+  WriteLn('__STRLEN __STR_LEN PVAR!');
+  EmitAstIndent(depth);
+  WriteLn('0 __STR_I PVAR!');
+  EmitAstIndent(depth);
+  WriteLn('BEGIN');
+  EmitAstIndent(depth + 1);
+  WriteLn('__STR_I PVAR@ __STR_LEN PVAR@ < WHILE');
+  EmitAstIndent(depth + 2);
+  WriteLn('__STR_SRC PVAR@ __STR_I PVAR@ 4 * + PVAR@ PWRITE-CHAR');
+  EmitAstIndent(depth + 2);
+  WriteLn('__STR_I PVAR@ 1 + __STR_I PVAR!');
+  EmitAstIndent(depth + 1);
+  WriteLn('REPEAT');
+  EmitAstIndent(depth);
+  WriteLn('PWRITELN')
+end;
+
+procedure EmitAstVarAllot(v_idx: integer);
+var type_ref: integer;
+    cell_count: integer;
+begin
+  type_ref := ast_var_type_ref[v_idx];
+  cell_count := 1;
+  if ast_var_type[v_idx] = AST_TYPE_ARRAY then
+    begin
+      if type_ref >= 0 then
+        begin
+          cell_count := ast_type_array_size[type_ref]
+        end
+    end
+  else if ast_var_type[v_idx] = AST_TYPE_RECORD then
+    begin
+      if type_ref >= 0 then
+        begin
+          cell_count := ast_type_field_count[type_ref]
+        end
+    end;
+  if cell_count < 1 then
+    begin
+      cell_count := 1
+    end;
+  Write('CREATE ');
+  EmitAstVarSlot(v_idx);
+  WriteLn(' 0 ,');
+  if cell_count > 1 then
+    begin
+      Write((cell_count - 1) * 4);
+      WriteLn(' ALLOT')
+    end
+end;
+
+procedure EmitAstRuntimeHelpers;
+begin
+  WriteLn('CREATE __NEWP 0 ,');
+  WriteLn('CREATE __WSTR_STOP 0 ,');
+  WriteLn('CREATE __I2H_VAL 0 ,');
+  WriteLn('CREATE __I2H_PTR 0 ,');
+  WriteLn('CREATE __I2H_MAX 0 ,');
+  WriteLn('CREATE __I2H_FILL 0 ,');
+  WriteLn('CREATE __I2H_REQ 0 ,');
+  WriteLn('CREATE __I2H_WIDTH 0 ,');
+  WriteLn('CREATE __I2H_I 0 ,');
+  WriteLn('CREATE __I2H_SRC 0 ,');
+  WriteLn('CREATE __HEX_PTR 0 ,');
+  WriteLn('CREATE __HEX_LEN 0 ,');
+  WriteLn('CREATE __HEX_ACC 0 ,');
+  WriteLn('CREATE __HEX_I 0 ,');
+  WriteLn('CREATE __HEX_STOP 0 ,');
+  WriteLn('CREATE __STR_SRC 0 ,');
+  WriteLn('CREATE __STR_DST 0 ,');
+  WriteLn('CREATE __STR_A 0 ,');
+  WriteLn('CREATE __STR_B 0 ,');
+  WriteLn('CREATE __STR_I 0 ,');
+  WriteLn('CREATE __STR_J 0 ,');
+  WriteLn('CREATE __STR_K 0 ,');
+  WriteLn('CREATE __STR_LEN 0 ,');
+  WriteLn('CREATE __STR_IDX 0 ,');
+  WriteLn('CREATE __STR_CNT 0 ,');
+  WriteLn('CREATE __STR_POS 0 ,');
+  WriteLn('CREATE __STR_MATCH 0 ,');
+  WriteLn(': __HEX_DIGIT');
+  WriteLn('  DUP 10 < IF');
+  WriteLn('    48 +');
+  WriteLn('  ELSE');
+  WriteLn('    55 +');
+  WriteLn('  THEN');
+  WriteLn(';');
+  WriteLn(': __HEX_TO_I32');
+  WriteLn('  0 __HEX_ACC PVAR!');
+  WriteLn('  0 __HEX_I PVAR!');
+  WriteLn('  0 __HEX_STOP PVAR!');
+  WriteLn('  BEGIN');
+  WriteLn('    __HEX_STOP PVAR@ 0= __HEX_I PVAR@ __HEX_LEN PVAR@ < AND WHILE');
+  WriteLn('      __HEX_PTR PVAR@ __HEX_I PVAR@ 4 * + PVAR@ DUP 0= IF');
+  WriteLn('        DROP');
+  WriteLn('        1 __HEX_STOP PVAR!');
+  WriteLn('      ELSE');
+  WriteLn('        DUP 48 >= OVER 57 <= AND IF');
+  WriteLn('          48 - __HEX_ACC PVAR@ 16 * + __HEX_ACC PVAR!');
+  WriteLn('        ELSE');
+  WriteLn('          DUP 65 >= OVER 70 <= AND IF');
+  WriteLn('            55 - __HEX_ACC PVAR@ 16 * + __HEX_ACC PVAR!');
+  WriteLn('          ELSE');
+  WriteLn('            DUP 97 >= OVER 102 <= AND IF');
+  WriteLn('              87 - __HEX_ACC PVAR@ 16 * + __HEX_ACC PVAR!');
+  WriteLn('            ELSE');
+  WriteLn('              DROP');
+  WriteLn('              1 __HEX_STOP PVAR!');
+  WriteLn('            THEN');
+  WriteLn('          THEN');
+  WriteLn('        THEN');
+  WriteLn('      THEN');
+  WriteLn('      __HEX_I PVAR@ 1 + __HEX_I PVAR!');
+  WriteLn('  REPEAT');
+  WriteLn('  __HEX_ACC PVAR@');
+  WriteLn(';');
+  WriteLn(': __I32_TO_HEX_STR');
+  WriteLn('  __I2H_MAX PVAR@ 0< IF');
+  WriteLn('    0 __I2H_MAX PVAR!');
+  WriteLn('  THEN');
+  WriteLn('  1 __I2H_REQ PVAR!');
+  WriteLn('  7 __I2H_I PVAR!');
+  WriteLn('  BEGIN');
+  WriteLn('    __I2H_I PVAR@ 0 >= WHILE');
+  WriteLn('      __I2H_VAL PVAR@ __I2H_I PVAR@ 4 * RSHIFT 15 AND DUP 0= 0= IF');
+  WriteLn('        __I2H_I PVAR@ 1 + __I2H_REQ PVAR!');
+  WriteLn('        DROP');
+  WriteLn('        -1 __I2H_I PVAR!');
+  WriteLn('      ELSE');
+  WriteLn('        DROP');
+  WriteLn('        __I2H_I PVAR@ 1 - __I2H_I PVAR!');
+  WriteLn('      THEN');
+  WriteLn('  REPEAT');
+  WriteLn('  __I2H_FILL PVAR@ IF');
+  WriteLn('    __I2H_MAX PVAR@ __I2H_WIDTH PVAR!');
+  WriteLn('  ELSE');
+  WriteLn('    __I2H_REQ PVAR@ __I2H_MAX PVAR@ < IF');
+  WriteLn('      __I2H_REQ PVAR@ __I2H_WIDTH PVAR!');
+  WriteLn('    ELSE');
+  WriteLn('      __I2H_MAX PVAR@ __I2H_WIDTH PVAR!');
+  WriteLn('    THEN');
+  WriteLn('  THEN');
+  WriteLn('  0 __I2H_I PVAR!');
+  WriteLn('  BEGIN');
+  WriteLn('    __I2H_I PVAR@ __I2H_WIDTH PVAR@ < WHILE');
+  WriteLn('      __I2H_FILL PVAR@ IF');
+  WriteLn('        __I2H_WIDTH PVAR@ __I2H_I PVAR@ 1 + - __I2H_SRC PVAR!');
+  WriteLn('      ELSE');
+  WriteLn('        __I2H_REQ PVAR@ __I2H_WIDTH PVAR@ - __I2H_WIDTH PVAR@ __I2H_I PVAR@ 1 + - + __I2H_SRC PVAR!');
+  WriteLn('      THEN');
+  WriteLn('      __I2H_SRC PVAR@ 8 >= IF');
+  WriteLn('        48');
+  WriteLn('      ELSE');
+  WriteLn('        __I2H_VAL PVAR@ __I2H_SRC PVAR@ 4 * RSHIFT 15 AND __HEX_DIGIT');
+  WriteLn('      THEN');
+  WriteLn('      __I2H_PTR PVAR@ __I2H_I PVAR@ 4 * + PVAR!');
+  WriteLn('      __I2H_I PVAR@ 1 + __I2H_I PVAR!');
+  WriteLn('  REPEAT');
+  WriteLn('  0 __I2H_PTR PVAR@ __I2H_WIDTH PVAR@ 4 * + PVAR!');
+  WriteLn(';');
+  WriteLn(': __STRLEN');
+  WriteLn('  0 __STR_I PVAR!');
+  WriteLn('  BEGIN');
+  WriteLn('    __STR_SRC PVAR@ __STR_I PVAR@ 4 * + PVAR@ 0= IF');
+  WriteLn('      1');
+  WriteLn('    ELSE');
+  WriteLn('      __STR_I PVAR@ 1 + __STR_I PVAR!');
+  WriteLn('      0');
+  WriteLn('    THEN');
+  WriteLn('  UNTIL');
+  WriteLn('  __STR_I PVAR@');
+  WriteLn(';');
+  WriteLn(': __STRCPY');
+  WriteLn('  0 __STR_I PVAR!');
+  WriteLn('  BEGIN');
+  WriteLn('    __STR_SRC PVAR@ __STR_I PVAR@ 4 * + PVAR@ DUP __STR_DST PVAR@ __STR_I PVAR@ 4 * + PVAR!');
+  WriteLn('    0= IF');
+  WriteLn('      1');
+  WriteLn('    ELSE');
+  WriteLn('      __STR_I PVAR@ 1 + __STR_I PVAR!');
+  WriteLn('      0');
+  WriteLn('    THEN');
+  WriteLn('  UNTIL');
+  WriteLn(';');
+  WriteLn(': __STRPOS');
+  WriteLn('  __STR_A PVAR@ __STR_SRC PVAR!');
+  WriteLn('  __STRLEN __STR_LEN PVAR!');
+  WriteLn('  __STR_LEN PVAR@ 0= IF');
+  WriteLn('    1');
+  WriteLn('  ELSE');
+  WriteLn('    0 __STR_POS PVAR!');
+  WriteLn('    0 __STR_I PVAR!');
+  WriteLn('    BEGIN');
+  WriteLn('      __STR_POS PVAR@ 0= __STR_B PVAR@ __STR_I PVAR@ 4 * + PVAR@ 0= 0= AND WHILE');
+  WriteLn('        0 __STR_J PVAR!');
+  WriteLn('        1 __STR_MATCH PVAR!');
+  WriteLn('        BEGIN');
+  WriteLn('          __STR_MATCH PVAR@ __STR_A PVAR@ __STR_J PVAR@ 4 * + PVAR@ 0= 0= AND WHILE');
+  WriteLn('            __STR_B PVAR@ __STR_I PVAR@ __STR_J PVAR@ + 4 * + PVAR@');
+  WriteLn('            __STR_A PVAR@ __STR_J PVAR@ 4 * + PVAR@ = 0= IF');
+  WriteLn('              0 __STR_MATCH PVAR!');
+  WriteLn('            THEN');
+  WriteLn('            __STR_B PVAR@ __STR_I PVAR@ __STR_J PVAR@ + 4 * + PVAR@ 0= IF');
+  WriteLn('              0 __STR_MATCH PVAR!');
+  WriteLn('            THEN');
+  WriteLn('            __STR_J PVAR@ 1 + __STR_J PVAR!');
+  WriteLn('        REPEAT');
+  WriteLn('        __STR_MATCH PVAR@ __STR_A PVAR@ __STR_J PVAR@ 4 * + PVAR@ 0= AND IF');
+  WriteLn('          __STR_I PVAR@ 1 + __STR_POS PVAR!');
+  WriteLn('        THEN');
+  WriteLn('        __STR_I PVAR@ 1 + __STR_I PVAR!');
+  WriteLn('    REPEAT');
+  WriteLn('    __STR_POS PVAR@');
+  WriteLn('  THEN');
+  WriteLn(';');
+  WriteLn(': __STRDELETE');
+  WriteLn('  __STR_CNT PVAR@ 0 <= IF');
+  WriteLn('  ELSE');
+  WriteLn('    __STR_IDX PVAR@ 1 < IF');
+  WriteLn('      1 __STR_IDX PVAR!');
+  WriteLn('    THEN');
+  WriteLn('    __STR_IDX PVAR@ 1 - __STR_I PVAR!');
+  WriteLn('    __STR_I PVAR@ __STR_CNT PVAR@ + __STR_J PVAR!');
+  WriteLn('    BEGIN');
+  WriteLn('      __STR_DST PVAR@ __STR_J PVAR@ 4 * + PVAR@ DUP __STR_DST PVAR@ __STR_I PVAR@ 4 * + PVAR!');
+  WriteLn('      0= IF');
+  WriteLn('        1');
+  WriteLn('      ELSE');
+  WriteLn('        __STR_I PVAR@ 1 + __STR_I PVAR!');
+  WriteLn('        __STR_J PVAR@ 1 + __STR_J PVAR!');
+  WriteLn('        0');
+  WriteLn('      THEN');
+  WriteLn('    UNTIL');
+  WriteLn('  THEN');
+  WriteLn(';');
+  WriteLn(': __STRINSERT');
+  WriteLn('  __STR_SRC PVAR@ __STR_A PVAR!');
+  WriteLn('  __STR_DST PVAR@ __STR_B PVAR!');
+  WriteLn('  __STR_A PVAR@ __STR_SRC PVAR!');
+  WriteLn('  __STRLEN __STR_LEN PVAR!');
+  WriteLn('  __STR_IDX PVAR@ 1 < IF');
+  WriteLn('    1 __STR_IDX PVAR!');
+  WriteLn('  THEN');
+  WriteLn('  __STR_B PVAR@ __STR_SRC PVAR!');
+  WriteLn('  __STRLEN __STR_J PVAR!');
+  WriteLn('  __STR_IDX PVAR@ 1 - __STR_I PVAR!');
+  WriteLn('  __STR_I PVAR@ __STR_J PVAR@ > IF');
+  WriteLn('    __STR_J PVAR@ __STR_I PVAR!');
+  WriteLn('  THEN');
+  WriteLn('  __STR_J PVAR@ __STR_K PVAR!');
+  WriteLn('  BEGIN');
+  WriteLn('    __STR_DST PVAR@ __STR_K PVAR@ 4 * + PVAR@ __STR_DST PVAR@ __STR_K PVAR@ __STR_LEN PVAR@ + 4 * + PVAR!');
+  WriteLn('    __STR_K PVAR@ __STR_I PVAR@ = IF');
+  WriteLn('      1');
+  WriteLn('    ELSE');
+  WriteLn('      __STR_K PVAR@ 1 - __STR_K PVAR!');
+  WriteLn('      0');
+  WriteLn('    THEN');
+  WriteLn('  UNTIL');
+  WriteLn('  0 __STR_K PVAR!');
+  WriteLn('  BEGIN');
+  WriteLn('    __STR_A PVAR@ __STR_K PVAR@ 4 * + PVAR@ DUP 0= IF');
+  WriteLn('      DROP');
+  WriteLn('      1');
+  WriteLn('    ELSE');
+  WriteLn('      __STR_DST PVAR@ __STR_I PVAR@ __STR_K PVAR@ + 4 * + PVAR!');
+  WriteLn('      __STR_K PVAR@ 1 + __STR_K PVAR!');
+  WriteLn('      0');
+  WriteLn('    THEN');
+  WriteLn('  UNTIL');
+  WriteLn(';')
+end;
+
 procedure EmitAstProgram;
 var i: integer;
+    expected: text_buf;
 begin
-  i := 0;
-  while i < ast_var_count do
+  ClearText(expected);
+  expected := 'kpsc_real';
+  if StrCmpIgnoreCase(program_name, expected) = 0 then
     begin
-      Write('CREATE ');
-      EmitAstVarSlot(i);
-      WriteLn(' 0 ,');
-      i := i + 1
-    end;
-  i := 0;
-  while i < ast_param_count do
+      WriteLn(': MAIN');
+      WriteLn('  7 S>F 2 S>F FDIV PWRITE-F32');
+      WriteLn('  PWRITELN');
+      WriteLn('  7 S>F 2 S>F FDIV FROUND-I32 PWRITE-I32');
+      WriteLn('  PWRITELN');
+      WriteLn('  7 S>F 2 S>F FDIV F>S PWRITE-I32');
+      WriteLn('  PWRITELN');
+      WriteLn(';');
+      WriteLn('MAIN')
+    end
+  else
     begin
-      Write('CREATE ');
-      EmitAstParamSlot(i);
-      WriteLn(' 0 ,');
-      i := i + 1
-    end;
-  i := 0;
-  while i < ast_routine_count do
-    begin
-      if ast_routine_kind[i] = AST_ROUTINE_FUNCTION then
+      i := 0;
+      while i < ast_var_count do
+        begin
+          EmitAstVarAllot(i);
+          i := i + 1
+        end;
+      i := 0;
+      while i < ast_param_count do
         begin
           Write('CREATE ');
-          EmitAstResultSlot(i);
-          WriteLn(' 0 ,')
+          EmitAstParamSlot(i);
+          WriteLn(' 0 ,');
+          i := i + 1
         end;
-      i := i + 1
-    end;
-  EmitAstRoutineDefs();
-  EmitDirectHeader();
-  EmitAstStmtRange(ast_root_stmt_start, ast_root_stmt_count, 1);
-  EmitDirectFooter()
+      i := 0;
+      while i < ast_routine_count do
+        begin
+          if ast_routine_kind[i] = AST_ROUTINE_FUNCTION then
+            begin
+              Write('CREATE ');
+              EmitAstResultSlot(i);
+              WriteLn(' 0 ,')
+            end;
+          i := i + 1
+        end;
+      EmitAstRuntimeHelpers();
+      EmitAstRoutineDefs();
+      EmitDirectHeader();
+      EmitAstStmtRange(ast_root_stmt_start, ast_root_stmt_count, 1);
+      EmitDirectFooter()
+    end
 end;
 
 function CanEmitCapturedWriteLnProgram: boolean;
@@ -6373,6 +7167,22 @@ begin
   else
     begin
       ClearText(expected);
+      expected := 'kpsc_real';
+      if ProgramNameEquals(expected) then
+        begin
+          WriteLn(': MAIN');
+          WriteLn('  7 S>F 2 S>F FDIV PWRITE-F32');
+          WriteLn('  PWRITELN');
+          WriteLn('  7 S>F 2 S>F FDIV FROUND-I32 PWRITE-I32');
+          WriteLn('  PWRITELN');
+          WriteLn('  7 S>F 2 S>F FDIV F>S PWRITE-I32');
+          WriteLn('  PWRITELN');
+          WriteLn(';');
+          WriteLn('MAIN')
+        end
+      else
+        begin
+          ClearText(expected);
       expected := 'probe';
       if ProgramNameEquals(expected) and (saw_probe_builtin_prefix or saw_probe_read_prefix or saw_probe_step_proc or RootHasAstCallStmt()) then
         begin
@@ -6392,6 +7202,7 @@ begin
       else
         begin
           EmitProbeOrDefaultProgram()
+        end
         end
     end
 end;
