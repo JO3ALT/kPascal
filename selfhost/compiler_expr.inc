@@ -422,6 +422,29 @@ begin
     end
 end;
 
+function BuildAstSetBitExpr(value_idx: integer): integer;
+var expr_idx: integer;
+begin
+  expr_idx := NewAstExpr(AST_EXPR_CALL);
+  ast_expr_op[expr_idx] := 12;
+  ast_expr_left[expr_idx] := ast_arg_count;
+  ast_expr_right[expr_idx] := 0;
+  AppendAstCallExprArg(expr_idx, value_idx);
+  BuildAstSetBitExpr := expr_idx
+end;
+
+function BuildAstSetRangeExpr(lo_idx: integer; hi_idx: integer): integer;
+var expr_idx: integer;
+begin
+  expr_idx := NewAstExpr(AST_EXPR_CALL);
+  ast_expr_op[expr_idx] := 16;
+  ast_expr_left[expr_idx] := ast_arg_count;
+  ast_expr_right[expr_idx] := 0;
+  AppendAstCallExprArg(expr_idx, lo_idx);
+  AppendAstCallExprArg(expr_idx, hi_idx);
+  BuildAstSetRangeExpr := expr_idx
+end;
+
 function BuildAstPrimaryExpr: integer;
 var expr_idx: integer;
     index_idx: integer;
@@ -442,16 +465,15 @@ begin
       set_expr_idx := zero_expr_idx;
       while token_kind <> TOK_RBRACK do
         begin
-          expr_idx := NewAstExpr(AST_EXPR_CALL);
-          ast_expr_op[expr_idx] := 12;
-          ast_expr_left[expr_idx] := ast_arg_count;
-          ast_expr_right[expr_idx] := 0;
-          AppendAstCallExprArg(expr_idx, BuildAstExpr());
+          expr_idx := BuildAstExpr();
           if token_kind = TOK_DOTDOT then
             begin
-              bootstrap_capture_failed := true;
-              parse_error_reason := 206;
-              FailParse()
+              NextToken();
+              expr_idx := BuildAstSetRangeExpr(expr_idx, BuildAstExpr())
+            end
+          else
+            begin
+              expr_idx := BuildAstSetBitExpr(expr_idx)
             end;
           if set_expr_idx = zero_expr_idx then
             begin
@@ -471,13 +493,8 @@ begin
     end
   else if token_kind = TOK_REAL_LIT then
     begin
-      expr_idx := NewAstExpr(AST_EXPR_CALL);
-      ast_expr_op[expr_idx] := 15;
-      ast_expr_left[expr_idx] := ast_arg_count;
-      ast_expr_right[expr_idx] := 0;
-      index_idx := NewAstExpr(AST_EXPR_INT);
-      ast_expr_int[index_idx] := token_value;
-      AppendAstCallExprArg(expr_idx, index_idx);
+      expr_idx := NewAstExpr(AST_EXPR_REAL);
+      ast_expr_text_ref[expr_idx] := NewAstTextLit(token_text);
       NextToken();
       BuildAstPrimaryExpr := expr_idx
     end

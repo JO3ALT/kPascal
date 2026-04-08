@@ -251,62 +251,66 @@ end;
 
 procedure ReadNumberToken;
 var i: integer;
-    frac_value: integer;
-    frac_nonzero: boolean;
     peek_char: char;
+    saw_real: boolean;
+    done: boolean;
 begin
   ClearToken();
   i := 0;
-  frac_value := 0;
-  frac_nonzero := false;
-  while i < 100000 do
+  saw_real := false;
+  done := false;
+  while not done do
     begin
       if stream_eof then
         begin
-          i := 100000
+          done := true
         end
       else if IsDigit(stream_current_char) then
         begin
           token_value := token_value * 10 + Ord(stream_current_char) - Ord('0');
+          token_text[i] := stream_current_char;
           i := i + 1;
           AdvanceSourceStream()
         end
       else
         begin
-          i := 100000
+          done := true
         end
     end;
   if stream_current_char = '.' then
     begin
       AdvanceSourceStream();
-      if IsDigit(stream_current_char) then
+      if stream_current_char = '.' then
         begin
-          while i < 100000 do
+          source_buffered_char := stream_current_char;
+          source_has_buffered_char := true;
+          stream_current_char := '.';
+          stream_eof := false;
+          token_kind := TOK_INT
+        end
+      else if IsDigit(stream_current_char) then
+        begin
+          token_text[i] := '.';
+          i := i + 1;
+          saw_real := true;
+          done := false;
+          while not done do
             begin
               if stream_eof then
                 begin
-                  i := 100000
+                  done := true
                 end
               else if IsDigit(stream_current_char) then
                 begin
-                  frac_value := frac_value * 10 + Ord(stream_current_char) - Ord('0');
-                  if stream_current_char <> '0' then
-                    begin
-                      frac_nonzero := true
-                    end;
+                  token_text[i] := stream_current_char;
                   i := i + 1;
                   AdvanceSourceStream()
                 end
               else
                 begin
-                  i := 100000
+                  done := true
                 end
             end;
-          token_kind := TOK_REAL_LIT;
-          if frac_nonzero then
-            begin
-              bootstrap_capture_failed := true
-            end
         end
       else
         begin
@@ -317,6 +321,98 @@ begin
           stream_eof := false;
           token_kind := TOK_INT
         end
+    end;
+  if stream_current_char = 'e' then
+    begin
+      token_text[i] := stream_current_char;
+      i := i + 1;
+      AdvanceSourceStream();
+      if stream_current_char = '+' then
+        begin
+          token_text[i] := stream_current_char;
+          i := i + 1;
+          AdvanceSourceStream()
+        end
+      else if stream_current_char = '-' then
+        begin
+          token_text[i] := stream_current_char;
+          i := i + 1;
+          AdvanceSourceStream()
+        end;
+      if IsDigit(stream_current_char) then
+        begin
+          saw_real := true;
+          done := false;
+          while not done do
+            begin
+              if stream_eof then
+                begin
+                  done := true
+                end
+              else if IsDigit(stream_current_char) then
+                begin
+                  token_text[i] := stream_current_char;
+                  i := i + 1;
+                  AdvanceSourceStream()
+                end
+              else
+                begin
+                  done := true
+                end
+            end
+        end
+      else
+        begin
+          bootstrap_capture_failed := true
+        end
+    end
+  else if stream_current_char = 'E' then
+    begin
+      token_text[i] := stream_current_char;
+      i := i + 1;
+      AdvanceSourceStream();
+      if stream_current_char = '+' then
+        begin
+          token_text[i] := stream_current_char;
+          i := i + 1;
+          AdvanceSourceStream()
+        end
+      else if stream_current_char = '-' then
+        begin
+          token_text[i] := stream_current_char;
+          i := i + 1;
+          AdvanceSourceStream()
+        end;
+      if IsDigit(stream_current_char) then
+        begin
+          saw_real := true;
+          done := false;
+          while not done do
+            begin
+              if stream_eof then
+                begin
+                  done := true
+                end
+              else if IsDigit(stream_current_char) then
+                begin
+                  token_text[i] := stream_current_char;
+                  i := i + 1;
+                  AdvanceSourceStream()
+                end
+              else
+                begin
+                  done := true
+                end
+            end
+        end
+      else
+        begin
+          bootstrap_capture_failed := true
+        end
+    end;
+  if saw_real then
+    begin
+      token_kind := TOK_REAL_LIT
     end
   else
     begin

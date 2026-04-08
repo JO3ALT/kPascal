@@ -51,6 +51,7 @@ const
   AST_EXPR_CALL = 9;
   AST_EXPR_DEREF = 10;
   AST_EXPR_NIL = 11;
+  AST_EXPR_REAL = 12;
   AST_TYPE_UNKNOWN = 0;
   AST_TYPE_INTEGER = 1;
   AST_TYPE_BOOLEAN = 2;
@@ -194,9 +195,6 @@ var
   saw_probe_read_prefix: boolean;
   saw_probe_builtin_prefix: boolean;
   saw_probe_step_proc: boolean;
-  saw_seed_char_decl: boolean;
-  saw_seed_char_assign: boolean;
-  saw_seed_char_writeln: boolean;
   bootstrap_has_non_writeln_stmt: boolean;
   bootstrap_capture_failed: boolean;
   parse_error_reason: integer;
@@ -224,6 +222,7 @@ var
   ast_type_array_high: array[0..2047] of integer;
   ast_type_array_len: array[0..2047] of integer;
   ast_type_array_size: array[0..2047] of integer;
+  ast_type_record_size: array[0..2047] of integer;
   ast_type_field_start: array[0..2047] of integer;
   ast_type_field_count: array[0..2047] of integer;
   ast_enum_const_count: integer;
@@ -233,6 +232,7 @@ var
   ast_field_count: integer;
   ast_field_name: array[0..16383] of ident_buf;
   ast_field_type: array[0..16383] of integer;
+  ast_field_type_ref: array[0..16383] of integer;
   ast_field_offset: array[0..16383] of integer;
   ast_root_stmt_start: integer;
   ast_root_stmt_count: integer;
@@ -286,6 +286,8 @@ var
   ast_ident_pool: array[0..65535] of ident_buf;
   ast_current_routine: integer;
   ast_emit_routine: integer;
+  ast_emit_set_low_bound: integer;
+  ast_emit_set_low_enabled: boolean;
 
 procedure ClearIdent(var s: ident_buf);
 var i: integer;
@@ -602,6 +604,126 @@ begin
   if not TryResolveBuiltinConst then
     begin
       ClearText(expected);
+      expected := 'max_captured_writelns';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 128;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'max_ast_vars';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 8192;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'max_ast_stmts';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 131072;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'max_ast_args';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 65536;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'max_ast_exprs';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 131072;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'max_ast_types';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 2048;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'max_ast_fields';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 16384;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'max_ast_routines';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 4096;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'max_ast_params';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 16384;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'max_ast_text_lits';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 16384;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'max_ast_idents';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 65536;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'max_ast_enum_consts';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 8192;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
       expected := 'ast_stmt_writeln';
       if StrCmp(name, expected) = 0 then
         begin
@@ -876,6 +998,26 @@ begin
       if StrCmp(name, expected) = 0 then
         begin
           value := 10;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_nil';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 11;
+          TryResolveBuiltinConst := true
+        end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'ast_expr_real';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 12;
           TryResolveBuiltinConst := true
         end
     end;
@@ -1678,6 +1820,16 @@ begin
           value := 81;
           TryResolveBuiltinConst := true
         end
+    end;
+  if not TryResolveBuiltinConst then
+    begin
+      ClearText(expected);
+      expected := 'tok_real_lit';
+      if StrCmp(name, expected) = 0 then
+        begin
+          value := 82;
+          TryResolveBuiltinConst := true
+        end
     end
 end;
 
@@ -2148,9 +2300,9 @@ begin
     begin
       if type_ref >= 0 then
         begin
-          if ast_type_field_count[type_ref] > 0 then
+          if ast_type_record_size[type_ref] > 0 then
             begin
-              AstTypeCellCount := ast_type_field_count[type_ref]
+              AstTypeCellCount := ast_type_record_size[type_ref]
             end
         end
     end
@@ -2175,6 +2327,7 @@ begin
   ast_type_array_high[idx] := 0;
   ast_type_array_len[idx] := 0;
   ast_type_array_size[idx] := 0;
+  ast_type_record_size[idx] := 0;
   ast_type_field_start[idx] := ast_field_count;
   ast_type_field_count[idx] := 0;
   NewAstType := idx
@@ -2196,7 +2349,7 @@ begin
   ast_enum_const_type_ref[idx] := type_idx
 end;
 
-procedure AppendAstField(type_idx: integer; var name: text_buf; field_type: integer);
+procedure AppendAstFieldLayout(type_idx: integer; var name: text_buf; field_type: integer; field_type_ref: integer; offset_cells: integer);
 var idx: integer;
 begin
   if ast_field_count >= MAX_AST_FIELDS then
@@ -2209,8 +2362,14 @@ begin
   ast_field_count := ast_field_count + 1;
   CopyTextToIdent(name, ast_field_name[idx]);
   ast_field_type[idx] := field_type;
-  ast_field_offset[idx] := ast_type_field_count[type_idx] * 4;
+  ast_field_type_ref[idx] := field_type_ref;
+  ast_field_offset[idx] := offset_cells * 4;
   ast_type_field_count[type_idx] := ast_type_field_count[type_idx] + 1
+end;
+
+procedure AppendAstField(type_idx: integer; var name: text_buf; field_type: integer);
+begin
+  AppendAstFieldLayout(type_idx, name, field_type, -1, ast_type_record_size[type_idx])
 end;
 
 function NewAstStmt(kind: integer): integer;
@@ -2446,9 +2605,6 @@ begin
   saw_probe_read_prefix := false;
   saw_probe_builtin_prefix := false;
   saw_probe_step_proc := false;
-  saw_seed_char_decl := false;
-  saw_seed_char_assign := false;
-  saw_seed_char_writeln := false;
   bootstrap_has_non_writeln_stmt := false;
   bootstrap_capture_failed := false;
   parse_error_reason := 0;
@@ -2498,6 +2654,8 @@ begin
   ast_ident_count := 0;
   ast_current_routine := -1;
   ast_emit_routine := -1;
+  ast_emit_set_low_bound := 0;
+  ast_emit_set_low_enabled := false;
   ClearText(token_text);
   ClearText(program_name)
 end;

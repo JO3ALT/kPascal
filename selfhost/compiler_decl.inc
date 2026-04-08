@@ -226,82 +226,68 @@ begin
   ExpectKind(TOK_KW_END)
 end;
 
-procedure AppendAstFieldOnce(type_idx: integer; var name: text_buf; field_type: integer);
+procedure AppendAstFieldOnce(type_idx: integer; var name: text_buf; field_type: integer; field_type_ref: integer; offset_cells: integer);
 begin
   if FindAstField(type_idx, name) < 0 then
     begin
-      AppendAstField(type_idx, name, field_type)
+      AppendAstFieldLayout(type_idx, name, field_type, field_type_ref, offset_cells)
     end
 end;
 
-procedure ParseCapturedVariantRecordTypeSpec(type_idx: integer);
+function ParseCapturedRecordMembersUntil(type_idx: integer; current_offset: integer; end_kind: integer): integer;
 var field_type: integer;
+    field_type_ref: integer;
     field_name: text_buf;
+    tag_type: integer;
+    tag_type_ref: integer;
+    union_offset: integer;
+    case_end: integer;
+    max_case_end: integer;
 begin
-  ExpectKind(TOK_KW_CASE);
-  if token_kind = TOK_IDENT then
-    begin
-      StrCopy(token_text, field_name);
-      NextToken();
-      ExpectKind(TOK_COLON);
-      field_type := AstBasicTypeFromCurrentToken();
-      if field_type = AST_TYPE_UNKNOWN then
-        begin
-          bootstrap_capture_failed := true
-        end;
-      AppendAstFieldOnce(type_idx, field_name, field_type);
-      ParseTypeRef()
-    end;
-  ExpectKind(TOK_KW_OF);
-  while token_kind <> TOK_KW_END do
-    begin
-      ParseExpr();
-      while token_kind = TOK_COMMA do
-        begin
-          NextToken();
-          ParseExpr()
-        end;
-      ExpectKind(TOK_COLON);
-      ExpectKind(TOK_LPAREN);
-      while token_kind <> TOK_RPAREN do
-        begin
-          if token_kind <> TOK_IDENT then
-            begin
-              FailParse()
-            end;
-          StrCopy(token_text, field_name);
-          NextToken();
-          ExpectKind(TOK_COLON);
-          field_type := AstBasicTypeFromCurrentToken();
-          if field_type = AST_TYPE_UNKNOWN then
-            begin
-              bootstrap_capture_failed := true
-            end;
-          AppendAstFieldOnce(type_idx, field_name, field_type);
-          ParseTypeRef();
-          if token_kind = TOK_SEMI then
-            begin
-              NextToken()
-            end
-        end;
-      ExpectKind(TOK_RPAREN);
-      if token_kind = TOK_SEMI then
-        begin
-          NextToken()
-        end
-    end
-end;
-
-procedure ParseCapturedRecordTypeSpec(type_idx: integer);
-var field_type: integer;
-    field_name: text_buf;
-begin
-  ExpectKind(TOK_KW_RECORD);
-  while token_kind <> TOK_KW_END do
+  while token_kind <> end_kind do
     begin
       if token_kind = TOK_KW_CASE then
         begin
-          ParseCapturedVariantRecordTypeSpec(type_idx)
+          ExpectKind(TOK_KW_CASE);
+          union_offset := current_offset;
+          if token_kind = TOK_IDENT then
+            begin
+              StrCopy(token_text, field_name);
+              NextToken();
+              ExpectKind(TOK_COLON);
+              ResolveCapturedTypeRef(tag_type, tag_type_ref);
+              if tag_type = AST_TYPE_UNKNOWN then
+                begin
+                  bootstrap_capture_failed := true
+                end;
+              AppendAstFieldOnce(type_idx, field_name, tag_type, tag_type_ref, current_offset);
+              ParseTypeRef();
+              union_offset := current_offset + AstTypeCellCount(tag_type, tag_type_ref)
+            end;
+          ExpectKind(TOK_KW_OF);
+          max_case_end := union_offset;
+          while token_kind <> TOK_KW_END do
+            begin
+              ParseExpr();
+              while token_kind = TOK_COMMA do
+                begin
+                  NextToken();
+                  ParseExpr()
+                end;
+              ExpectKind(TOK_COLON);
+              ExpectKind(TOK_LPAREN);
+              case_end := ParseCapturedRecordMembersUntil(type_idx, union_offset, TOK_RPAREN);
+              if case_end > max_case_end then
+                begin
+                  max_case_end := case_end
+                end;
+              ExpectKind(TOK_RPAREN);
+              if token_kind = TOK_SEMI then
+                begin
+                  NextToken()
+                end
+            end;
+          current_offset := max_case_end
         end
       else
         begin
@@ -312,19 +298,27 @@ begin
           StrCopy(token_text, field_name);
           NextToken();
           ExpectKind(TOK_COLON);
-          field_type := AstBasicTypeFromCurrentToken();
+          ResolveCapturedTypeRef(field_type, field_type_ref);
           if field_type = AST_TYPE_UNKNOWN then
             begin
               bootstrap_capture_failed := true
             end;
-          AppendAstField(type_idx, field_name, field_type);
+          AppendAstFieldLayout(type_idx, field_name, field_type, field_type_ref, current_offset);
           ParseTypeRef();
+          current_offset := current_offset + AstTypeCellCount(field_type, field_type_ref);
           if token_kind = TOK_SEMI then
             begin
               NextToken()
             end
         end
     end;
+  ParseCapturedRecordMembersUntil := current_offset
+end;
+
+procedure ParseCapturedRecordTypeSpec(type_idx: integer);
+begin
+  ExpectKind(TOK_KW_RECORD);
+  ast_type_record_size[type_idx] := ParseCapturedRecordMembersUntil(type_idx, 0, TOK_KW_END);
   ExpectKind(TOK_KW_END)
 end;
 
@@ -595,12 +589,47 @@ end;
 procedure ParseCapturedSubrangeTypeSpec(type_idx: integer);
 var low_value: integer;
     high_value: integer;
+    type_name: text_buf;
+    enum_const_idx: integer;
+    named_type_idx: integer;
 begin
   low_value := 0;
   high_value := 0;
   if token_kind = TOK_INT then
     begin
       low_value := token_value
+    end
+  else if token_kind = TOK_IDENT then
+    begin
+      ClearText(type_name);
+      StrCopy(token_text, type_name);
+      enum_const_idx := FindAstEnumConst(type_name);
+      if enum_const_idx >= 0 then
+        begin
+          low_value := ast_enum_const_value[enum_const_idx]
+        end
+      else if TryResolveBuiltinConst(type_name, low_value) then
+        begin
+        end
+      else
+        begin
+          named_type_idx := FindAstType(type_name);
+          if named_type_idx >= 0 then
+            begin
+              if ast_type_kind[named_type_idx] = AST_DECL_SUBRANGE then
+                begin
+                  low_value := ast_type_array_low[named_type_idx]
+                end
+              else
+                begin
+                  bootstrap_capture_failed := true
+                end
+            end
+          else
+            begin
+              bootstrap_capture_failed := true
+            end
+        end
     end
   else
     begin
@@ -611,6 +640,38 @@ begin
   if token_kind = TOK_INT then
     begin
       high_value := token_value
+    end
+  else if token_kind = TOK_IDENT then
+    begin
+      ClearText(type_name);
+      StrCopy(token_text, type_name);
+      enum_const_idx := FindAstEnumConst(type_name);
+      if enum_const_idx >= 0 then
+        begin
+          high_value := ast_enum_const_value[enum_const_idx]
+        end
+      else if TryResolveBuiltinConst(type_name, high_value) then
+        begin
+        end
+      else
+        begin
+          named_type_idx := FindAstType(type_name);
+          if named_type_idx >= 0 then
+            begin
+              if ast_type_kind[named_type_idx] = AST_DECL_SUBRANGE then
+                begin
+                  high_value := ast_type_array_high[named_type_idx]
+                end
+              else
+                begin
+                  bootstrap_capture_failed := true
+                end
+            end
+          else
+            begin
+              bootstrap_capture_failed := true
+            end
+        end
     end
   else
     begin
@@ -643,9 +704,11 @@ procedure ParseVarSection;
 var first_name: text_buf;
     expected_name: text_buf;
     type_name: text_buf;
+    empty_name: text_buf;
     type_idx: integer;
     ast_var_start: integer;
     ast_var_type_value: integer;
+    parsed_type_ref: integer;
 begin
   ExpectKind(TOK_KW_VAR);
   while token_kind = TOK_IDENT do
@@ -660,8 +723,18 @@ begin
       ParseIdentList();
       ast_capture_var_names := false;
       ExpectKind(TOK_COLON);
+      parsed_type_ref := 0;
       ast_var_type_value := AST_TYPE_UNKNOWN;
-      if token_kind = TOK_KW_INTEGER then
+      if token_kind = TOK_KW_ARRAY then
+        begin
+          ClearText(empty_name);
+          type_idx := NewAstType(empty_name, AST_DECL_ARRAY);
+          ParseCapturedArrayTypeSpec(type_idx);
+          ast_var_type_value := AST_TYPE_ARRAY;
+          SetRecentAstVarTypeRefs(ast_var_start, type_idx);
+          parsed_type_ref := 1
+        end
+      else if token_kind = TOK_KW_INTEGER then
         begin
           ast_var_type_value := AST_TYPE_INTEGER
         end
@@ -730,16 +803,10 @@ begin
             end
         end;
       SetRecentAstVarTypes(ast_var_start, ast_var_type_value);
-      ClearText(expected_name);
-      expected_name := 'ch';
-      if StrCmp(first_name, expected_name) = 0 then
+      if parsed_type_ref = 0 then
         begin
-          if token_kind = TOK_KW_CHAR then
-            begin
-              saw_seed_char_decl := true
-            end
+          ParseTypeRef()
         end;
-      ParseTypeRef();
       ExpectKind(TOK_SEMI)
     end
 end;
@@ -857,6 +924,11 @@ begin
       ParseCapturedSetTypeSpec(type_idx)
     end
   else if token_kind = TOK_INT then
+    begin
+      type_idx := NewAstType(type_name, AST_DECL_SUBRANGE);
+      ParseCapturedSubrangeTypeSpec(type_idx)
+    end
+  else if token_kind = TOK_IDENT then
     begin
       type_idx := NewAstType(type_name, AST_DECL_SUBRANGE);
       ParseCapturedSubrangeTypeSpec(type_idx)

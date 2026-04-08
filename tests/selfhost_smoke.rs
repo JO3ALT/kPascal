@@ -659,9 +659,10 @@ begin
   readingword := 0
 end."#;
     let emitted_forth = run_selfhost_main_for_input("main-read-prefix-stage1", src);
-    assert!(emitted_forth.contains("0 aftersemi PVAR!"));
-    assert!(emitted_forth.contains("0 readingword PVAR!"));
+    assert!(emitted_forth.contains(": MAIN"), "emitted forth:\n{emitted_forth}");
     assert!(!emitted_forth.contains("PERR"));
+    let got = run_native_forth("main-read-prefix-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "");
 }
 
 #[test]
@@ -718,17 +719,10 @@ begin
   WriteLn(position)
 end."#;
     let emitted_forth = run_selfhost_main_for_input("main-builtin-prefix-stage1", src);
-    assert!(emitted_forth.contains("1 writelnx PVAR!"));
-    assert!(emitted_forth.contains("2 withhold PVAR!"));
-    assert!(emitted_forth.contains("3 concatx PVAR!"));
-    assert!(emitted_forth.contains("4 newer PVAR!"));
-    assert!(emitted_forth.contains("5 disposex PVAR!"));
-    assert!(emitted_forth.contains("6 setaddrx PVAR!"));
-    assert!(emitted_forth.contains("7 rounding PVAR!"));
-    assert!(emitted_forth.contains("8 position PVAR!"));
-    assert!(emitted_forth.contains("rounding PVAR@ PWRITE-I32"));
-    assert!(emitted_forth.contains("position PVAR@ PWRITE-I32"));
-    assert!(!emitted_forth.contains("PERR"));
+    assert!(emitted_forth.contains(": MAIN"), "emitted forth:\n{emitted_forth}");
+    assert!(!emitted_forth.contains("PERR"), "emitted forth:\n{emitted_forth}");
+    let got = run_native_forth("main-builtin-prefix-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "7\n8");
 }
 
 #[test]
@@ -1406,6 +1400,56 @@ fn selfhost_preprocessed_kpsc_main_direct_suite_covers_sample_set() {
             "3.5000\n4\n3",
         ),
         (
+            "real-generic",
+            include_str!("samples/24_real_generic.pas"),
+            "5\n7.2500\n7\n3.5000",
+        ),
+        (
+            "real-mixed",
+            include_str!("samples/25_real_mixed.pas"),
+            "7.0000\n8.0000\n8.0000\n5.0000\n14.0000",
+        ),
+        (
+            "set-range",
+            include_str!("samples/26_set_literal_range.pas"),
+            "FALSE\nTRUE\nTRUE\nTRUE",
+        ),
+        (
+            "real-exponent",
+            include_str!("samples/27_real_exponent.pas"),
+            "125.0000\n0.1250\n5.0000\n-25.0000",
+        ),
+        (
+            "subrange-set-range",
+            include_str!("samples/28_subrange_set_range.pas"),
+            "TRUE\nTRUE",
+        ),
+        (
+            "subrange-set-int-lits",
+            include_str!("samples/29_subrange_set_int_literals.pas"),
+            "TRUE\nTRUE",
+        ),
+        (
+            "variant-overlap",
+            include_str!("samples/30_variant_overlap.pas"),
+            "12\n7\n30",
+        ),
+        (
+            "subrange-enum-bounds",
+            include_str!("samples/31_subrange_enum_bounds.pas"),
+            "TRUE\nFALSE",
+        ),
+        (
+            "subrange-named-bounds",
+            include_str!("samples/32_subrange_named_bounds.pas"),
+            "5",
+        ),
+        (
+            "real-large-exponent",
+            include_str!("samples/33_real_large_exponent.pas"),
+            "10000000000.0000\n0.0000",
+        ),
+        (
             "routine",
             include_str!("samples/17_nested_routines.pas"),
             "9",
@@ -1891,6 +1935,66 @@ fn selfhost_kpsc_main_compiles_variant_feature() {
 }
 
 #[test]
+fn selfhost_kpsc_main_compiles_variant_overlap_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main variant overlap feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-variant-overlap",
+        include_str!("samples/30_variant_overlap.pas"),
+    );
+    let got = run_native_forth("main-feat-variant-overlap-run", &stage1);
+    assert_eq!(got.trim_end(), "12\n7\n30", "variant overlap via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_enum_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange enum bounds feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-subrange-enum-bounds",
+        include_str!("samples/31_subrange_enum_bounds.pas"),
+    );
+    let got = run_native_forth("main-feat-subrange-enum-bounds-run", &stage1);
+    assert_eq!(got.trim_end(), "TRUE\nFALSE", "subrange enum bounds via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_named_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange named bounds feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-subrange-named-bounds",
+        include_str!("samples/32_subrange_named_bounds.pas"),
+    );
+    let got = run_native_forth("main-feat-subrange-named-bounds-run", &stage1);
+    assert_eq!(got.trim_end(), "5", "subrange named bounds via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_real_large_exponent_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main real large exponent feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-real-large-exponent",
+        include_str!("samples/33_real_large_exponent.pas"),
+    );
+    let got = run_native_forth("main-feat-real-large-exponent-run", &stage1);
+    assert_eq!(got.trim_end(), "10000000000.0000\n0.0000", "real large exponent via selfhost compiler");
+}
+
+#[test]
 fn selfhost_kpsc_main_compiles_pointer_feature() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
@@ -2038,6 +2142,120 @@ fn selfhost_kpsc_main_compiles_real_feature() {
     );
     let got = run_native_forth("main-feat-real-run", &stage1);
     assert_eq!(got.trim_end(), "3.5000\n4\n3", "real feature via selfhost compiler");
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_generic_real_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main generic real feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-real-generic",
+        include_str!("samples/24_real_generic.pas"),
+    );
+    let got = run_native_forth("main-feat-real-generic-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "5\n7.2500\n7\n3.5000",
+        "generic real feature via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_mixed_real_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main mixed real feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-real-mixed",
+        include_str!("samples/25_real_mixed.pas"),
+    );
+    let got = run_native_forth("main-feat-real-mixed-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "7.0000\n8.0000\n8.0000\n5.0000\n14.0000",
+        "mixed real feature via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_set_range_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main set range feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-set-range",
+        include_str!("samples/26_set_literal_range.pas"),
+    );
+    let got = run_native_forth("main-feat-set-range-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "FALSE\nTRUE\nTRUE\nTRUE",
+        "set range feature via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_real_exponent_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main real exponent feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-real-exponent",
+        include_str!("samples/27_real_exponent.pas"),
+    );
+    let got = run_native_forth("main-feat-real-exponent-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "125.0000\n0.1250\n5.0000\n-25.0000",
+        "real exponent feature via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_set_range_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange set range feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-subrange-set-range",
+        include_str!("samples/28_subrange_set_range.pas"),
+    );
+    let got = run_native_forth("main-feat-subrange-set-range-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange set range feature via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_set_int_literal_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange set int literal feature: missing native backend");
+        return;
+    }
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-subrange-set-int-lits",
+        include_str!("samples/29_subrange_set_int_literals.pas"),
+    );
+    let got = run_native_forth("main-feat-subrange-set-int-lits-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange set int literal feature via selfhost compiler"
+    );
 }
 
 #[test]

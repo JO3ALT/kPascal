@@ -187,15 +187,6 @@ begin
     end
   else
     begin
-      if token_kind = TOK_IDENT then
-        begin
-          ClearText(expected_name);
-          expected_name := 'ch';
-          if StrCmp(token_text, expected_name) = 0 then
-            begin
-              saw_seed_char_writeln := true
-            end
-        end;
       if token_kind = TOK_INT then
         begin
           CaptureWriteLnInt(token_value)
@@ -476,21 +467,6 @@ begin
       NoteNonWriteLnStatement();
       NextToken();
       captured_simple_assign := false;
-      ClearText(expected_name);
-      expected_name := 'ch';
-      if StrCmp(first_name, expected_name) = 0 then
-        begin
-          if token_kind = TOK_STR then
-            begin
-              if token_text[0] = 'H' then
-                begin
-                  if token_text[1] = #0 then
-                    begin
-                      saw_seed_char_assign := true
-                    end
-                end
-            end
-        end;
       if ast_capture_enabled then
         begin
           stmt_idx := NewAstStmt(AST_STMT_ASSIGN);

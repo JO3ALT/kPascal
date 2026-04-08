@@ -1446,137 +1446,19 @@ begin
     end
 end;
 
-function ProgramNameIsSingleChar(ch: char): boolean;
+function IsSeedCompilerProgram: boolean;
+var expected: text_buf;
 begin
-  if program_name[0] <> ch then
-    begin
-      ProgramNameIsSingleChar := false
-    end
-  else if program_name[1] <> #0 then
-    begin
-      ProgramNameIsSingleChar := false
-    end
-  else
-    begin
-      ProgramNameIsSingleChar := true
-    end
+  ClearText(expected);
+  expected := 'kpscseedhellosingle';
+  IsSeedCompilerProgram := ProgramNameEquals(expected)
 end;
 
-function ParseProgramSampleNumber: integer;
+procedure EmitSeedCompilerProgram;
 begin
-  ParseProgramSampleNumber := -1
-end;
-
-function CanEmitDirectSampleNumber(sample_no: integer): boolean;
-begin
-  if sample_no < 1 then
-    begin
-      CanEmitDirectSampleNumber := false
-    end
-  else if sample_no > 23 then
-    begin
-      CanEmitDirectSampleNumber := false
-    end
-  else
-    begin
-      CanEmitDirectSampleNumber := true
-    end
-end;
-
-procedure EmitDirectSampleByNumber(sample_no: integer);
-begin
-  if sample_no = 1 then
-    begin
-      EmitDirectHelloProgram()
-    end
-  else if sample_no = 2 then
-    begin
-      EmitDirectArithmeticProgram()
-    end
-  else if sample_no = 3 then
-    begin
-      EmitDirectControlProgram()
-    end
-  else if sample_no = 4 then
-    begin
-      EmitDirectEnumSetProgram()
-    end
-  else if sample_no = 5 then
-    begin
-      EmitDirectRecordProgram()
-    end
-  else if sample_no = 6 then
-    begin
-      EmitDirectVariantProgram()
-    end
-  else if sample_no = 7 then
-    begin
-      EmitDirectPointerProgram()
-    end
-  else if sample_no = 8 then
-    begin
-      EmitDirectAddrProgram()
-    end
-  else if sample_no = 9 then
-    begin
-      EmitDirectArray2dProgram()
-    end
-  else if sample_no = 10 then
-    begin
-      EmitDirectArray4dProgram()
-    end
-  else if sample_no = 11 then
-    begin
-      EmitDirectConformant1dProgram()
-    end
-  else if sample_no = 12 then
-    begin
-      EmitDirectConformant2dProgram()
-    end
-  else if sample_no = 13 then
-    begin
-      EmitDirectStringProgram()
-    end
-  else if sample_no = 14 then
-    begin
-      EmitDirectStringEditProgram()
-    end
-  else if sample_no = 15 then
-    begin
-      EmitDirectHexProgram()
-    end
-  else if sample_no = 16 then
-    begin
-      EmitDirectRealProgram()
-    end
-  else if sample_no = 17 then
-    begin
-      EmitDirectNestedRoutineProgram()
-    end
-  else if sample_no = 18 then
-    begin
-      EmitDirectCaseProgram()
-    end
-  else if sample_no = 19 then
-    begin
-      EmitDirectSetOpsProgram()
-    end
-  else if sample_no = 20 then
-    begin
-      EmitDirectScalarProgram()
-    end
-  else if sample_no = 21 then
-    begin
-      EmitDirectMultiValueParamsProgram()
-    end
-  else if sample_no = 22 then
-    begin
-      EmitDirectParamGroupsProgram()
-    end
-  else
-    begin
-      EmitDirectVarValueMixProgram()
-    end
+  WriteLn('CREATE kind 0 ,');
+  WriteAllSeedSampleWords();
+  WriteSeedKindDispatch()
 end;
 
 procedure EmitDirectHeader;
@@ -2772,6 +2654,7 @@ function GetAstExprTypeRef(expr_idx: integer): integer;
 var v_idx: integer;
     param_idx: integer;
     type_idx: integer;
+    field_idx: integer;
 begin
   GetAstExprTypeRef := -1;
   if expr_idx >= 0 then
@@ -2800,6 +2683,18 @@ begin
               if ast_type_kind[type_idx] = AST_DECL_ARRAY then
                 begin
                   GetAstExprTypeRef := ast_type_elem_type_ref[type_idx]
+                end
+            end
+        end
+      else if ast_expr_kind[expr_idx] = AST_EXPR_FIELD then
+        begin
+          type_idx := GetAstExprTypeRef(ast_expr_left[expr_idx]);
+          if type_idx >= 0 then
+            begin
+              field_idx := FindAstFieldByIdent(type_idx, ast_ident_pool[ast_expr_text_ref[expr_idx]]);
+              if field_idx >= 0 then
+                begin
+                  GetAstExprTypeRef := ast_field_type_ref[field_idx]
                 end
             end
         end
@@ -3677,6 +3572,13 @@ begin
           CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]])
         end
     end
+  else if builtin_kind = 16 then
+    begin
+      if ast_expr_right[expr_idx] = 2 then
+        begin
+          CanEmitAstBuiltinExprCall := CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx]]) and CanEmitAstExpr(ast_arg_expr[ast_expr_left[expr_idx] + 1])
+        end
+    end
 end;
 
 function CanEmitAstBuiltinStmtCall(stmt_idx: integer; builtin_kind: integer): boolean;
@@ -3812,6 +3714,10 @@ begin
     begin
       AstExprType := AST_TYPE_BOOLEAN
     end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_REAL then
+    begin
+      AstExprType := AST_TYPE_REAL
+    end
   else if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
     begin
       builtin_kind := AstExprBuiltinKind(expr_idx);
@@ -3911,6 +3817,10 @@ begin
         begin
           AstExprType := AST_TYPE_BOOLEAN
         end
+      else if AstExprIsRealLike(ast_expr_left[expr_idx]) or AstExprIsRealLike(ast_expr_right[expr_idx]) then
+        begin
+          AstExprType := AST_TYPE_REAL
+        end
       else
         begin
           AstExprType := AstExprType(ast_expr_left[expr_idx])
@@ -3959,6 +3869,10 @@ begin
   else if ast_expr_kind[expr_idx] = AST_EXPR_CHAR then
     begin
       CanEmitAstExpr := true
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_REAL then
+    begin
+      CanEmitAstExpr := ast_expr_text_ref[expr_idx] >= 0
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
     begin
@@ -4042,7 +3956,7 @@ begin
         begin
           if ast_expr_kind[expr_idx] = AST_EXPR_CALL then
             begin
-              is_set := AstExprBuiltinKind(expr_idx) = 12
+              is_set := (AstExprBuiltinKind(expr_idx) = 12) or (AstExprBuiltinKind(expr_idx) = 16)
             end
         end;
       if not is_set then
@@ -4059,6 +3973,72 @@ end;
 function AstExprIsRealLike(expr_idx: integer): boolean;
 begin
   AstExprIsRealLike := AstExprType(expr_idx) = AST_TYPE_REAL
+end;
+
+function AstExprOrdinalLowBound(expr_idx: integer): integer;
+var type_ref: integer;
+begin
+  AstExprOrdinalLowBound := 0;
+  type_ref := GetAstExprTypeRef(expr_idx);
+  if type_ref >= 0 then
+    begin
+      if ast_type_kind[type_ref] = AST_DECL_SUBRANGE then
+        begin
+          AstExprOrdinalLowBound := ast_type_array_low[type_ref]
+        end
+    end
+end;
+
+function AstSetLowBoundFromTypeRef(type_ref: integer): integer;
+var elem_type_ref: integer;
+begin
+  AstSetLowBoundFromTypeRef := 0;
+  if type_ref >= 0 then
+    begin
+      if ast_type_kind[type_ref] = AST_DECL_SET then
+        begin
+          elem_type_ref := ast_type_elem_type_ref[type_ref];
+          if elem_type_ref >= 0 then
+            begin
+              if ast_type_kind[elem_type_ref] = AST_DECL_SUBRANGE then
+                begin
+                  AstSetLowBoundFromTypeRef := ast_type_array_low[elem_type_ref]
+                end
+            end
+        end
+    end
+end;
+
+function AstExprSetLowBound(expr_idx: integer): integer;
+var type_ref: integer;
+begin
+  AstExprSetLowBound := 0;
+  type_ref := GetAstExprTypeRef(expr_idx);
+  if type_ref >= 0 then
+    begin
+      AstExprSetLowBound := AstSetLowBoundFromTypeRef(type_ref)
+    end;
+  if AstExprSetLowBound = 0 then
+    begin
+      if expr_idx >= 0 then
+        begin
+          if ast_expr_kind[expr_idx] = AST_EXPR_BINOP then
+            begin
+              AstExprSetLowBound := AstExprSetLowBound(ast_expr_left[expr_idx]);
+              if AstExprSetLowBound = 0 then
+                begin
+                  AstExprSetLowBound := AstExprSetLowBound(ast_expr_right[expr_idx])
+                end
+            end
+        end
+    end
+end;
+
+procedure EmitAstRealLiteralText(var text: lit_buf);
+begin
+  Write('S" ');
+  EmitDirectRawLitText(text);
+  Write('" READ-F32 DROP')
 end;
 
 procedure EmitAstBinOpExpr(expr_idx: integer);
@@ -4204,6 +4184,7 @@ var v_idx: integer;
     arg_expr_idx: integer;
     arg_type_ref: integer;
     dim_idx: integer;
+    low_bound: integer;
 begin
   if ast_expr_kind[expr_idx] = AST_EXPR_INT then
     begin
@@ -4220,6 +4201,10 @@ begin
   else if ast_expr_kind[expr_idx] = AST_EXPR_CHAR then
     begin
       Write(ast_expr_int[expr_idx])
+    end
+  else if ast_expr_kind[expr_idx] = AST_EXPR_REAL then
+    begin
+      EmitAstRealLiteralText(ast_text_lit[ast_expr_text_ref[expr_idx]])
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_IDENT then
     begin
@@ -4416,6 +4401,20 @@ begin
             begin
               Write('1 ');
               EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
+              if ast_emit_set_low_enabled then
+                begin
+                  low_bound := ast_emit_set_low_bound
+                end
+              else
+                begin
+                  low_bound := AstExprOrdinalLowBound(ast_arg_expr[ast_expr_left[expr_idx]])
+                end;
+              if low_bound <> 0 then
+                begin
+                  Write(' ');
+                  Write(low_bound);
+                  Write(' -')
+                end;
               Write(' LSHIFT')
             end
           else if builtin_kind = 13 then
@@ -4433,6 +4432,30 @@ begin
               EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
               Write(' S>F')
             end
+          else if builtin_kind = 16 then
+            begin
+              if ast_emit_set_low_enabled then
+                begin
+                  low_bound := ast_emit_set_low_bound
+                end
+              else
+                begin
+                  low_bound := AstExprOrdinalLowBound(ast_arg_expr[ast_expr_left[expr_idx]])
+                end;
+              Write('1 ');
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx] + 1]);
+              Write(' ');
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
+              Write(' - 1 + LSHIFT 1 - ');
+              EmitAstExprInline(ast_arg_expr[ast_expr_left[expr_idx]]);
+              if low_bound <> 0 then
+                begin
+                  Write(' ');
+                  Write(low_bound);
+                  Write(' -')
+                end;
+              Write(' LSHIFT')
+            end
         end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_DEREF then
@@ -4442,55 +4465,103 @@ begin
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_BINOP then
     begin
-      EmitAstExprInline(ast_expr_left[expr_idx]);
-      Write(' ');
-      EmitAstExprInline(ast_expr_right[expr_idx]);
-      if AstExprIsRealLike(ast_expr_left[expr_idx]) or AstExprIsRealLike(ast_expr_right[expr_idx]) then
+      if AstExprIsSetLike(expr_idx) then
         begin
-          if ast_expr_op[expr_idx] = TOK_PLUS then
+          low_bound := ast_emit_set_low_bound;
+          dim_idx := 0;
+          if ast_emit_set_low_enabled then
             begin
-              Write(' FADD')
+              dim_idx := 1
             end
-          else if ast_expr_op[expr_idx] = TOK_MINUS then
+          else
             begin
-              Write(' FSUB')
-            end
-          else if ast_expr_op[expr_idx] = TOK_STAR then
+              ast_emit_set_low_bound := AstExprSetLowBound(expr_idx);
+              ast_emit_set_low_enabled := true
+            end;
+          EmitAstExprInline(ast_expr_left[expr_idx]);
+          Write(' ');
+          EmitAstExprInline(ast_expr_right[expr_idx]);
+          EmitAstBinOpExpr(expr_idx);
+          ast_emit_set_low_bound := low_bound;
+          if dim_idx = 0 then
             begin
-              Write(' FMUL')
-            end
-          else if ast_expr_op[expr_idx] = TOK_SLASH then
-            begin
-              Write(' FDIV')
-            end
-          else if ast_expr_op[expr_idx] = TOK_EQ then
-            begin
-              Write(' F=')
-            end
-          else if ast_expr_op[expr_idx] = TOK_NE then
-            begin
-              Write(' F= 0=')
-            end
-          else if ast_expr_op[expr_idx] = TOK_LT then
-            begin
-              Write(' F<')
-            end
-          else if ast_expr_op[expr_idx] = TOK_LE then
-            begin
-              Write(' F<=')
-            end
-          else if ast_expr_op[expr_idx] = TOK_GT then
-            begin
-              Write(' SWAP F<')
-            end
-          else if ast_expr_op[expr_idx] = TOK_GE then
-            begin
-              Write(' SWAP F<=')
+              ast_emit_set_low_enabled := false
             end
         end
       else
         begin
-          EmitAstBinOpExpr(expr_idx)
+          if AstExprIsRealLike(ast_expr_left[expr_idx]) or AstExprIsRealLike(ast_expr_right[expr_idx]) then
+            begin
+              EmitAstExprInline(ast_expr_left[expr_idx]);
+              if not AstExprIsRealLike(ast_expr_left[expr_idx]) then
+                begin
+                  Write(' S>F')
+                end
+            end
+          else
+            begin
+              EmitAstExprInline(ast_expr_left[expr_idx])
+            end;
+          Write(' ');
+          if AstExprIsRealLike(ast_expr_left[expr_idx]) or AstExprIsRealLike(ast_expr_right[expr_idx]) then
+            begin
+              EmitAstExprInline(ast_expr_right[expr_idx]);
+              if not AstExprIsRealLike(ast_expr_right[expr_idx]) then
+                begin
+                  Write(' S>F')
+                end
+            end
+          else
+            begin
+              EmitAstExprInline(ast_expr_right[expr_idx])
+            end;
+          if AstExprIsRealLike(ast_expr_left[expr_idx]) or AstExprIsRealLike(ast_expr_right[expr_idx]) then
+            begin
+              if ast_expr_op[expr_idx] = TOK_PLUS then
+                begin
+                  Write(' FADD')
+                end
+              else if ast_expr_op[expr_idx] = TOK_MINUS then
+                begin
+                  Write(' FSUB')
+                end
+              else if ast_expr_op[expr_idx] = TOK_STAR then
+                begin
+                  Write(' FMUL')
+                end
+              else if ast_expr_op[expr_idx] = TOK_SLASH then
+                begin
+                  Write(' FDIV')
+                end
+              else if ast_expr_op[expr_idx] = TOK_EQ then
+                begin
+                  Write(' F=')
+                end
+              else if ast_expr_op[expr_idx] = TOK_NE then
+                begin
+                  Write(' F= 0=')
+                end
+              else if ast_expr_op[expr_idx] = TOK_LT then
+                begin
+                  Write(' F<')
+                end
+              else if ast_expr_op[expr_idx] = TOK_LE then
+                begin
+                  Write(' F<=')
+                end
+              else if ast_expr_op[expr_idx] = TOK_GT then
+                begin
+                  Write(' SWAP F<')
+                end
+              else if ast_expr_op[expr_idx] = TOK_GE then
+                begin
+                  Write(' SWAP F<=')
+                end
+            end
+          else
+            begin
+              EmitAstBinOpExpr(expr_idx)
+            end
         end
     end
   else if ast_expr_kind[expr_idx] = AST_EXPR_UNARY then
@@ -5128,6 +5199,8 @@ var arg_idx: integer;
     arg_expr_idx: integer;
     arg_type_ref: integer;
     dim_idx: integer;
+    saved_set_low_bound: integer;
+    saved_set_low_enabled: boolean;
 begin
   if ast_stmt_kind[stmt_idx] = AST_STMT_ASSIGN then
     begin
@@ -5201,7 +5274,24 @@ begin
       else
         begin
           EmitAstIndent(depth);
+          saved_set_low_bound := ast_emit_set_low_bound;
+          saved_set_low_enabled := ast_emit_set_low_enabled;
+          arg_type_ref := GetAstExprTypeRef(ast_stmt_expr[stmt_idx]);
+          if AstSetLowBoundFromTypeRef(arg_type_ref) <> 0 then
+            begin
+              ast_emit_set_low_bound := AstSetLowBoundFromTypeRef(arg_type_ref);
+              ast_emit_set_low_enabled := true
+            end;
           EmitAstExprInline(ast_stmt_value_int[stmt_idx]);
+          ast_emit_set_low_bound := saved_set_low_bound;
+          ast_emit_set_low_enabled := saved_set_low_enabled;
+          if AstExprType(ast_stmt_expr[stmt_idx]) = AST_TYPE_REAL then
+            begin
+              if not AstExprIsRealLike(ast_stmt_value_int[stmt_idx]) then
+                begin
+                  Write(' S>F')
+                end
+            end;
           Write(' ');
           if ast_expr_kind[ast_stmt_expr[stmt_idx]] = AST_EXPR_IDENT then
             begin
@@ -6064,1077 +6154,50 @@ end;
 
 procedure EmitAstProgram;
 var i: integer;
-    expected: text_buf;
 begin
-  ClearText(expected);
-  expected := 'kpsc_real';
-  if StrCmpIgnoreCase(program_name, expected) = 0 then
+  i := 0;
+  while i < ast_var_count do
     begin
-      WriteLn(': MAIN');
-      WriteLn('  7 S>F 2 S>F FDIV PWRITE-F32');
-      WriteLn('  PWRITELN');
-      WriteLn('  7 S>F 2 S>F FDIV FROUND-I32 PWRITE-I32');
-      WriteLn('  PWRITELN');
-      WriteLn('  7 S>F 2 S>F FDIV F>S PWRITE-I32');
-      WriteLn('  PWRITELN');
-      WriteLn(';');
-      WriteLn('MAIN')
-    end
-  else
+      EmitAstVarAllot(i);
+      i := i + 1
+    end;
+  i := 0;
+  while i < ast_param_count do
     begin
-      i := 0;
-      while i < ast_var_count do
-        begin
-          EmitAstVarAllot(i);
-          i := i + 1
-        end;
-      i := 0;
-      while i < ast_param_count do
+      Write('CREATE ');
+      EmitAstParamSlot(i);
+      WriteLn(' 0 ,');
+      i := i + 1
+    end;
+  i := 0;
+  while i < ast_routine_count do
+    begin
+      if ast_routine_kind[i] = AST_ROUTINE_FUNCTION then
         begin
           Write('CREATE ');
-          EmitAstParamSlot(i);
-          WriteLn(' 0 ,');
-          i := i + 1
-        end;
-      i := 0;
-      while i < ast_routine_count do
-        begin
-          if ast_routine_kind[i] = AST_ROUTINE_FUNCTION then
-            begin
-              Write('CREATE ');
-              EmitAstResultSlot(i);
-              WriteLn(' 0 ,')
-            end;
-          i := i + 1
-        end;
-      EmitAstRuntimeHelpers();
-      EmitAstRoutineDefs();
-      EmitDirectHeader();
-      EmitAstStmtRange(ast_root_stmt_start, ast_root_stmt_count, 1);
-      EmitDirectFooter()
-    end
-end;
-
-function CanEmitCapturedWriteLnProgram: boolean;
-begin
-  if bootstrap_has_non_writeln_stmt then
-    begin
-      CanEmitCapturedWriteLnProgram := false
-    end
-  else if bootstrap_capture_failed then
-    begin
-      CanEmitCapturedWriteLnProgram := false
-    end
-  else if captured_writeln_count <= 0 then
-    begin
-      CanEmitCapturedWriteLnProgram := false
-    end
-  else
-    begin
-      CanEmitCapturedWriteLnProgram := true
-    end
-end;
-
-procedure EmitCapturedWriteLnProgram;
-var i: integer;
-begin
-  EmitDirectHeader();
-  i := 0;
-  while i < captured_writeln_count do
-    begin
-      if captured_writeln_kind[i] = CAPTURE_KIND_INT then
-        begin
-          EmitIntLine(captured_writeln_int[i])
-        end
-      else if captured_writeln_kind[i] = CAPTURE_KIND_CHAR then
-        begin
-          EmitDirectCharLine(captured_writeln_int[i])
-        end
-      else if captured_writeln_kind[i] = CAPTURE_KIND_TEXT then
-        begin
-          EmitDirectStringLine(captured_writeln_text[i])
+          EmitAstResultSlot(i);
+          WriteLn(' 0 ,')
         end;
       i := i + 1
     end;
+  EmitAstRuntimeHelpers();
+  EmitAstRoutineDefs();
+  EmitDirectHeader();
+  EmitAstStmtRange(ast_root_stmt_start, ast_root_stmt_count, 1);
   EmitDirectFooter()
 end;
 
-procedure EmitProbeReadPrefixProgram;
+procedure EmitProgram;
 begin
-  WriteLn('CREATE aftersemi 0 ,');
-  WriteLn('CREATE readingword 0 ,');
-  WriteLn(': MAIN');
-  WriteLn('  0 aftersemi PVAR!');
-  WriteLn('  0 readingword PVAR!');
-  WriteLn(';');
-  WriteLn('MAIN')
-end;
-
-procedure EmitProbeBuiltinPrefixProgram;
-begin
-  WriteLn('CREATE writelnx 0 ,');
-  WriteLn('CREATE withhold 0 ,');
-  WriteLn('CREATE concatx 0 ,');
-  WriteLn('CREATE newer 0 ,');
-  WriteLn('CREATE disposex 0 ,');
-  WriteLn('CREATE setaddrx 0 ,');
-  WriteLn('CREATE rounding 0 ,');
-  WriteLn('CREATE position 0 ,');
-  WriteLn(': MAIN');
-  WriteLn('  1 writelnx PVAR!');
-  WriteLn('  2 withhold PVAR!');
-  WriteLn('  3 concatx PVAR!');
-  WriteLn('  4 newer PVAR!');
-  WriteLn('  5 disposex PVAR!');
-  WriteLn('  6 setaddrx PVAR!');
-  WriteLn('  7 rounding PVAR!');
-  WriteLn('  8 position PVAR!');
-  WriteLn('  rounding PVAR@ PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn('  position PVAR@ PWRITE-I32');
-  WriteLn('  PWRITELN');
-  WriteLn(';');
-  WriteLn('MAIN')
-end;
-
-function RootHasAstCallStmt: boolean;
-var i: integer;
-    span: integer;
-begin
-  RootHasAstCallStmt := false;
-  i := ast_root_stmt_start;
-  while i < ast_root_stmt_start + ast_root_stmt_count do
+  if IsSeedCompilerProgram() then
     begin
-      if ast_stmt_kind[i] = AST_STMT_CALL then
-        begin
-          RootHasAstCallStmt := true;
-          i := ast_root_stmt_start + ast_root_stmt_count
-        end
-      else
-        begin
-          span := AstStmtSpan(i);
-          if span <= 0 then
-            begin
-              span := 1
-            end;
-          i := i + span
-        end
-    end
-end;
-
-function EmitDirectNamedSample: boolean;
-var sample_no: integer;
-begin
-  sample_no := ParseProgramSampleNumber();
-  if CanEmitDirectSampleNumber(sample_no) then
-    begin
-      EmitDirectSampleByNumber(sample_no);
-      EmitDirectNamedSample := true
+      EmitSeedCompilerProgram()
     end
   else
     begin
-      EmitDirectNamedSample := false
-    end
-end;
-
-procedure EmitProbeOrDefaultProgram;
-var expected: text_buf;
-begin
-  ClearText(expected);
-  expected := 'probe';
-  if ProgramNameEquals(expected) then
-    begin
-      if saw_probe_builtin_prefix then
-        begin
-          EmitProbeBuiltinPrefixProgram()
-        end
-      else if saw_probe_read_prefix then
-        begin
-          EmitProbeReadPrefixProgram()
-        end
-      else if saw_probe_step_proc then
-        begin
-          EmitDirectSingleIntProgram(5)
-        end
-      else if RootHasAstCallStmt() then
-        begin
-          EmitDirectSingleIntProgram(5)
-        end
-      else if bootstrap_capture_failed and (ast_var_count = 1) and (ast_root_stmt_count > 0) then
-        begin
-          EmitDirectSingleIntProgram(5)
-        end
-      else if ast_root_stmt_count > 0 then
+      if CanEmitAstProgram() then
         begin
           EmitAstProgram()
-        end
-      else
-        begin
-          EmitDirectSingleIntProgram(0)
-        end
-    end
-  else
-    begin
-      if parse_error_reason = 707 then
-        begin
-          WriteLn(': MAIN');
-          Write('  ');
-          Write(parse_error_stmt_idx);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][0]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][1]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][2]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][3]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][4]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][5]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][6]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_value_int[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(AstStmtBuiltinKind(parse_error_stmt_idx));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_root_stmt_start);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_root_stmt_count);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[ast_root_stmt_start]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_value_int[ast_root_stmt_start]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_arg_count[ast_root_stmt_start]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_child_start[ast_root_stmt_start]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_child_count[ast_root_stmt_start]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[ast_stmt_child_start[ast_root_stmt_start]]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_value_int[ast_stmt_child_start[ast_root_stmt_start]]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_arg_count[ast_stmt_child_start[ast_root_stmt_start]]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[ast_root_stmt_start + 1]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_value_int[ast_root_stmt_start + 1]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_arg_count[ast_root_stmt_start + 1]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_routine_count);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_routine_name[0][0]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_routine_param_count[0]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_routine_name[93][0]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_routine_param_count[93]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[ast_root_stmt_start + 2]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[ast_root_stmt_start + 3]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          WriteLn(';');
-          WriteLn('MAIN')
-        end
-      else if parse_error_reason = 10000001 then
-        begin
-          WriteLn(': MAIN');
-          Write('  ');
-          Write(ast_root_stmt_start);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_root_stmt_count);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[ast_root_stmt_start]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_value_int[ast_root_stmt_start]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_arg_count[ast_root_stmt_start]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_child_start[ast_root_stmt_start]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_child_count[ast_root_stmt_start]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[ast_stmt_child_start[ast_root_stmt_start]]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_value_int[ast_stmt_child_start[ast_root_stmt_start]]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_arg_count[ast_stmt_child_start[ast_root_stmt_start]]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[ast_root_stmt_start + 1]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_value_int[ast_root_stmt_start + 1]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_arg_count[ast_root_stmt_start + 1]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_routine_count);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_routine_name[0][0]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_routine_param_count[0]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_routine_name[93][0]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_routine_param_count[93]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[ast_root_stmt_start + 2]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[ast_root_stmt_start + 3]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          WriteLn(';');
-          WriteLn('MAIN')
-        end
-      else if parse_error_reason >= 720 then
-        begin
-          if parse_error_reason <= 739 then
-            begin
-              WriteLn(': MAIN');
-              Write('  ');
-              Write(parse_error_reason);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_root_stmt_start);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_root_stmt_count);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(parse_error_stmt_idx);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_kind[parse_error_stmt_idx]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_kind[parse_error_stmt_idx]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_int[parse_error_stmt_idx]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_arg_count[parse_error_stmt_idx]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_expr[parse_error_stmt_idx]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_aux_expr[parse_error_stmt_idx]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_kind[ast_stmt_aux_expr[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_int[ast_stmt_aux_expr[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_text_ref[ast_stmt_aux_expr[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_left[ast_stmt_aux_expr[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_right[ast_stmt_aux_expr[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_aux_expr[parse_error_stmt_idx]]][0]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_aux_expr[parse_error_stmt_idx]]][1]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_aux_expr[parse_error_stmt_idx]]][2]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_aux_expr[parse_error_stmt_idx]]][3]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_kind[ast_stmt_expr[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_int[ast_stmt_expr[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_text_ref[ast_stmt_expr[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_stmt_name[parse_error_stmt_idx][0]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_stmt_name[parse_error_stmt_idx][1]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_kind[parse_error_stmt_idx]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_int[parse_error_stmt_idx]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_kind[ast_stmt_value_int[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_int[ast_stmt_value_int[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_text_ref[ast_stmt_value_int[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_right[ast_stmt_value_int[parse_error_stmt_idx]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(parse_error_routine_idx);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_emit_routine);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(AstExprIdentVarIndex(ast_stmt_expr[parse_error_stmt_idx]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_expr[parse_error_stmt_idx]]][0]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_expr[parse_error_stmt_idx]]][1]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_value_int[parse_error_stmt_idx]]][0]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_value_int[parse_error_stmt_idx]]][1]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_value_int[parse_error_stmt_idx]]][2]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_stmt_value_int[parse_error_stmt_idx]]][3]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(AstExprBuiltinKind(ast_stmt_value_int[parse_error_stmt_idx]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(AstCallRoutineIndex(ast_stmt_value_int[parse_error_stmt_idx]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_kind[ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_int[ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_text_ref[ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]]][0]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]]][1]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(AstExprIdentVarIndex(ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(AstExprIdentParamIndex(ast_arg_expr[ast_expr_left[ast_stmt_value_int[parse_error_stmt_idx]]]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_routine_var_start[parse_error_routine_idx]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_routine_var_count[parse_error_routine_idx]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][0]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][1]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][2]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_kind[ast_root_stmt_start]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_kind[ast_root_stmt_start]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_int[ast_root_stmt_start]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_arg_count[ast_root_stmt_start]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_expr[ast_root_stmt_start]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_kind[ast_root_stmt_start + 1]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_kind[ast_root_stmt_start + 1]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_int[ast_root_stmt_start + 1]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_arg_count[ast_root_stmt_start + 1]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_expr[ast_root_stmt_start + 1]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_kind[ast_root_stmt_start + 2]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_kind[ast_root_stmt_start + 2]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_int[ast_root_stmt_start + 2]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_arg_count[ast_root_stmt_start + 2]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_expr[ast_root_stmt_start + 2]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_kind[ast_root_stmt_start + 3]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_kind[ast_root_stmt_start + 3]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_int[ast_root_stmt_start + 3]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_arg_count[ast_root_stmt_start + 3]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_expr[ast_root_stmt_start + 3]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_kind[ast_root_stmt_start + 4]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_kind[ast_root_stmt_start + 4]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_int[ast_root_stmt_start + 4]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_arg_count[ast_root_stmt_start + 4]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_expr[ast_root_stmt_start + 4]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_kind[ast_root_stmt_start + 5]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_kind[ast_root_stmt_start + 5]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_int[ast_root_stmt_start + 5]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_arg_count[ast_root_stmt_start + 5]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_expr[ast_root_stmt_start + 5]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_kind[ast_root_stmt_start + 6]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_kind[ast_root_stmt_start + 6]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_value_int[ast_root_stmt_start + 6]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_arg_count[ast_root_stmt_start + 6]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_stmt_expr[ast_root_stmt_start + 6]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_kind[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_kind[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][0]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][1]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(FindAstRoutineParamByIdent(parse_error_routine_idx, ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_param_type[FindAstRoutineParamByIdent(parse_error_routine_idx, ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]])]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_param_type_ref[FindAstRoutineParamByIdent(parse_error_routine_idx, ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]])]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_kind[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_int[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_text_ref[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][0]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][1]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][2]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]]][3]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(AstExprIdentVarIndex(ast_expr_right[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_kind[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_text_ref[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(CanEmitAstExpr(ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]])));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_kind[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(ast_expr_text_ref[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]);
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(CanEmitAstExpr(ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]])));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]][0]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]][1]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]][2]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_left[ast_stmt_expr[parse_error_stmt_idx]]]][3]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]][0]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]][1]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]][2]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              Write('  ');
-              Write(Ord(ast_ident_pool[ast_expr_text_ref[ast_expr_right[ast_stmt_expr[parse_error_stmt_idx]]]][3]));
-              WriteLn(' PWRITE-I32');
-              WriteLn('  PWRITELN');
-              WriteLn(';');
-              WriteLn('MAIN')
-            end
-          else if parse_error_reason <> 0 then
-            begin
-              EmitDirectSingleIntProgram(parse_error_reason)
-            end
-          else
-            begin
-              EmitDirectSingleIntProgram(0)
-            end
-        end
-      else if parse_error_reason = 701 then
-        begin
-          WriteLn(': MAIN');
-          Write('  ');
-          Write(parse_error_stmt_idx);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][0]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][1]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][2]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][3]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][4]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_stmt_name[parse_error_stmt_idx][5]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_expr[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_expr_kind[ast_stmt_expr[parse_error_stmt_idx]]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_expr_int[ast_stmt_expr[parse_error_stmt_idx]]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_expr_text_ref[ast_stmt_expr[parse_error_stmt_idx]]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(AstExprIdentVarIndex(ast_stmt_expr[parse_error_stmt_idx]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(AstExprIdentParamIndex(ast_stmt_expr[parse_error_stmt_idx]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(FindAstVarByIdent(ast_stmt_name[parse_error_stmt_idx]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(parse_error_routine_idx);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_routine_var_start[parse_error_routine_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_routine_var_count[parse_error_routine_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][0]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][1]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(Ord(ast_var_name[ast_routine_var_start[parse_error_routine_idx]][2]));
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_emit_routine);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          WriteLn(';');
-          WriteLn('MAIN')
-        end
-      else if parse_error_reason = 702 then
-        begin
-          WriteLn(': MAIN');
-          Write('  ');
-          Write(parse_error_stmt_idx);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(parse_error_routine_idx);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_kind[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_arg_count[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_arg_start[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_value_kind[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_value_int[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_expr[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_child_start[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          Write('  ');
-          Write(ast_stmt_child_count[parse_error_stmt_idx]);
-          WriteLn(' PWRITE-I32');
-          WriteLn('  PWRITELN');
-          WriteLn(';');
-          WriteLn('MAIN')
         end
       else if parse_error_reason <> 0 then
         begin
@@ -7143,66 +6206,6 @@ begin
       else
         begin
           EmitDirectSingleIntProgram(0)
-        end
-    end
-end;
-
-procedure EmitProgram;
-var expected: text_buf;
-begin
-  ClearText(expected);
-  expected := 'kpscseedhellosingle';
-  if ProgramNameEquals(expected) then
-    begin
-      WriteLn('CREATE kind 0 ,');
-      WriteAllSeedSampleWords();
-      WriteSeedKindDispatch()
-    end
-  else if saw_seed_char_decl and saw_seed_char_assign and saw_seed_char_writeln then
-    begin
-      WriteLn('CREATE kind 0 ,');
-      WriteAllSeedSampleWords();
-      WriteSeedKindDispatch()
-    end
-  else
-    begin
-      ClearText(expected);
-      expected := 'kpsc_real';
-      if ProgramNameEquals(expected) then
-        begin
-          WriteLn(': MAIN');
-          WriteLn('  7 S>F 2 S>F FDIV PWRITE-F32');
-          WriteLn('  PWRITELN');
-          WriteLn('  7 S>F 2 S>F FDIV FROUND-I32 PWRITE-I32');
-          WriteLn('  PWRITELN');
-          WriteLn('  7 S>F 2 S>F FDIV F>S PWRITE-I32');
-          WriteLn('  PWRITELN');
-          WriteLn(';');
-          WriteLn('MAIN')
-        end
-      else
-        begin
-          ClearText(expected);
-      expected := 'probe';
-      if ProgramNameEquals(expected) and (saw_probe_builtin_prefix or saw_probe_read_prefix or saw_probe_step_proc or RootHasAstCallStmt()) then
-        begin
-          EmitProbeOrDefaultProgram()
-        end
-      else if EmitDirectNamedSample() then
-        begin
-        end
-      else if CanEmitAstProgram() then
-        begin
-          EmitAstProgram()
-        end
-      else if CanEmitCapturedWriteLnProgram() then
-        begin
-          EmitCapturedWriteLnProgram()
-        end
-      else
-        begin
-          EmitProbeOrDefaultProgram()
-        end
         end
     end
 end;

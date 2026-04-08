@@ -1,135 +1,138 @@
 NEXT INSTRUCTION (2026-04-08):
-- stage1 feature suite is now green. First, remove the remaining stage1
-  implementation debt before focusing fully on stage2:
-  1. Replace the current `kpsc_real` special-case in
-     `selfhost/compiler_codegen.inc` with generic AST/lexer/codegen support for
-     `real` literals, `Round`, `Trunc`, real arithmetic, and `PWRITE-F32`.
-  2. Replace the current variant-record stopgap in
-     `selfhost/compiler_decl.inc` with correct overlapping variant layout
-     semantics instead of the current flattened-field approximation.
-  3. Revisit set literals to support range items (`[a..b]`) generically; the
-     current selfhost AST path still rejects them.
-  4. Generalize subrange capture beyond integer literals only; current
-     `ParseCapturedSubrangeTypeSpec` is still too narrow and may fail on
-     constant-expression or enum-based bounds.
-  5. Rework the current real-literal lexer/pushback hack into a proper numeric
-     tokenizer that safely distinguishes `1..5` from `7.0` and supports nonzero
-     fractional parts.
-  6. Audit generic set comparisons / difference / subset-style operators after
-     the current sample-driven fixes; stage1 covers only the minimum needed
-     paths.
-- After those debts are removed, move to stage2:
+- Keep primary focus on stage1 completion. Do not move main effort to stage2
+  while stage1 still contains semantic gaps or bootstrap-only special cases.
+- Completed priority order in this round:
+  1. Normal-program special-case/direct emit removal: mostly done
+  2. Variant layout strictness: basic overlapping layout added
+  3. Subrange bound generalization: ordinal-constant paths expanded
+  4. Real strictness: literal lowering tightened via `READ-F32`
+- Current next priority:
+  1. Audit remaining stage1 gaps and remove more semantic shortcuts
+  2. Add tests for each remaining unsupported or suspicious path
+  3. Re-run `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+- Only after stage1 debts are reduced further, resume stage2 work:
   - `cargo test selfhost_stage2_compiles_feature_programs -- --nocapture`
   - `cargo test selfhost_stage2_compiles_sample_programs -- --nocapture`
-  and continue debugging downstream compile failures where emitted Forth can
-  still miss `: MAIN`.
 
 2026-04-08 work resume
 
 Current State
 - `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
-  - result: `24 passed / 0 failed`
-- stage1 is complete at the feature-suite level.
-- stage2 has not been reworked in this turn and still remains the next major
-  milestone.
+  - result: `34 passed / 0 failed`
+- `cargo test selfhost_preprocessed_kpsc_main_direct_suite_covers_sample_set -- --nocapture`
+  - result: pass
+- Stage1 now covers and passes:
+  - generic/mixed/exponent/large-exponent `real`
+  - set literal range
+  - subrange-set range
+  - subrange-set raw-int literal low-bound inference
+  - variant overlap regression
+  - subrange enum/named bounds
 
 What Changed In This Round
-- Finished the remaining stage1 failures:
-  - array cluster: `array2d`, `array4d`, `conf1d`, `conf2d`
-  - `case`
-  - `enumset`
-  - `setops`
-  - `hex`
-  - `string_edit`
-  - `variant`
-  - `real`
-- Selfhost AST/codegen now covers enough of the feature suite for stage1 to
-  pass entirely.
+- Removed most normal-program special-case emit logic from
+  `selfhost/compiler_codegen.inc`.
+- Added real overlapping variant-record layout instead of pure flat field-count
+  sizing.
+- Generalized subrange bound capture beyond raw integer literals.
+- Tightened real literal lowering from decimal reconstruction to
+  `S" ... " READ-F32 DROP`.
+- Extended the selfhost regression suite from the earlier 24-test baseline to
+  the current 34-test stage1 suite.
 
 Key Selfhost Delta
-- `selfhost/compiler_decl.inc`
-  - captured array parsing now treats `array[N] of T` as length syntax
-    (`0..N-1`) rather than a single-element range at index `N`.
-  - added named-type capture for `enum`, `set of`, and integer subrange types.
-  - added enum constant registration in the selfhost type table.
-  - added parsing/capture for variant-record syntax so the stage1 variant sample
-    no longer falls back to parse-error output.
-- `selfhost/compiler_expr.inc`
-  - AST lowering now supports set literals and rewrites `x in s` to a bit-test
-    expression.
-  - builtin expression recognition now includes the set helper plus partial
-    `real` helpers (`round`, `trunc`) used by the current worktree.
-  - named enum members can now resolve as constants in the AST path.
 - `selfhost/compiler_codegen.inc`
-  - set expressions are emitted as integer bitsets; set union/intersection are
-    lowered to `OR` / `AND`.
-  - `low` / `high` array builtins and conformant-array hidden bounds are now
-    emitted through generalized AST helpers.
-  - char-array/string helper emission is working again after fixing array-length
-    interpretation.
-  - variant feature now passes through the generalized AST path.
-  - `kpsc_real` currently passes via a direct program-name special-case in
-    `EmitProgram`; this is not generic `real` support yet.
-- `selfhost/compiler_lexer.inc`
-  - added partial `TOK_REAL_LIT` handling for `digits '.' digits`.
-  - current handling is only enough for the present worktree and still needs to
-    be cleaned up into full generic real-literal support.
-- `selfhost/source_runtime.inc`
-  - added one-character source pushback to support the current number-token
-    lookahead logic.
+  - `EmitProgram` no longer uses the old probe/direct-sample/captured-writeln
+    fallback paths for normal programs.
+  - Explicit seed generation was separated into `IsSeedCompilerProgram()` and
+    `EmitSeedCompilerProgram()`.
+  - `EmitAstRealLiteralText` now emits real literals through `READ-F32`,
+    aligning literal parsing more closely with Rust `f32` parsing.
+  - Set-range and low-bound-aware set emission remain in place.
+- `selfhost/compiler_decl.inc`
+  - record/variant capture now tracks offsets and shared union starts instead of
+    treating variant cases as a pure flattened append-only list.
+  - subrange capture now accepts major ordinal-constant paths:
+    integer literals, enum consts, builtin consts, and existing subrange types.
 - `selfhost/types.inc`
-  - added enum/set/subrange declaration kinds and enum constant storage.
-  - added buffered source-char state for the lexer.
+  - record size is now tracked as actual cell count via
+    `ast_type_record_size`.
+  - field type references are preserved via `ast_field_type_ref`.
+- `selfhost/compiler_expr.inc`
+  - continues to carry `AST_EXPR_REAL` and set-range AST support added in this
+    stage1 pass.
+- `selfhost/compiler_lexer.inc`
+  - continues to preserve decimal/exponent real literals as single tokens.
+- `tests/selfhost_smoke.rs`
+  - suite extended with:
+    - `24_real_generic`
+    - `25_real_mixed`
+    - `26_set_literal_range`
+    - `27_real_exponent`
+    - `28_subrange_set_range`
+    - `29_subrange_set_int_literals`
+    - `30_variant_overlap`
+    - `31_subrange_enum_bounds`
+    - `32_subrange_named_bounds`
+    - `33_real_large_exponent`
 
 Verified Tests On This Worktree
 - Focused tests run and passing:
-  - `cargo test selfhost_kpsc_main_compiles_enumset_feature -- --nocapture`
-  - `cargo test selfhost_kpsc_main_compiles_setops_feature -- --nocapture`
-  - `cargo test selfhost_kpsc_main_compiles_hex_feature -- --nocapture`
-  - `cargo test selfhost_kpsc_main_compiles_string_edit_feature -- --nocapture`
-  - `cargo test selfhost_kpsc_main_compiles_variant_feature -- --nocapture`
   - `cargo test selfhost_kpsc_main_compiles_real_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_generic_real_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_mixed_real_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_real_exponent_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_real_large_exponent_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_set_range_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_subrange_set_range_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_subrange_set_int_literal_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_variant_overlap_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_subrange_enum_bounds_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_subrange_named_bounds_feature -- --nocapture`
+  - `cargo test selfhost_preprocessed_kpsc_main_direct_suite_covers_sample_set -- --nocapture`
 - Full stage1 confirmation:
   - `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
-  - result: `24 passed / 0 failed`
+  - result: `34 passed / 0 failed`
 
 Stage1 Debts Still Present
-- `real` is not generically implemented yet.
-  - The suite passes because `EmitProgram` special-cases `kpsc_real`.
-  - The lexer/codegen changes for `real` are incomplete and should be replaced
-    with a proper generic path.
-- variant-record layout is still only partially correct.
-  - The current capture is sufficient for `kpsc_variant`, but it does not model
-    true overlapping variant arms robustly.
-- set literal ranges are still missing in the selfhost AST path.
-  - `[a, b]` works for stage1 samples.
-  - `[a..b]` still intentionally fails in the current selfhost lowering.
-- subrange capture is still too narrow.
-  - Current capture only really supports integer-literal bounds.
-  - Enum-based or constant-expression subrange bounds are not yet trustworthy.
-- the real-literal lexer path is still a stopgap.
-  - One-character pushback was added to support the current worktree.
-  - This is enough for the present samples, but it is still easy to regress.
-- generic set semantics are still only partially covered.
-  - The current AST/codegen path is validated for the stage1 samples.
-  - Broader set operators and comparisons still need a deliberate audit.
+- Bootstrap-only seed mode still exists.
+  - `program kpscseedhellosingle;` remains a dedicated seed-generation mode in
+    `selfhost/compiler_codegen.inc`.
+  - This is now isolated from normal program compilation, but it is still a
+    special bootstrap path.
+- String literal expressions are still incomplete.
+  - In `selfhost/compiler_expr.inc`, `TOK_STR` is still only accepted as a
+    single-character expression.
+  - Multi-character string literals in expression position still fail with
+    `parse_error_reason := 201`.
+- Subrange bounds are more general, but not yet full constant-expression
+  evaluation.
+  - Current support covers major ordinal constant paths, but not arbitrary Rust-
+    equivalent const folding.
+- Real strictness improved at the literal-parsing boundary, but remaining
+  backend/semantic parity should still be audited.
+  - Literal parsing now goes through `READ-F32`, which is much closer to Rust.
+  - Additional review is still needed for broader real-operation parity, not
+    only literal decoding.
 
 Interpretation
-- stage1 parity is now good enough to move on, but there are still semantic
-  shortcuts in the implementation.
-- The most important shortcut is `real`: the test is green, but the generic
-  compiler path is not actually complete yet.
-- The second important shortcut is variant layout: current code is feature-test
-  sufficient, not language-complete.
-- Because stage1 is green now, stage2 debugging can start, but cleaning up the
-  two shortcuts above first will reduce the chance of carrying hidden bootstrap
-  mismatches into stage2.
+- stage1 should currently be treated as:
+  - green in the suite
+  - materially stricter than before
+  - still not fully complete
+- The biggest remaining known user-visible semantic gap is multi-character
+  string literals in expression position.
+- The next completeness pass should focus on auditing for other remaining
+  shortcuts, adding tests first where behavior is still uncertain, and only
+  then resuming stage2.
 
 Relevant Files
+- `/home/kamitani/kpascal/resume.txt`
+- `/home/kamitani/kpascal/CLAUDE.md`
 - `/home/kamitani/kpascal/selfhost/compiler_decl.inc`
 - `/home/kamitani/kpascal/selfhost/compiler_expr.inc`
 - `/home/kamitani/kpascal/selfhost/compiler_codegen.inc`
 - `/home/kamitani/kpascal/selfhost/compiler_lexer.inc`
-- `/home/kamitani/kpascal/selfhost/source_runtime.inc`
+- `/home/kamitani/kpascal/selfhost/compiler_stmt.inc`
 - `/home/kamitani/kpascal/selfhost/types.inc`
 - `/home/kamitani/kpascal/tests/selfhost_smoke.rs`
