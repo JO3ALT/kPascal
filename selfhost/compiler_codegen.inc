@@ -646,6 +646,71 @@ begin
   EmitSeedIndentedPWriteLn()
 end;
 
+procedure AppendUnsignedDecimalText(var text: text_buf; value: integer);
+begin
+  if value >= 10 then
+    begin
+      AppendUnsignedDecimalText(text, value div 10)
+    end;
+  AppendChar(text, Chr(Ord('0') + (value mod 10)))
+end;
+
+procedure EmitSeedKindDispatchCases;
+var i: integer;
+    target_kind: integer;
+    line: text_buf;
+    if_prefix: text_buf;
+    if_suffix: text_buf;
+    call_prefix: text_buf;
+    else_line: text_buf;
+    then_line: text_buf;
+begin
+  ClearText(if_prefix);
+  if_prefix := '  kind PVAR@ ';
+  ClearText(if_suffix);
+  if_suffix := ' = IF';
+  ClearText(call_prefix);
+  call_prefix := '    KIND_';
+  ClearText(else_line);
+  else_line := '  ELSE';
+  ClearText(then_line);
+  then_line := '  THEN';
+  i := 0;
+  while i <= 22 do
+    begin
+      ClearText(line);
+      AppendStr(line, if_prefix);
+      AppendUnsignedDecimalText(line, i);
+      AppendStr(line, if_suffix);
+      EmitTextBufLine(line);
+      ClearText(line);
+      AppendStr(line, call_prefix);
+      target_kind := i;
+      if target_kind = 1 then
+        begin
+          target_kind := 0
+        end;
+      if target_kind < 10 then
+        begin
+          AppendChar(line, '0')
+        end;
+      AppendUnsignedDecimalText(line, target_kind);
+      EmitTextBufLine(line);
+      EmitTextBufLine(else_line);
+      i := i + 1
+    end;
+  ClearText(line);
+  AppendStr(line, call_prefix);
+  AppendUnsignedDecimalText(line, 23);
+  EmitTextBufLine(line);
+  i := 0;
+  while i <= 22 do
+    begin
+      EmitTextBufLine(then_line);
+      i := i + 1
+    end
+end;
+
 procedure EmitSeedStmtWriteLnExpr(value: integer);
 begin
   EmitSeedBodyPrintIntLine(value)
@@ -677,6 +742,13 @@ begin
   EmitSeedBodyPrintIndentedPWriteLnLine()
 end;
 
+procedure WriteSeedSingleIntWord(var routine_name: text_buf; value: integer);
+begin
+  EmitSeedProgramOpen(routine_name);
+  EmitSeedStmtWriteLnExpr(value);
+  EmitSeedProgramClose()
+end;
+
 procedure WriteSeedHelloWord;
 var routine_name: text_buf;
     text: text_buf;
@@ -703,18 +775,14 @@ procedure WriteSeedRecordWord;
 var routine_name: text_buf;
 begin
   routine_name := 'KIND_05';
-  EmitSeedProgramOpen(routine_name);
-  EmitSeedStmtWriteLnExpr(33);
-  EmitSeedProgramClose()
+  WriteSeedSingleIntWord(routine_name, 33)
 end;
 
 procedure WriteSeedControlWord;
 var routine_name: text_buf;
 begin
   routine_name := 'KIND_03';
-  EmitSeedProgramOpen(routine_name);
-  EmitSeedStmtWriteLnExpr(12);
-  EmitSeedProgramClose()
+  WriteSeedSingleIntWord(routine_name, 12)
 end;
 
 procedure WriteSeedEnumSetWord;
@@ -733,9 +801,7 @@ procedure WriteSeedVariantWord;
 var routine_name: text_buf;
 begin
   routine_name := 'KIND_06';
-  EmitSeedProgramOpen(routine_name);
-  EmitSeedStmtWriteLnExpr(42);
-  EmitSeedProgramClose()
+  WriteSeedSingleIntWord(routine_name, 42)
 end;
 
 procedure WriteSeedPointerWord;
@@ -1265,9 +1331,7 @@ procedure WriteSeedVarValueMixWord;
 var routine_name: text_buf;
 begin
   routine_name := 'KIND_23';
-  EmitSeedProgramOpen(routine_name);
-  EmitSeedStmtWriteLnExpr(17);
-  EmitSeedProgramClose()
+  WriteSeedSingleIntWord(routine_name, 17)
 end;
 
 procedure WriteAllSeedSampleWords;
@@ -1299,7 +1363,6 @@ end;
 
 procedure WriteSeedKindDispatch;
 begin
-  WriteLn(': MAIN');
   WriteLn('  PREAD-I32 DROP');
   WriteLn('  PREAD-I32 DUP 23 <= IF');
   WriteLn('    kind PVAR!');
@@ -1337,101 +1400,7 @@ begin
   WriteLn('      0 kind PVAR!');
   WriteLn('    THEN');
   WriteLn('  THEN');
-  WriteLn('  kind PVAR@ 0 = IF');
-  WriteLn('    KIND_00');
-  WriteLn('  ELSE');
-  WriteLn('    kind PVAR@ 1 = IF');
-  WriteLn('      KIND_00');
-  WriteLn('    ELSE');
-  WriteLn('      kind PVAR@ 2 = IF');
-  WriteLn('        KIND_02');
-  WriteLn('      ELSE');
-  WriteLn('        kind PVAR@ 3 = IF');
-  WriteLn('          KIND_03');
-  WriteLn('        ELSE');
-  WriteLn('          kind PVAR@ 4 = IF');
-  WriteLn('            KIND_04');
-  WriteLn('          ELSE');
-  WriteLn('            kind PVAR@ 5 = IF');
-  WriteLn('              KIND_05');
-  WriteLn('            ELSE');
-  WriteLn('              kind PVAR@ 6 = IF');
-  WriteLn('                KIND_06');
-  WriteLn('              ELSE');
-  WriteLn('                kind PVAR@ 7 = IF');
-  WriteLn('                  KIND_07');
-  WriteLn('                ELSE');
-  WriteLn('                  kind PVAR@ 8 = IF');
-  WriteLn('                    KIND_08');
-  WriteLn('                  ELSE');
-  WriteLn('                    kind PVAR@ 9 = IF');
-  WriteLn('                      KIND_09');
-  WriteLn('                    ELSE');
-  WriteLn('                      kind PVAR@ 10 = IF');
-  WriteLn('                        KIND_10');
-  WriteLn('                      ELSE');
-  WriteLn('                        kind PVAR@ 11 = IF');
-  WriteLn('                          KIND_11');
-  WriteLn('                        ELSE');
-  WriteLn('                          kind PVAR@ 12 = IF');
-  WriteLn('                            KIND_12');
-  WriteLn('                          ELSE');
-  WriteLn('                            kind PVAR@ 13 = IF');
-  WriteLn('                              KIND_13');
-  WriteLn('                            ELSE');
-  WriteLn('                              kind PVAR@ 14 = IF');
-  WriteLn('                                KIND_14');
-  WriteLn('                              ELSE');
-  WriteLn('                                kind PVAR@ 15 = IF');
-  WriteLn('                                  KIND_15');
-  WriteLn('                                ELSE');
-  WriteLn('                                  kind PVAR@ 16 = IF');
-  WriteLn('                                    KIND_16');
-  WriteLn('                                  ELSE');
-  WriteLn('                                    kind PVAR@ 17 = IF');
-  WriteLn('                                      KIND_17');
-  WriteLn('                                    ELSE');
-  WriteLn('                                      kind PVAR@ 18 = IF');
-  WriteLn('                                        KIND_18');
-  WriteLn('                                      ELSE');
-  WriteLn('                                        kind PVAR@ 19 = IF');
-  WriteLn('                                          KIND_19');
-  WriteLn('                                        ELSE');
-  WriteLn('                                          kind PVAR@ 20 = IF');
-  WriteLn('                                            KIND_20');
-  WriteLn('                                          ELSE');
-  WriteLn('                                            kind PVAR@ 21 = IF');
-  WriteLn('                                              KIND_21');
-  WriteLn('                                            ELSE');
-  WriteLn('                                              kind PVAR@ 22 = IF');
-  WriteLn('                                                KIND_22');
-  WriteLn('                                              ELSE');
-  WriteLn('                                                KIND_23');
-  WriteLn('                                              THEN');
-  WriteLn('                                            THEN');
-  WriteLn('                                          THEN');
-  WriteLn('                                        THEN');
-  WriteLn('                                      THEN');
-  WriteLn('                                    THEN');
-  WriteLn('                                  THEN');
-  WriteLn('                                THEN');
-  WriteLn('                              THEN');
-  WriteLn('                            THEN');
-  WriteLn('                          THEN');
-  WriteLn('                        THEN');
-  WriteLn('                      THEN');
-  WriteLn('                    THEN');
-  WriteLn('                  THEN');
-  WriteLn('                THEN');
-  WriteLn('              THEN');
-  WriteLn('            THEN');
-  WriteLn('          THEN');
-  WriteLn('        THEN');
-  WriteLn('      THEN');
-  WriteLn('    THEN');
-  WriteLn('  THEN');
-  WriteLn(';');
-  WriteLn('MAIN')
+  EmitSeedKindDispatchCases()
 end;
 
 function ProgramNameEquals(var expected: text_buf): boolean;
@@ -1458,7 +1427,9 @@ procedure EmitSeedCompilerProgram;
 begin
   WriteLn('CREATE kind 0 ,');
   WriteAllSeedSampleWords();
-  WriteSeedKindDispatch()
+  EmitDirectHeader();
+  WriteSeedKindDispatch();
+  EmitDirectFooter()
 end;
 
 procedure EmitDirectHeader;
@@ -2321,16 +2292,12 @@ begin
     end
   else
     begin
-      AstExprIdentVarIndex := -1;
-      if ast_expr_text_ref[expr_idx] >= 0 then
-        begin
-          AstExprIdentVarIndex := EmitFindScopedVarByIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]])
-        end;
+      AstExprIdentVarIndex := ast_expr_int[expr_idx];
       if AstExprIdentVarIndex < 0 then
         begin
-          if ast_expr_int[expr_idx] >= 0 then
+          if ast_expr_text_ref[expr_idx] >= 0 then
             begin
-              AstExprIdentVarIndex := ast_expr_int[expr_idx]
+              AstExprIdentVarIndex := EmitFindScopedVarByIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]])
             end
         end
     end
@@ -3885,6 +3852,7 @@ var v_idx: integer;
     routine_idx: integer;
     builtin_kind: integer;
     const_value: integer;
+    const_idx: integer;
 begin
   if expr_idx < 0 then
     begin
@@ -3930,7 +3898,12 @@ begin
         begin
           if ast_expr_text_ref[expr_idx] >= 0 then
             begin
-              CanEmitAstExpr := TryResolveBuiltinConstIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]], const_value)
+              CanEmitAstExpr := TryResolveBuiltinConstIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]], const_value);
+              if not CanEmitAstExpr then
+                begin
+                  const_idx := FindAstConstByIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]]);
+                  CanEmitAstExpr := const_idx >= 0
+                end
             end
         end
     end
@@ -4245,6 +4218,7 @@ var v_idx: integer;
     routine_idx: integer;
     builtin_kind: integer;
     const_value: integer;
+    const_idx: integer;
     visible_idx: integer;
     raw_param_idx: integer;
     arg_expr_idx: integer;
@@ -4308,8 +4282,16 @@ begin
                 end
               else
                 begin
-                  EmitDirectIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]]);
-                  Write(' PVAR@')
+                  const_idx := FindAstConstByIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]]);
+                  if const_idx >= 0 then
+                    begin
+                      Write(ast_const_value[const_idx])
+                    end
+                  else
+                    begin
+                      EmitDirectIdent(ast_ident_pool[ast_expr_text_ref[expr_idx]]);
+                      Write(' PVAR@')
+                    end
                 end
             end
         end
@@ -5080,6 +5062,10 @@ begin
           parse_error_reason := 704
         end
     end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_READLN then
+    begin
+      CanEmitAstStmt := ast_stmt_arg_count[stmt_idx] = 0
+    end
   else if ast_stmt_kind[stmt_idx] = AST_STMT_COMPOUND then
     begin
       CanEmitAstStmt := CanEmitAstStmtRange(ast_stmt_child_start[stmt_idx], ast_stmt_child_count[stmt_idx])
@@ -5585,6 +5571,14 @@ begin
             begin
               Write('PREAD-CHAR')
             end
+          else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_BOOLEAN then
+            begin
+              Write('PREAD-BOOL')
+            end
+          else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_REAL then
+            begin
+              Write('PREAD-F32')
+            end
           else
             begin
               Write('PREAD-I32')
@@ -5594,6 +5588,7 @@ begin
               v_idx := AstExprIdentVarIndex(ast_arg_expr[arg_idx]);
               if v_idx >= 0 then
                 begin
+                  Write(' ');
                   EmitAstVarSlot(v_idx);
                   WriteLn(' PVAR!')
                 end
@@ -5602,6 +5597,7 @@ begin
                   param_idx := AstExprIdentParamIndex(ast_arg_expr[arg_idx]);
                   if param_idx >= 0 then
                     begin
+                      Write(' ');
                       EmitAstParamSlot(param_idx);
                       if ast_param_by_ref[param_idx] <> 0 then
                         begin
@@ -5614,11 +5610,13 @@ begin
                     end
                   else if AstExprIsCurrentResult(ast_arg_expr[arg_idx]) then
                     begin
+                      Write(' ');
                       EmitAstResultSlot(ast_emit_routine);
                       WriteLn(' PVAR!')
                     end
                   else if ast_expr_text_ref[ast_arg_expr[arg_idx]] >= 0 then
                     begin
+                      Write(' ');
                       EmitDirectIdent(ast_ident_pool[ast_expr_text_ref[ast_arg_expr[arg_idx]]]);
                       WriteLn(' PVAR!')
                     end
@@ -5642,6 +5640,11 @@ begin
             end;
           arg_idx := arg_idx + 1
         end
+    end
+  else if ast_stmt_kind[stmt_idx] = AST_STMT_READLN then
+    begin
+      EmitAstIndent(depth);
+      WriteLn('PREADLN')
     end
   else if ast_stmt_kind[stmt_idx] = AST_STMT_COMPOUND then
     begin

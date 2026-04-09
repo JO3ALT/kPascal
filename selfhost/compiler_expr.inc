@@ -452,6 +452,7 @@ var expr_idx: integer;
     with_base_idx: integer;
     const_value: integer;
     enum_const_idx: integer;
+    scoped_var_idx: integer;
     temp_text: text_buf;
     set_expr_idx: integer;
     zero_expr_idx: integer;
@@ -565,34 +566,44 @@ begin
         end
       else
         begin
-          if TryResolveBuiltinConst(temp_text, const_value) then
+          scoped_var_idx := FindScopedAstVar(temp_text);
+          if scoped_var_idx >= 0 then
             begin
-              expr_idx := NewAstExpr(AST_EXPR_INT);
-              ast_expr_int[expr_idx] := const_value
+              expr_idx := NewAstExpr(AST_EXPR_IDENT);
+              ast_expr_int[expr_idx] := scoped_var_idx;
+              ast_expr_text_ref[expr_idx] := NewAstIdent(temp_text)
             end
           else
             begin
-              enum_const_idx := FindAstEnumConst(temp_text);
-              if enum_const_idx >= 0 then
+              if TryResolveBuiltinConst(temp_text, const_value) then
                 begin
                   expr_idx := NewAstExpr(AST_EXPR_INT);
-                  ast_expr_int[expr_idx] := ast_enum_const_value[enum_const_idx]
+                  ast_expr_int[expr_idx] := const_value
                 end
               else
                 begin
-                  expr_idx := NewAstExpr(AST_EXPR_IDENT);
-                  ast_expr_int[expr_idx] := FindScopedAstVar(temp_text);
-                  ast_expr_text_ref[expr_idx] := NewAstIdent(temp_text);
-                  if ast_expr_int[expr_idx] < 0 then
+                  enum_const_idx := FindAstEnumConst(temp_text);
+                  if enum_const_idx >= 0 then
                     begin
-                      if ast_with_type_ref >= 0 then
+                      expr_idx := NewAstExpr(AST_EXPR_INT);
+                      ast_expr_int[expr_idx] := ast_enum_const_value[enum_const_idx]
+                    end
+                  else
+                    begin
+                      expr_idx := NewAstExpr(AST_EXPR_IDENT);
+                      ast_expr_int[expr_idx] := scoped_var_idx;
+                      ast_expr_text_ref[expr_idx] := NewAstIdent(temp_text);
+                      if ast_expr_int[expr_idx] < 0 then
                         begin
-                          if FindAstFieldByIdent(ast_with_type_ref, ast_ident_pool[ast_expr_text_ref[expr_idx]]) >= 0 then
+                          if ast_with_type_ref >= 0 then
                             begin
-                              with_base_idx := NewAstExpr(AST_EXPR_IDENT);
-                              ast_expr_int[with_base_idx] := ast_with_var;
-                              ast_expr_kind[expr_idx] := AST_EXPR_FIELD;
-                              ast_expr_left[expr_idx] := with_base_idx
+                              if FindAstFieldByIdent(ast_with_type_ref, ast_ident_pool[ast_expr_text_ref[expr_idx]]) >= 0 then
+                                begin
+                                  with_base_idx := NewAstExpr(AST_EXPR_IDENT);
+                                  ast_expr_int[with_base_idx] := ast_with_var;
+                                  ast_expr_kind[expr_idx] := AST_EXPR_FIELD;
+                                  ast_expr_left[expr_idx] := with_base_idx
+                                end
                             end
                         end
                     end

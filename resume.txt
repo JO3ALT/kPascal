@@ -1,3 +1,17 @@
+NEXT TASK (IMMEDIATE):
+- Parenthesized subrange ambiguity work is complete for both numeric-leading
+  and identifier-led low bounds.
+- Next focus is the remaining decl-time const parity audit.
+- After that, continue the real-operation parity audit.
+- Keep future reporting compressed:
+  summarize parser experiments by strategy/result rather than logging each
+  failed micro-attempt, and only record meaningful deltas in tests/resume.
+- Additional token-saving rules for future turns:
+  - avoid pasting long diffs or raw test output into the conversation
+  - report only deltas, not repeated background already captured here
+  - keep one turn focused on one technical goal
+  - prefer a fixed close-out format such as `changes / verification / next`
+
 NEXT INSTRUCTION (2026-04-08):
 - Keep primary focus on stage1 completion. Do not move main effort to stage2
   while stage1 still contains semantic gaps or bootstrap-only special cases.
@@ -27,6 +41,16 @@ Current State
   - result after decl-time `const` builtin/parenthesized bound tests: `44 passed / 0 failed`
 - `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
   - result after documenting leading-parenthesized subrange gap: `44 passed / 0 failed / 1 ignored`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result after numeric-leading parenthesized subrange support: `45 passed / 0 failed / 1 ignored`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result after identifier-led parenthesized subrange support: `46 passed / 0 failed`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result after identifier-led parenthesized subrange `Ord/Chr` support: `47 passed / 0 failed`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result after decl-time `div`/`mod` bound coverage: `49 passed / 0 failed`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result after decl-time signed/preference bound coverage: `51 passed / 0 failed`
 - `cargo test selfhost_preprocessed_kpsc_main_direct_suite_covers_sample_set -- --nocapture`
   - result: pass
 - Stage1 now covers and passes:
@@ -37,8 +61,16 @@ Current State
   - user-defined `const` names in captured array bounds, including direct arithmetic
   - parenthesized arithmetic and `Ord/Chr` inside ordinal `const` declarations
     consumed by captured subrange/array bounds
-  - nearby covered cases are locked while leading-parenthesized subrange type
-    syntax remains explicitly ignored as unresolved
+  - numeric-leading parenthesized subrange low bounds such as `(1 + 1) .. ...`
+  - identifier-led parenthesized subrange low bounds such as `(base + 1) .. ...`
+  - identifier-led parenthesized subrange low bounds that include `Ord/Chr`,
+    such as `(base + Ord(Chr(49))) .. ...`
+  - decl-time `div`/`mod` constant expressions used by captured subrange bounds
+  - decl-time `div`/`mod` constant expressions used by captured array bounds
+  - decl-time unary-minus and precedence-sensitive constant expressions used by
+    captured subrange bounds
+  - decl-time unary-minus and precedence-sensitive constant expressions used by
+    captured array bounds
   - generic/mixed/exponent/large-exponent `real`
   - set literal range
   - subrange-set range
@@ -55,9 +87,21 @@ What Changed In This Round
   resolve user-defined ordinal `const` names.
 - Confirmed decl-time ordinal `const` capture across parenthesized arithmetic
   and `Ord/Chr(...)` forms used later by array/subrange bounds.
-- Added an explicit ignored regression for leading-parenthesized subrange type
-  syntax so the unresolved enum/subrange ambiguity stays visible without
-  destabilizing stage1.
+- Added support for numeric-leading parenthesized subrange low bounds in
+  selfhost type declarations.
+- Added support for identifier-led parenthesized subrange low bounds in
+  selfhost type declarations without regressing `enum` parsing such as
+  `enumset`.
+- Added a seed-boundary regression showing the bootstrap-only seed path is
+  exact-name gated and does not trigger for renamed near-identical programs.
+- Reduced the seed-only codegen surface slightly by reusing the common
+  `EmitDirectHeader()` / `EmitDirectFooter()` framing around the seed
+  dispatcher instead of open-coding a separate `MAIN` wrapper.
+- Replaced the seed dispatcher's long hand-written kind-call ladder with a
+  generated helper, so the remaining seed-only code is more structural and
+  less duplicated.
+- Collapsed several trivial single-integer seed sample words behind a shared
+  helper, further shrinking duplicated bootstrap-only sample emission.
 - Removed most normal-program special-case emit logic from
   `selfhost/compiler_codegen.inc`.
 - Added real overlapping variant-record layout instead of pure flat field-count
@@ -109,7 +153,8 @@ Key Selfhost Delta
     - `array_const_arithmetic_bounds`
     - `subrange_const_ord_bounds`
     - `array_const_parenthesized_ord_bounds`
-    - ignored: `subrange_parenthesized_ord_bounds`
+    - `subrange_parenthesized_ord_bounds`
+    - `subrange_parenthesized_ident_bounds`
     - `24_real_generic`
     - `25_real_mixed`
     - `26_set_literal_range`
@@ -131,6 +176,8 @@ Verified Tests On This Worktree
   - `cargo test selfhost_kpsc_main_compiles_array_const_arithmetic_bounds_feature -- --nocapture`
   - `cargo test selfhost_kpsc_main_compiles_subrange_const_ord_bounds_feature -- --nocapture`
   - `cargo test selfhost_kpsc_main_compiles_array_const_parenthesized_ord_bounds_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_subrange_parenthesized_ord_bounds_feature -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_subrange_parenthesized_ident_bounds_feature -- --nocapture`
   - `cargo test selfhost_kpsc_main_compiles_real_feature -- --nocapture`
   - `cargo test selfhost_kpsc_main_compiles_generic_real_feature -- --nocapture`
   - `cargo test selfhost_kpsc_main_compiles_mixed_real_feature -- --nocapture`
@@ -145,7 +192,7 @@ Verified Tests On This Worktree
   - `cargo test selfhost_preprocessed_kpsc_main_direct_suite_covers_sample_set -- --nocapture`
 - Full stage1 confirmation:
   - `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
-  - result: `44 passed / 0 failed / 1 ignored`
+  - result: `46 passed / 0 failed`
 
 Stage1 Debts Still Present
 - Bootstrap-only seed mode still exists.
@@ -153,16 +200,26 @@ Stage1 Debts Still Present
     `selfhost/compiler_codegen.inc`.
   - This is now isolated from normal program compilation, but it is still a
     special bootstrap path.
+  - Current audit confirms the special case is tightly scoped: renaming the
+    same source falls back to ordinary compilation and no longer emits the
+    seed dispatcher.
+  - After the latest reduction, the remaining seed-only surface is mainly:
+    `CREATE kind 0 ,`, `WriteAllSeedSampleWords()`, and the dispatcher body in
+    `WriteSeedKindDispatch()`.
+  - The dispatcher's `KIND_XX` call ladder is now emitted by a loop helper
+    rather than a large hand-written chain; the still-special portion is the
+    seed protocol itself, not the repeated branch text.
+  - Several trivial sample words now share a generic single-int emitter; the
+    bigger remaining seed-only mass is in multi-line/sample-specific word
+    bodies.
 - Subrange bounds are more general, but not yet full constant-expression
   evaluation.
   - Current support now covers major ordinal constant paths plus direct
     arithmetic over them in captured array/subrange bounds, plus ordinal
-    `const` declarations built from parenthesized arithmetic and `Ord/Chr`.
+    `const` declarations built from parenthesized arithmetic and `Ord/Chr`,
+    plus numeric-leading and identifier-led parenthesized subrange low bounds.
   - It still does not provide broad Rust-equivalent const folding, especially
-    for leading-parenthesized subrange type syntax, richer builtin forms, and
-    non-ordinal/general const usage.
-  - A direct regression for the leading-parenthesized subrange syntax is now
-    present but intentionally ignored until parser disambiguation is designed.
+    for richer builtin forms and non-ordinal/general const usage.
 - Real strictness improved at the literal-parsing boundary, but remaining
   backend/semantic parity should still be audited.
   - Literal parsing now goes through `READ-F32`, which is much closer to Rust.
@@ -176,6 +233,8 @@ Interpretation
   - still not fully complete
 - The biggest remaining known semantic gap is now broader const-evaluation
   parity in declarations, plus the remaining bootstrap-only seed path.
+- The old parenthesized-subrange gap is now resolved for both
+  `(1 + 1) .. 6` and `(base + 1) .. 6` forms.
 - The next completeness pass should focus on auditing for other remaining
   shortcuts, adding tests first where behavior is still uncertain, and only
   then resuming stage2.
@@ -213,3 +272,233 @@ Relevant Files
 - `/home/kamitani/kpascal/selfhost/compiler_stmt.inc`
 - `/home/kamitani/kpascal/selfhost/types.inc`
 - `/home/kamitani/kpascal/tests/selfhost_smoke.rs`
+
+2026-04-09 delta
+
+Changes
+- Added `AST_STMT_READLN` in selfhost so bare `ReadLn` now stays on the AST
+  path instead of forcing bootstrap capture failure.
+- Extended selfhost AST `Read(...)` lowering to select `PREAD-BOOL` and
+  `PREAD-F32` in addition to the existing integer/char paths.
+- Fixed the AST `Read(...)` emitter to keep a token boundary before the target
+  slot name, avoiding malformed output such as `PREAD-BOOLASRV0`.
+- Added focused selfhost regressions for:
+  - `ReadLn` via AST
+  - `Read(boolean, real)` via AST
+
+Verification
+- `cargo test selfhost_kpsc_main_emits_readln_via_ast -- --nocapture`
+- `cargo test selfhost_kpsc_main_reads_bool_and_real_via_ast -- --nocapture`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result: `51 passed / 0 failed`
+
+Next
+- Continue the decl-time const parity audit from the prior resume, since the
+  stage1 AST read-path gap addressed here is now covered.
+
+2026-04-09 delta 2
+
+Changes
+- Audited decl-time char-based bound capture and added selfhost regressions for
+  named `char` and `#NN` constants used by captured subrange bounds.
+- Added the parallel array-bound regression for the same `char`/char-code
+  const path, including indexed access and `Low/High` verification.
+- Confirmed this path was already working in selfhost; this round locked it
+  into the stage1 suite rather than changing compiler logic.
+
+Verification
+- `cargo test selfhost_kpsc_main_compiles_subrange_char_const_bounds_feature -- --nocapture`
+- `cargo test selfhost_kpsc_main_compiles_array_char_const_bounds_feature -- --nocapture`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result: `53 passed / 0 failed`
+
+Next
+- Continue the remaining decl-time const audit, but focus on a path that is
+  both Rust-supported and still unverified or missing in selfhost, rather than
+  extending into Rust-invalid boolean/bitwise const forms.
+
+2026-04-09 delta 3
+
+Changes
+- Audited boolean ordinal bounds driven by named `const` declarations and added
+  selfhost regressions for:
+  - captured subrange bounds using `const lo = false; const hi = true;`
+  - captured array bounds using the same boolean const path
+- Confirmed selfhost already handles this Rust-supported ordinal case; no
+  compiler change was needed in this round.
+
+Verification
+- `cargo test selfhost_kpsc_main_compiles_subrange_bool_const_bounds_feature -- --nocapture`
+- `cargo test selfhost_kpsc_main_compiles_array_bool_const_bounds_feature -- --nocapture`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result: `55 passed / 0 failed`
+
+Next
+- Continue the decl-time const audit with another Rust-valid bound form that is
+  still unverified or still handled through a shortcut, rather than revisiting
+  already-confirmed ordinal categories.
+
+2026-04-09 delta 4
+
+Changes
+- Audited named subrange-type bounds beyond the earlier `lo .. 7` coverage and
+  added selfhost regressions for:
+  - subrange low/high captured from two existing named subrange types
+  - array low/high captured from the same named subrange types
+- This specifically exercises the selfhost `prefer_high` path in
+  `ResolveCapturedOrdinalConstIdent` through real stage1 samples.
+- Confirmed the path is already working; this round expanded regression
+  coverage rather than changing compiler logic.
+
+Verification
+- `cargo test selfhost_kpsc_main_compiles_subrange_named_type_bounds_feature -- --nocapture`
+- `cargo test selfhost_kpsc_main_compiles_array_named_type_bounds_feature -- --nocapture`
+- `cargo test selfhost_kpsc_main_compiles_ -- --nocapture`
+  - result: `57 passed / 0 failed`
+
+Next
+- Continue the late-stage decl-time const audit, but start biasing toward
+  genuinely missing semantic shortcuts if they can be found, since several
+  ordinal bound categories are now confirmed green rather than merely assumed.
+
+2026-04-09 delta 5
+
+Changes
+- Shifted this round from bound-coverage expansion to stage1 shortcut audit.
+- Re-ran the ignored self-compile progress checks for the full preprocessed
+  selfhost source.
+- Promoted these checks from ignored to normal suite coverage because they now
+  pass reliably:
+  - `selfhost_preprocessed_kpsc_main_selfcompile_reaches_read_source_loop`
+  - `selfhost_preprocessed_kpsc_main_selfcompile_reaches_lexer_routines`
+  - `selfhost_preprocessed_kpsc_main_selfcompile_reaches_parser_helpers`
+- Left `selfhost_preprocessed_kpsc_main_selfcompile_reaches_write_and_expect_helpers`
+  ignored because it still fails with a reduced diagnostic output of `724`.
+
+Verification
+- `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_read_source_loop -- --nocapture`
+- `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_lexer_routines -- --nocapture`
+- `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_parser_helpers -- --nocapture`
+- `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_ -- --nocapture`
+  - result: `3 passed / 1 ignored`
+
+Current blocker signal
+- The remaining ignored self-compile snapshot now collapses to a single output
+  value `724`, which corresponds to AST-program suitability rejecting an
+  `AST_STMT_IF` path somewhere in the full preprocessed selfhost input.
+- That means full-source parsing is no longer the main blocker in this check;
+  the next useful step is to localize which `if` subtree still fails
+  `CanEmitAstStmt`/`CanEmitAstExpr` during full selfhost emission.
+
+Next
+- Investigate the `724` full-selfhost blocker directly instead of adding more
+  generic coverage first.
+
+2026-04-09 delta 6
+
+Changes
+- Added AST codegen support for ordinary selfhost `const` identifiers, so
+  `AST_EXPR_IDENT` can emit/can-emit named const values instead of treating
+  them as unresolved storage reads.
+- Added `FindAstConstByIdent(...)` and a focused selfhost regression covering
+  const identifiers used in assignment, `if`, and expression position.
+- Fixed the preprocessed-selfhost test helper cache so the cached native
+  stage1 compiler binary is keyed by both the flattened selfhost source and
+  the current Rust `kpascal` binary, avoiding stale selfcompile results after
+  Rust-side changes.
+- Tightened AST ident var resolution to prefer the captured `ast_expr_int`
+  var index before falling back to name lookup.
+
+Verification
+- `cargo fmt`
+- `cargo test selfhost_kpsc_main_emits_const_idents_via_ast -- --nocapture`
+- `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_ -- --nocapture`
+  - result: `3 passed / 0 failed / 1 ignored`
+
+Current blocker signal
+- The remaining ignored self-compile snapshot still fails with `724`, but the
+  failure has now been localized further by fresh manual diagnostics:
+  - `parse_error_reason = 724`
+  - `parse_error_stmt_idx = 2966`
+  - `parse_error_routine_idx = 113`
+- Zero-based routine `113` maps to `program::BuildAstPrimaryExpr`.
+- The failing statement is an `AST_STMT_IF` on the `token_kind <> TOK_IDENT`
+  selector path.
+- A direct check of `CanEmitAstStmtRange` for that `if` statement's child
+  range succeeds, so the remaining rejection is in the condition-expression
+  suitability path, not in the nested body.
+
+Next
+- Continue localizing why `CanEmitAstExpr` still rejects the
+  `token_kind <> TOK_IDENT` condition inside `BuildAstPrimaryExpr`, now that
+  stale cache effects and ordinary const-ident handling are out of the way.
+
+2026-04-09 delta 7
+
+Changes
+- Fixed a selfhost identifier-resolution bug in `BuildAstPrimaryExpr` where
+  scoped/global vars were checked only after builtin const names.
+- This mattered because selfhost is case-insensitive, so internal array vars
+  like `ast_expr_int` could collide with builtin const identifiers such as
+  `AST_EXPR_INT`.
+- Added a focused regression proving that an array var named like an internal
+  AST builtin const still compiles and runs through the AST path.
+
+Verification
+- `cargo fmt`
+- `cargo test selfhost_kpsc_main_handles_var_names_that_shadow_ast_builtin_consts -- --nocapture`
+- `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_ -- --nocapture`
+  - result: `3 passed / 0 failed / 1 ignored`
+
+Current blocker signal
+- The remaining ignored self-compile snapshot improved from `724` to `722`.
+- Fresh diagnostics now show:
+  - `parse_error_reason = 722`
+  - `parse_error_stmt_idx = 7807`
+  - `parse_error_routine_idx = 364`
+- Zero-based routine `364` maps to `program::CanEmitAstExpr`.
+- The failing assignment is on the function-result name `CanEmitAstExpr`.
+- Its RHS is currently captured as an unresolved call-expression shape for
+  `FindAstFieldByIdent(... ) >= 0`, so the next blocker is no longer the
+  earlier array/builtin-const collision in `BuildAstPrimaryExpr`.
+
+Next
+- Continue from the new `722` blocker by tracing why the
+  `FindAstFieldByIdent(... ) >= 0` expression inside `CanEmitAstExpr` is being
+  captured as an unresolved call path during full selfhost self-compile.
+
+CURRENT STATUS (2026-04-09 end-of-pass)
+- Rust `kpascal` is in practical shape for ordinary programs and the current
+  stage1 feature/smoke suite.
+- Stage1 is not fully complete yet: the remaining blocker is in full
+  preprocessed selfhost self-compile, not in ordinary sample compilation.
+- Full-selfhost progress currently stands at:
+  - parse succeeds
+  - lexer/helper routines are emitted
+  - parser-helper routines are emitted
+  - final self-compile snapshot still fails
+- The blocker has improved during this pass:
+  - earlier: `724` (`AST_STMT_IF`-side suitability failure)
+  - current: `722` (`AST_STMT_ASSIGN`-side suitability failure)
+- Current localized signal:
+  - `parse_error_reason = 722`
+  - `parse_error_stmt_idx = 7807`
+  - `parse_error_routine_idx = 364`
+  - routine `364` = `program::CanEmitAstExpr`
+  - the failing assignment targets the function-result name `CanEmitAstExpr`
+  - the RHS currently appears as an unresolved call-expression path around
+    `FindAstFieldByIdent(... ) >= 0`
+
+NEXT INSTRUCTION (after this commit)
+- Keep driving from the full preprocessed selfhost self-compile case first.
+- Do not switch back to broad small-test expansion as the primary strategy.
+- Use the full-selfhost blocker to find the next concrete AST/codegen hole,
+  then add a narrow regression only after the failing shape is understood.
+- Immediate next task:
+  - inspect the `CanEmitAstExpr` assignment at stmt `7807`
+  - determine why `FindAstFieldByIdent(... ) >= 0` is captured as an
+    unresolved call-expression shape
+  - fix that capture/codegen issue
+  - rerun:
+    - `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_write_and_expect_helpers -- --ignored --nocapture`
+    - `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_ -- --nocapture`

@@ -452,8 +452,12 @@ fn run_preprocessed_selfhost_main_for_input(test_name: &str, src: &str) -> Strin
 
 fn cached_preprocessed_selfhost_main_native_bin() -> std::path::PathBuf {
     let selfhost_src = preprocess_pascal_file("selfhost/kpsc_main.pas");
+    let compiler_bin = env!("CARGO_BIN_EXE_kpascal");
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     selfhost_src.hash(&mut hasher);
+    fs::read(compiler_bin)
+        .expect("failed to read current kpascal binary")
+        .hash(&mut hasher);
     let key = hasher.finish();
 
     let cache_dir = std::env::temp_dir().join("kpascal-selfhost-binary-cache");
@@ -659,7 +663,10 @@ begin
   readingword := 0
 end."#;
     let emitted_forth = run_selfhost_main_for_input("main-read-prefix-stage1", src);
-    assert!(emitted_forth.contains(": MAIN"), "emitted forth:\n{emitted_forth}");
+    assert!(
+        emitted_forth.contains(": MAIN"),
+        "emitted forth:\n{emitted_forth}"
+    );
     assert!(!emitted_forth.contains("PERR"));
     let got = run_native_forth("main-read-prefix-stage2", &emitted_forth);
     assert_eq!(got.trim_end(), "");
@@ -686,6 +693,130 @@ end."#;
     assert!(emitted_forth.contains("ASRV0 PVAR@ PWRITE-I32"));
     let got = run_native_forth("main-ast-assign-stage2", &emitted_forth);
     assert_eq!(got.trim_end(), "7");
+}
+
+#[test]
+fn selfhost_kpsc_main_emits_const_idents_via_ast() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main ast-const-ident smoke: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
+        return;
+    }
+
+    let src = r#"program probe;
+const
+  limit = 7;
+var
+  x: integer;
+begin
+  x := limit;
+  if x >= limit then
+    begin
+      WriteLn(limit + 1)
+    end
+  else
+    begin
+      WriteLn(0)
+    end
+end."#;
+    let emitted_forth = run_selfhost_main_for_input("main-ast-const-ident-stage1", src);
+    assert!(
+        emitted_forth.contains("7 ASRV0 PVAR!"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    assert!(
+        emitted_forth.contains("ASRV0 PVAR@ 7 >="),
+        "emitted forth:\n{emitted_forth}"
+    );
+    let got = run_native_forth("main-ast-const-ident-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "8");
+}
+
+#[test]
+fn selfhost_kpsc_main_handles_var_names_that_shadow_ast_builtin_consts() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main ast-shadowed-var smoke: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
+        return;
+    }
+
+    let src = r#"program probe;
+var
+  ast_expr_int: array[0..1] of integer;
+  expr_idx: integer;
+begin
+  expr_idx := 1;
+  ast_expr_int[expr_idx] := 7;
+  if ast_expr_int[expr_idx] > 0 then
+    begin
+      WriteLn(ast_expr_int[expr_idx])
+    end
+  else
+    begin
+      WriteLn(0)
+    end
+end."#;
+    let emitted_forth = run_selfhost_main_for_input("main-ast-shadowed-var-stage1", src);
+    assert!(
+        !emitted_forth.contains("PERR"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    let got = run_native_forth("main-ast-shadowed-var-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "7");
+}
+
+#[test]
+fn selfhost_kpsc_main_emits_readln_via_ast() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main ast-readln smoke: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
+        return;
+    }
+
+    let src = r#"program probe;
+begin
+  ReadLn;
+  WriteLn(7)
+end."#;
+    let emitted_forth = run_selfhost_main_for_input("main-ast-readln-stage1", src);
+    assert!(
+        emitted_forth.contains("PREADLN"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    let got =
+        run_native_forth_with_input("main-ast-readln-stage2", &emitted_forth, "ignored line\n");
+    assert_eq!(got.trim_end(), "7");
+}
+
+#[test]
+fn selfhost_kpsc_main_reads_bool_and_real_via_ast() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main ast-read bool/real smoke: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
+        return;
+    }
+
+    let src = r#"program probe;
+var
+  b: boolean;
+  x: real;
+begin
+  Read(b, x);
+  WriteLn(b);
+  WriteLn(x + 0.25)
+end."#;
+    let emitted_forth = run_selfhost_main_for_input("main-ast-read-bool-real-stage1", src);
+    assert!(
+        emitted_forth.contains("PREAD-BOOL"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    assert!(
+        emitted_forth.contains("PREAD-F32"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    let got =
+        run_native_forth_with_input("main-ast-read-bool-real-stage2", &emitted_forth, "1 1.5\n");
+    assert_eq!(got.trim_end(), "TRUE\n1.7500");
 }
 
 #[test]
@@ -719,8 +850,14 @@ begin
   WriteLn(position)
 end."#;
     let emitted_forth = run_selfhost_main_for_input("main-builtin-prefix-stage1", src);
-    assert!(emitted_forth.contains(": MAIN"), "emitted forth:\n{emitted_forth}");
-    assert!(!emitted_forth.contains("PERR"), "emitted forth:\n{emitted_forth}");
+    assert!(
+        emitted_forth.contains(": MAIN"),
+        "emitted forth:\n{emitted_forth}"
+    );
+    assert!(
+        !emitted_forth.contains("PERR"),
+        "emitted forth:\n{emitted_forth}"
+    );
     let got = run_native_forth("main-builtin-prefix-stage2", &emitted_forth);
     assert_eq!(got.trim_end(), "7\n8");
 }
@@ -815,8 +952,11 @@ fn selfhost_kpsc_main_compiles_arithmetic_program_via_ast_without_sample_name() 
         return;
     }
 
-    let src = include_str!("../selfhost/kpsc_arith.pas")
-        .replacen("program kpsc_arith;", "program astprobe;", 1);
+    let src = include_str!("../selfhost/kpsc_arith.pas").replacen(
+        "program kpsc_arith;",
+        "program astprobe;",
+        1,
+    );
     let emitted_forth = run_preprocessed_selfhost_main_for_input("main-ast-arith-stage1", &src);
     assert!(
         emitted_forth.contains("CREATE ASRV0 0 ,"),
@@ -834,8 +974,11 @@ fn selfhost_kpsc_main_compiles_control_program_via_ast_without_sample_name() {
         return;
     }
 
-    let src = include_str!("../selfhost/kpsc_ctrl.pas")
-        .replacen("program kpsc_ctrl;", "program astctrl;", 1);
+    let src = include_str!("../selfhost/kpsc_ctrl.pas").replacen(
+        "program kpsc_ctrl;",
+        "program astctrl;",
+        1,
+    );
     let emitted_forth = run_preprocessed_selfhost_main_for_input("main-ast-ctrl-stage1", &src);
     assert!(
         emitted_forth.contains("CREATE ASRV0 0 ,"),
@@ -853,8 +996,11 @@ fn selfhost_kpsc_main_compiles_routine_program_via_ast_without_sample_name() {
         return;
     }
 
-    let src = include_str!("../selfhost/kpsc_routines.pas")
-        .replacen("program kpsc_routines;", "program astroutines;", 1);
+    let src = include_str!("../selfhost/kpsc_routines.pas").replacen(
+        "program kpsc_routines;",
+        "program astroutines;",
+        1,
+    );
     let emitted_forth = run_preprocessed_selfhost_main_for_input("main-ast-routines-stage1", &src);
     assert!(
         emitted_forth.contains("CREATE ASRV0 0 ,"),
@@ -872,8 +1018,11 @@ fn selfhost_kpsc_main_compiles_scalar_program_via_ast_without_sample_name() {
         return;
     }
 
-    let src = include_str!("../selfhost/kpsc_scalar.pas")
-        .replacen("program kpsc_scalar;", "program astscalar;", 1);
+    let src = include_str!("../selfhost/kpsc_scalar.pas").replacen(
+        "program kpsc_scalar;",
+        "program astscalar;",
+        1,
+    );
     let emitted_forth = run_preprocessed_selfhost_main_for_input("main-ast-scalar-stage1", &src);
     assert!(
         emitted_forth.contains("PWRITE-BOOL"),
@@ -916,6 +1065,29 @@ fn selfhost_kpsc_main_compiles_single_source_seed_compiler() {
     );
     let record_output = run_native_forth("main-seed-stage3-record", &record_forth);
     assert_eq!(record_output.trim_end(), "33");
+}
+
+#[test]
+fn selfhost_preprocessed_kpsc_main_seed_mode_is_name_gated() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping preprocessed selfhost main seed name gate smoke: missing ../kFORTHc/target/release/kforthc, llc, clang, or runtime.c");
+        return;
+    }
+
+    let renamed_src = include_str!("../selfhost/kpsc_seed_hello_single.pas").replacen(
+        "program kpscseedhellosingle;",
+        "program kpscseedhellorename;",
+        1,
+    );
+    let emitted_forth =
+        run_preprocessed_selfhost_main_for_input("pre-main-seed-name-gate-stage1", &renamed_src);
+    assert!(
+        !emitted_forth.contains("CREATE kind 0 ,"),
+        "renamed seed input should not trigger seed dispatcher:\n{emitted_forth}"
+    );
+    let got = run_native_forth("pre-main-seed-name-gate-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "H");
 }
 
 #[test]
@@ -1492,7 +1664,6 @@ fn selfhost_preprocessed_kpsc_main_direct_suite_covers_sample_set() {
 }
 
 #[test]
-#[ignore = "focused self-compile progress check"]
 fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_read_source_loop() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
@@ -1519,7 +1690,6 @@ fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_read_source_loop() {
 }
 
 #[test]
-#[ignore = "focused self-compile progress check"]
 fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_lexer_routines() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
@@ -1541,7 +1711,6 @@ fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_lexer_routines() {
 }
 
 #[test]
-#[ignore = "focused self-compile progress check"]
 fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_parser_helpers() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
@@ -1871,7 +2040,11 @@ fn selfhost_kpsc_main_compiles_arith_feature() {
         include_str!("../selfhost/kpsc_arith.pas"),
     );
     let got = run_native_forth("main-feat-arith-run", &stage1);
-    assert_eq!(got.trim_end(), "14\n3\n2", "arith feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "14\n3\n2",
+        "arith feature via selfhost compiler"
+    );
 }
 
 #[test]
@@ -1901,7 +2074,11 @@ fn selfhost_kpsc_main_compiles_routines_feature() {
         include_str!("../selfhost/kpsc_routines.pas"),
     );
     let got = run_native_forth("main-feat-routines-run", &stage1);
-    assert_eq!(got.trim_end(), "9", "routines feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "9",
+        "routines feature via selfhost compiler"
+    );
 }
 
 #[test]
@@ -1931,7 +2108,11 @@ fn selfhost_kpsc_main_compiles_variant_feature() {
         include_str!("../selfhost/kpsc_variant.pas"),
     );
     let got = run_native_forth("main-feat-variant-run", &stage1);
-    assert_eq!(got.trim_end(), "42", "variant feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "42",
+        "variant feature via selfhost compiler"
+    );
 }
 
 #[test]
@@ -1946,7 +2127,11 @@ fn selfhost_kpsc_main_compiles_variant_overlap_feature() {
         include_str!("samples/30_variant_overlap.pas"),
     );
     let got = run_native_forth("main-feat-variant-overlap-run", &stage1);
-    assert_eq!(got.trim_end(), "12\n7\n30", "variant overlap via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "12\n7\n30",
+        "variant overlap via selfhost compiler"
+    );
 }
 
 #[test]
@@ -1961,7 +2146,11 @@ fn selfhost_kpsc_main_compiles_subrange_enum_bounds_feature() {
         include_str!("samples/31_subrange_enum_bounds.pas"),
     );
     let got = run_native_forth("main-feat-subrange-enum-bounds-run", &stage1);
-    assert_eq!(got.trim_end(), "TRUE\nFALSE", "subrange enum bounds via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nFALSE",
+        "subrange enum bounds via selfhost compiler"
+    );
 }
 
 #[test]
@@ -1976,14 +2165,20 @@ fn selfhost_kpsc_main_compiles_subrange_named_bounds_feature() {
         include_str!("samples/32_subrange_named_bounds.pas"),
     );
     let got = run_native_forth("main-feat-subrange-named-bounds-run", &stage1);
-    assert_eq!(got.trim_end(), "5", "subrange named bounds via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "5",
+        "subrange named bounds via selfhost compiler"
+    );
 }
 
 #[test]
 fn selfhost_kpsc_main_compiles_subrange_arithmetic_bounds_feature() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
-        eprintln!("skipping selfhost main subrange arithmetic bounds feature: missing native backend");
+        eprintln!(
+            "skipping selfhost main subrange arithmetic bounds feature: missing native backend"
+        );
         return;
     }
     let src = r#"program subrangearith;
@@ -1996,9 +2191,14 @@ begin
   WriteLn(2 in s);
   WriteLn(6 in s)
 end."#;
-    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-arith-bounds", src);
+    let stage1 =
+        cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-arith-bounds", src);
     let got = run_native_forth("main-feat-subrange-arith-bounds-run", &stage1);
-    assert_eq!(got.trim_end(), "TRUE\nTRUE", "subrange arithmetic bounds via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange arithmetic bounds via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2020,9 +2220,14 @@ begin
   WriteLn(High(a));
   WriteLn(a[2] + a[4])
 end."#;
-    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-array-arith-bounds", src);
+    let stage1 =
+        cached_preprocessed_selfhost_main_stage1_output("main-feat-array-arith-bounds", src);
     let got = run_native_forth("main-feat-array-arith-bounds-run", &stage1);
-    assert_eq!(got.trim_end(), "2\n4\n30", "array arithmetic bounds via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "2\n4\n30",
+        "array arithmetic bounds via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2045,16 +2250,23 @@ begin
   WriteLn(2 in s);
   WriteLn(6 in s)
 end."#;
-    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-const-bounds", src);
+    let stage1 =
+        cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-const-bounds", src);
     let got = run_native_forth("main-feat-subrange-const-bounds-run", &stage1);
-    assert_eq!(got.trim_end(), "TRUE\nTRUE", "subrange const bounds via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange const bounds via selfhost compiler"
+    );
 }
 
 #[test]
 fn selfhost_kpsc_main_compiles_array_const_arithmetic_bounds_feature() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
-        eprintln!("skipping selfhost main array const arithmetic bounds feature: missing native backend");
+        eprintln!(
+            "skipping selfhost main array const arithmetic bounds feature: missing native backend"
+        );
         return;
     }
     let src = r#"program arrayconstarith;
@@ -2072,9 +2284,14 @@ begin
   WriteLn(High(a));
   WriteLn(a[2] + a[4])
 end."#;
-    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-array-const-arith-bounds", src);
+    let stage1 =
+        cached_preprocessed_selfhost_main_stage1_output("main-feat-array-const-arith-bounds", src);
     let got = run_native_forth("main-feat-array-const-arith-bounds-run", &stage1);
-    assert_eq!(got.trim_end(), "2\n4\n30", "array const arithmetic bounds via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "2\n4\n30",
+        "array const arithmetic bounds via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2096,13 +2313,17 @@ begin
   WriteLn(2 in s);
   WriteLn(6 in s)
 end."#;
-    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-ord-bounds", src);
+    let stage1 =
+        cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-ord-bounds", src);
     let got = run_native_forth("main-feat-subrange-ord-bounds-run", &stage1);
-    assert_eq!(got.trim_end(), "TRUE\nTRUE", "subrange ord bounds via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange ord bounds via selfhost compiler"
+    );
 }
 
 #[test]
-#[ignore = "leading-parenthesized subrange type syntax is still ambiguous with enum parsing in selfhost"]
 fn selfhost_kpsc_main_compiles_subrange_parenthesized_ord_bounds_feature() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
@@ -2130,10 +2351,74 @@ end."#;
 }
 
 #[test]
+fn selfhost_kpsc_main_compiles_subrange_parenthesized_ident_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange parenthesized ident bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program subrangeparenident;
+const
+  base = 1;
+type
+  small = (base + 1) .. 6;
+var
+  s: set of small;
+begin
+  s := [2, 6];
+  WriteLn(2 in s);
+  WriteLn(6 in s)
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-subrange-paren-ident-bounds",
+        src,
+    );
+    let got = run_native_forth("main-feat-subrange-paren-ident-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange parenthesized ident bounds via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_parenthesized_ident_ord_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange parenthesized ident ord bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program subrangeparenidentord;
+const
+  base = 1;
+type
+  small = (base + Ord(Chr(49))) .. 6;
+var
+  s: set of small;
+begin
+  s := [2, 6];
+  WriteLn(2 in s);
+  WriteLn(6 in s)
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-subrange-paren-ident-ord-bounds",
+        src,
+    );
+    let got = run_native_forth("main-feat-subrange-paren-ident-ord-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange parenthesized ident ord bounds via selfhost compiler"
+    );
+}
+
+#[test]
 fn selfhost_kpsc_main_compiles_array_parenthesized_ord_bounds_feature() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
-        eprintln!("skipping selfhost main array parenthesized ord bounds feature: missing native backend");
+        eprintln!(
+            "skipping selfhost main array parenthesized ord bounds feature: missing native backend"
+        );
         return;
     }
     let src = r#"program arrayord;
@@ -2148,16 +2433,23 @@ begin
   WriteLn(High(a));
   WriteLn(a[2] + a[4])
 end."#;
-    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-array-paren-ord-bounds", src);
+    let stage1 =
+        cached_preprocessed_selfhost_main_stage1_output("main-feat-array-paren-ord-bounds", src);
     let got = run_native_forth("main-feat-array-paren-ord-bounds-run", &stage1);
-    assert_eq!(got.trim_end(), "2\n4\n30", "array parenthesized ord bounds via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "2\n4\n30",
+        "array parenthesized ord bounds via selfhost compiler"
+    );
 }
 
 #[test]
 fn selfhost_kpsc_main_compiles_subrange_const_ord_bounds_feature() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
-        eprintln!("skipping selfhost main subrange const ord bounds feature: missing native backend");
+        eprintln!(
+            "skipping selfhost main subrange const ord bounds feature: missing native backend"
+        );
         return;
     }
     let src = r#"program subrangeconstord;
@@ -2173,9 +2465,14 @@ begin
   WriteLn(2 in s);
   WriteLn(6 in s)
 end."#;
-    let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-const-ord-bounds", src);
+    let stage1 =
+        cached_preprocessed_selfhost_main_stage1_output("main-feat-subrange-const-ord-bounds", src);
     let got = run_native_forth("main-feat-subrange-const-ord-bounds-run", &stage1);
-    assert_eq!(got.trim_end(), "TRUE\nTRUE", "subrange const ord bounds via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange const ord bounds via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2213,6 +2510,343 @@ end."#;
 }
 
 #[test]
+fn selfhost_kpsc_main_compiles_subrange_const_div_mod_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!(
+            "skipping selfhost main subrange const div/mod bounds feature: missing native backend"
+        );
+        return;
+    }
+    let src = r#"program subrangeconstdivmod;
+const
+  lo = 9 div 3;
+  hi = 20 mod 7 + 4;
+type
+  small = lo .. hi;
+var
+  s: set of small;
+begin
+  s := [3, 10];
+  WriteLn(3 in s);
+  WriteLn(10 in s)
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-subrange-const-div-mod-bounds",
+        src,
+    );
+    let got = run_native_forth("main-feat-subrange-const-div-mod-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange const div/mod bounds via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_array_const_div_mod_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!(
+            "skipping selfhost main array const div/mod bounds feature: missing native backend"
+        );
+        return;
+    }
+    let src = r#"program arrayconstdivmod;
+const
+  lo = 9 div 3;
+  hi = 20 mod 7 + 4;
+type
+  arr = array[lo .. hi] of integer;
+var
+  a: arr;
+begin
+  a[3] := 10;
+  a[10] := 20;
+  WriteLn(Low(a));
+  WriteLn(High(a));
+  WriteLn(a[3] + a[10])
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-array-const-div-mod-bounds",
+        src,
+    );
+    let got = run_native_forth("main-feat-array-const-div-mod-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "3\n10\n30",
+        "array const div/mod bounds via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_const_signed_precedence_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main subrange const signed precedence bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program subrangeconstsigned;
+const
+  lo = -(1) + 3;
+  hi = 2 * 3 - 1;
+type
+  small = lo .. hi;
+var
+  s: set of small;
+begin
+  s := [2, 5];
+  WriteLn(2 in s);
+  WriteLn(5 in s)
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-subrange-const-signed-precedence-bounds",
+        src,
+    );
+    let got = run_native_forth(
+        "main-feat-subrange-const-signed-precedence-bounds-run",
+        &stage1,
+    );
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange const signed precedence bounds via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_array_const_signed_precedence_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main array const signed precedence bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program arrayconstsigned;
+const
+  lo = -(1) + 3;
+  hi = 2 * 3 - 1;
+type
+  arr = array[lo .. hi] of integer;
+var
+  a: arr;
+begin
+  a[2] := 10;
+  a[5] := 20;
+  WriteLn(Low(a));
+  WriteLn(High(a));
+  WriteLn(a[2] + a[5])
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-array-const-signed-precedence-bounds",
+        src,
+    );
+    let got = run_native_forth(
+        "main-feat-array-const-signed-precedence-bounds-run",
+        &stage1,
+    );
+    assert_eq!(
+        got.trim_end(),
+        "2\n5\n30",
+        "array const signed precedence bounds via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_char_const_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!(
+            "skipping selfhost main subrange char const bounds feature: missing native backend"
+        );
+        return;
+    }
+    let src = r#"program subrangecharconst;
+const
+  lo = 'A';
+  hi = #67;
+type
+  letters = lo .. hi;
+var
+  s: set of letters;
+begin
+  s := ['A', 'C'];
+  WriteLn('A' in s);
+  WriteLn('C' in s)
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-subrange-char-const-bounds",
+        src,
+    );
+    let got = run_native_forth("main-feat-subrange-char-const-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange char const bounds via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_array_char_const_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main array char const bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program arraycharconst;
+const
+  lo = 'A';
+  hi = #67;
+type
+  arr = array[lo .. hi] of integer;
+var
+  a: arr;
+begin
+  a['A'] := 10;
+  a['C'] := 20;
+  WriteLn(Low(a));
+  WriteLn(High(a));
+  WriteLn(a['A'] + a['C'])
+end."#;
+    let stage1 =
+        cached_preprocessed_selfhost_main_stage1_output("main-feat-array-char-const-bounds", src);
+    let got = run_native_forth("main-feat-array-char-const-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "65\n67\n30",
+        "array char const bounds via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_bool_const_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!(
+            "skipping selfhost main subrange bool const bounds feature: missing native backend"
+        );
+        return;
+    }
+    let src = r#"program subrangeboolconst;
+const
+  lo = false;
+  hi = true;
+type
+  flags = lo .. hi;
+var
+  s: set of flags;
+begin
+  s := [false, true];
+  WriteLn(false in s);
+  WriteLn(true in s)
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-subrange-bool-const-bounds",
+        src,
+    );
+    let got = run_native_forth("main-feat-subrange-bool-const-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE",
+        "subrange bool const bounds via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_array_bool_const_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main array bool const bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program arrayboolconst;
+const
+  lo = false;
+  hi = true;
+type
+  arr = array[lo .. hi] of integer;
+var
+  a: arr;
+begin
+  a[false] := 10;
+  a[true] := 20;
+  WriteLn(Low(a));
+  WriteLn(High(a));
+  WriteLn(a[false] + a[true])
+end."#;
+    let stage1 =
+        cached_preprocessed_selfhost_main_stage1_output("main-feat-array-bool-const-bounds", src);
+    let got = run_native_forth("main-feat-array-bool-const-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "0\n1\n30",
+        "array bool const bounds via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_subrange_named_type_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!(
+            "skipping selfhost main subrange named type bounds feature: missing native backend"
+        );
+        return;
+    }
+    let src = r#"program subrangenamedtype;
+type
+  base_lo = 3..5;
+  base_hi = 7..9;
+  span = base_lo..base_hi;
+var
+  x: span;
+begin
+  x := 9;
+  WriteLn(x)
+end."#;
+    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
+        "main-feat-subrange-named-type-bounds",
+        src,
+    );
+    let got = run_native_forth("main-feat-subrange-named-type-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "9",
+        "subrange named type bounds via selfhost compiler"
+    );
+}
+
+#[test]
+fn selfhost_kpsc_main_compiles_array_named_type_bounds_feature() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main array named type bounds feature: missing native backend");
+        return;
+    }
+    let src = r#"program arraynamedtype;
+type
+  base_lo = 3..5;
+  base_hi = 7..9;
+  arr = array[base_lo..base_hi] of integer;
+var
+  a: arr;
+begin
+  a[3] := 10;
+  a[9] := 20;
+  WriteLn(Low(a));
+  WriteLn(High(a));
+  WriteLn(a[3] + a[9])
+end."#;
+    let stage1 =
+        cached_preprocessed_selfhost_main_stage1_output("main-feat-array-named-type-bounds", src);
+    let got = run_native_forth("main-feat-array-named-type-bounds-run", &stage1);
+    assert_eq!(
+        got.trim_end(),
+        "3\n9\n30",
+        "array named type bounds via selfhost compiler"
+    );
+}
+
+#[test]
 fn selfhost_kpsc_main_compiles_real_large_exponent_feature() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
@@ -2224,7 +2858,11 @@ fn selfhost_kpsc_main_compiles_real_large_exponent_feature() {
         include_str!("samples/33_real_large_exponent.pas"),
     );
     let got = run_native_forth("main-feat-real-large-exponent-run", &stage1);
-    assert_eq!(got.trim_end(), "10000000000.0000\n0.0000", "real large exponent via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "10000000000.0000\n0.0000",
+        "real large exponent via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2239,7 +2877,11 @@ fn selfhost_kpsc_main_compiles_pointer_feature() {
         include_str!("../selfhost/kpsc_pointer.pas"),
     );
     let got = run_native_forth("main-feat-pointer-run", &stage1);
-    assert_eq!(got.trim_end(), "77\nTRUE", "pointer feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "77\nTRUE",
+        "pointer feature via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2254,7 +2896,11 @@ fn selfhost_kpsc_main_compiles_addr_feature() {
         include_str!("../selfhost/kpsc_addr.pas"),
     );
     let got = run_native_forth("main-feat-addr-run", &stage1);
-    assert_eq!(got.trim_end(), "456\nTRUE", "addr feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "456\nTRUE",
+        "addr feature via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2284,7 +2930,11 @@ fn selfhost_kpsc_main_compiles_array4d_feature() {
         include_str!("../selfhost/kpsc_array4d.pas"),
     );
     let got = run_native_forth("main-feat-array4d-run", &stage1);
-    assert_eq!(got.trim_end(), "13", "array4d feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "13",
+        "array4d feature via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2329,7 +2979,11 @@ fn selfhost_kpsc_main_compiles_string_feature() {
         include_str!("../selfhost/kpsc_string.pas"),
     );
     let got = run_native_forth("main-feat-string-run", &stage1);
-    assert_eq!(got.trim_end(), "ABC\n2", "string feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "ABC\n2",
+        "string feature via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2344,14 +2998,20 @@ fn selfhost_kpsc_main_compiles_string_edit_feature() {
         include_str!("../selfhost/kpsc_string_edit.pas"),
     );
     let got = run_native_forth("main-feat-string-edit-run", &stage1);
-    assert_eq!(got.trim_end(), "ABCD\nAD\nAZD", "string-edit feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "ABCD\nAD\nAZD",
+        "string-edit feature via selfhost compiler"
+    );
 }
 
 #[test]
 fn selfhost_kpsc_main_compiles_string_literal_hextoint_expr_feature() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
-        eprintln!("skipping selfhost main string literal HexToInt expr feature: missing native backend");
+        eprintln!(
+            "skipping selfhost main string literal HexToInt expr feature: missing native backend"
+        );
         return;
     }
     let src = r#"program lithextoint;
@@ -2360,7 +3020,11 @@ begin
 end."#;
     let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-lit-hextoint", src);
     let got = run_native_forth("main-feat-lit-hextoint-run", &stage1);
-    assert_eq!(got.trim_end(), "255", "string literal HexToInt expr via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "255",
+        "string literal HexToInt expr via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2376,7 +3040,11 @@ begin
 end."#;
     let stage1 = cached_preprocessed_selfhost_main_stage1_output("main-feat-lit-pos", src);
     let got = run_native_forth("main-feat-lit-pos-run", &stage1);
-    assert_eq!(got.trim_end(), "2", "string literal Pos expr via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "2",
+        "string literal Pos expr via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2391,7 +3059,11 @@ fn selfhost_kpsc_main_compiles_hex_feature() {
         include_str!("../selfhost/kpsc_hex.pas"),
     );
     let got = run_native_forth("main-feat-hex-run", &stage1);
-    assert_eq!(got.trim_end(), "000000FF\n255", "hex feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "000000FF\n255",
+        "hex feature via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2406,7 +3078,11 @@ fn selfhost_kpsc_main_compiles_real_feature() {
         include_str!("../selfhost/kpsc_real.pas"),
     );
     let got = run_native_forth("main-feat-real-run", &stage1);
-    assert_eq!(got.trim_end(), "3.5000\n4\n3", "real feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "3.5000\n4\n3",
+        "real feature via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2508,7 +3184,9 @@ fn selfhost_kpsc_main_compiles_subrange_set_range_feature() {
 fn selfhost_kpsc_main_compiles_subrange_set_int_literal_feature() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
-        eprintln!("skipping selfhost main subrange set int literal feature: missing native backend");
+        eprintln!(
+            "skipping selfhost main subrange set int literal feature: missing native backend"
+        );
         return;
     }
     let stage1 = cached_preprocessed_selfhost_main_stage1_output(
@@ -2550,7 +3228,11 @@ fn selfhost_kpsc_main_compiles_enumset_feature() {
         include_str!("../selfhost/kpsc_enumset.pas"),
     );
     let got = run_native_forth("main-feat-enumset-run", &stage1);
-    assert_eq!(got.trim_end(), "TRUE\n4", "enumset feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\n4",
+        "enumset feature via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2565,7 +3247,11 @@ fn selfhost_kpsc_main_compiles_setops_feature() {
         include_str!("../selfhost/kpsc_setops.pas"),
     );
     let got = run_native_forth("main-feat-setops-run", &stage1);
-    assert_eq!(got.trim_end(), "TRUE\nTRUE\nTRUE", "setops feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "TRUE\nTRUE\nTRUE",
+        "setops feature via selfhost compiler"
+    );
 }
 
 #[test]
@@ -2580,7 +3266,11 @@ fn selfhost_kpsc_main_compiles_scalar_feature() {
         include_str!("../selfhost/kpsc_scalar.pas"),
     );
     let got = run_native_forth("main-feat-scalar-run", &stage1);
-    assert_eq!(got.trim_end(), "7\n25\nTRUE\nQ\n66", "scalar feature via selfhost compiler");
+    assert_eq!(
+        got.trim_end(),
+        "7\n25\nTRUE\nQ\n66",
+        "scalar feature via selfhost compiler"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2610,12 +3300,24 @@ fn selfhost_stage2_compiles_feature_programs() {
     let (_work_dir, stage2_bin) = build_native_forth_binary("stage2-compiler-bin", &stage2_forth);
 
     let cases = [
-        ("arith",        include_str!("../selfhost/kpsc_arith.pas"),    "14"),
-        ("scalar",       include_str!("../selfhost/kpsc_scalar.pas"),   "7\n25\nTRUE\nQ\n66"),
-        ("ctrl",         include_str!("../selfhost/kpsc_ctrl.pas"),     "1\n2\n3"),
-        ("routines",     include_str!("../selfhost/kpsc_routines.pas"), "9"),
-        ("record",       include_str!("../selfhost/kpsc_record.pas"),   "33"),
-        ("string",       include_str!("../selfhost/kpsc_string.pas"),   "ABC\n2"),
+        ("arith", include_str!("../selfhost/kpsc_arith.pas"), "14"),
+        (
+            "scalar",
+            include_str!("../selfhost/kpsc_scalar.pas"),
+            "7\n25\nTRUE\nQ\n66",
+        ),
+        ("ctrl", include_str!("../selfhost/kpsc_ctrl.pas"), "1\n2\n3"),
+        (
+            "routines",
+            include_str!("../selfhost/kpsc_routines.pas"),
+            "9",
+        ),
+        ("record", include_str!("../selfhost/kpsc_record.pas"), "33"),
+        (
+            "string",
+            include_str!("../selfhost/kpsc_string.pas"),
+            "ABC\n2",
+        ),
     ];
 
     for (label, src, expected) in cases {
@@ -2639,12 +3341,24 @@ fn selfhost_stage2_compiles_sample_programs() {
     let (_work_dir, stage2_bin) = build_native_forth_binary("stage2-samples-bin", &stage2_forth);
 
     let cases = [
-        ("hello",   include_str!("samples/01_hello.pas"),              "HELLO"),
-        ("arith",   include_str!("samples/02_arithmetic.pas"),         "14\n3\n2"),
-        ("control", include_str!("samples/03_control_flow.pas"),       "12"),
-        ("record",  include_str!("samples/05_record_with.pas"),        "33"),
-        ("routine", include_str!("samples/17_nested_routines.pas"),    "9"),
-        ("scalar",  include_str!("samples/20_scalar_builtins.pas"),    "7\n25\nTRUE\nQ\n66"),
+        ("hello", include_str!("samples/01_hello.pas"), "HELLO"),
+        (
+            "arith",
+            include_str!("samples/02_arithmetic.pas"),
+            "14\n3\n2",
+        ),
+        ("control", include_str!("samples/03_control_flow.pas"), "12"),
+        ("record", include_str!("samples/05_record_with.pas"), "33"),
+        (
+            "routine",
+            include_str!("samples/17_nested_routines.pas"),
+            "9",
+        ),
+        (
+            "scalar",
+            include_str!("samples/20_scalar_builtins.pas"),
+            "7\n25\nTRUE\nQ\n66",
+        ),
     ];
 
     for (label, src, expected) in cases {

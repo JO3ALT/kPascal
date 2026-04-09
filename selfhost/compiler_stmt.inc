@@ -615,15 +615,12 @@ begin
 end;
 
 procedure ParseReadLnStmt;
+var stmt_idx: integer;
 begin
-  NoteNonWriteLnStatement();
+  stmt_idx := -1;
   if ast_capture_enabled then
     begin
-      bootstrap_capture_failed := true;
-      if parse_error_reason = 0 then
-        begin
-          parse_error_reason := 329
-        end
+      stmt_idx := NewAstStmt(AST_STMT_READLN)
     end;
   ExpectKind(TOK_KW_READLN);
   if token_kind = TOK_LPAREN then
@@ -631,7 +628,7 @@ begin
       NextToken();
       if token_kind <> TOK_RPAREN then
         begin
-          ParseExprList()
+          FailParse()
         end;
       ExpectKind(TOK_RPAREN)
     end

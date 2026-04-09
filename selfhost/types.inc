@@ -33,6 +33,7 @@ const
   AST_STMT_CALL = 8;
   AST_STMT_WRITE = 9;
   AST_STMT_READ = 10;
+  AST_STMT_READLN = 11;
   AST_ARG_NONE = 0;
   AST_ARG_INT = 1;
   AST_ARG_TEXT = 2;
@@ -2298,6 +2299,25 @@ begin
       if TextIdentEq(name, ast_const_name[idx]) then
         begin
           FindAstConst := idx;
+          idx := ast_const_count
+        end
+      else
+        begin
+          idx := idx + 1
+        end
+    end
+end;
+
+function FindAstConstByIdent(var name: ident_buf): integer;
+var idx: integer;
+begin
+  idx := 0;
+  FindAstConstByIdent := -1;
+  while idx < ast_const_count do
+    begin
+      if IdentEq(ast_const_name[idx], name) then
+        begin
+          FindAstConstByIdent := idx;
           idx := ast_const_count
         end
       else
