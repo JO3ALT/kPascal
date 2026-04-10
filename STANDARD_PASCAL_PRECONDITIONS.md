@@ -12,7 +12,7 @@ Current language policy:
 - String literal assignment truncates to fit, writes at most `len - 1` characters, and appends `#0`.
 - `Read(s, max_len)`, `Write(s)`, `WriteLn(s)`, `Copy`, `Concat`, `Delete`, `Insert`, `Pos`, `HexToInt`, and `IntToHex` all operate on `#0`-terminated text.
 - `Copy`, `Concat`, `Insert`, and `Pos` also accept string literals through compiler-generated static char-array storage.
-- `string_utils.pas` provides fixed-buffer text helpers for compiler-style code: `ClearStr`, `AppendChar`, `AppendStr`, `StrCopy`, `StrEq`, `StrEqLit`, `StrEqIgnoreCase`, `StrEqIgnoreCaseLit`, `HasNameEqIgnoreCase`, `StrCmp`, `StartsWith`, `TrimLeft`, `TrimRight`, and `ParseInt`.
+- `selfhost/string_utils.pas` provides fixed-buffer text helpers for compiler-style code: `ClearStr`, `AppendChar`, `AppendStr`, `StrCopy`, `StrEq`, `StrEqLit`, `StrEqIgnoreCase`, `StrEqIgnoreCaseLit`, `HasNameEqIgnoreCase`, `StrCmp`, `StartsWith`, `TrimLeft`, `TrimRight`, and `ParseInt`.
 - The safest first selfhost-side adoption point for these helpers is not the `IsExact*Name` literal checks but variable-to-variable predicates such as `IsStringVar`, where repeated `HasName(...) and StrEqIgnoreCase(...)` chains can be consolidated without introducing literal-argument calling constraints.
 - Aggregate assignment of char arrays remains a raw fixed-size copy and does not stop at `#0`.
 - The removed helper I/O extensions `ReadArr`, `WriteArr`, `ReadStr`, `WriteStr`, and `WriteHex` are intentionally not part of the current language surface.
@@ -54,6 +54,8 @@ cargo clippy -- -D warnings
 At the time of this document, all of the commands above pass in this worktree. The active `main` test set covers compiler checks, kforth end-to-end execution, error-message regressions, enum semantics, and the restored Standard Pascal sample regressions.
 
 In this repository, "self-hosting complete" is scoped to the Standard Pascal-oriented core. Concretely, that means the selfhost compiler path can compile and run the restored Standard Pascal sample set; it does not, by itself, claim selfhost completion for the integrated kPascal extensions.
+
+The current selfhost validation path goes beyond a single bootstrap step: the preprocessed selfhost source is recompiled through `stage2` and `stage3`, the emitted `stage3` Forth is checked to be native-backend clean, and the resulting `stage3` compiler is regression-tested against the restored `tests/samples` corpus.
 
 Self-hosting validation also includes a preprocessed single-source path. `scripts/prekpascal` uses `sed + m4` to flatten `selfhost/kpsc_main.pas` without requiring Pascal-side file I/O, and `scripts/preprocess_selfhost.sh` remains as a compatibility wrapper to that entry point.
 

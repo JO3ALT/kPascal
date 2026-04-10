@@ -2,7 +2,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
@@ -412,6 +412,39 @@ fn classify_seed_program_kind(src: &str) -> i32 {
     } else {
         0
     }
+}
+
+fn samples_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/samples")
+}
+
+fn sample_names() -> Vec<String> {
+    let mut names = fs::read_dir(samples_dir())
+        .expect("failed to read samples directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let stem = path.file_stem()?.to_str()?;
+            if path.extension()?.to_str()? == "pas" {
+                Some(stem.to_string())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    names.sort();
+    names
+}
+
+fn normalized_output(raw: &str) -> String {
+    let mut out = raw
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    while out.ends_with('\n') {
+        out.pop();
+    }
+    out
 }
 
 fn encode_seed_ascii_program(src: &str) -> String {
@@ -3432,6 +3465,29 @@ fn cached_stage2_forth() -> String {
     cached_preprocessed_selfhost_main_stage1_output("stage2-compiler", &selfhost_src)
 }
 
+fn cached_stage3_forth() -> String {
+    let selfhost_src = preprocess_pascal_file("selfhost/kpsc_main.pas");
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    selfhost_src.hash(&mut hasher);
+    cached_stage2_forth().hash(&mut hasher);
+    let key = hasher.finish();
+
+    let cache_dir = std::env::temp_dir().join("kpascal-selfhost-stage3-cache");
+    fs::create_dir_all(&cache_dir).expect("failed to create stage3 cache dir");
+    let cache_path = cache_dir.join(format!("stage3-compiler-{key:016x}.fth"));
+    if cache_path.exists() {
+        return fs::read_to_string(&cache_path).expect("failed to read cached stage3 output");
+    }
+
+    let stage2_forth = cached_stage2_forth();
+    let (_stage2_work_dir, stage2_bin_path) =
+        build_native_forth_binary("stage3-compiler-bin", &stage2_forth);
+    let encoded = encode_ascii_program(&selfhost_src);
+    let out = run_native_binary_with_input(&stage2_bin_path, &encoded);
+    fs::write(&cache_path, &out).expect("failed to write cached stage3 output");
+    out
+}
+
 #[test]
 fn selfhost_stage2_compiles_feature_programs() {
     let _guard = selfhost_serial_guard();
@@ -3616,5 +3672,124 @@ fn selfhost_stage2_compiles_sample_programs() {
         let emitted_forth = run_native_binary_with_input(&stage2_bin, &encoded);
         let got = run_native_forth(&format!("stage2-sample-{label}"), &emitted_forth);
         assert_eq!(got.trim_end(), expected, "stage2 sample failed: {label}");
+    }
+}
+
+#[test]
+fn selfhost_stage3_compiles_feature_programs() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping stage3 feature suite: missing native backend");
+        return;
+    }
+
+    let stage3_forth = cached_stage3_forth();
+    assert!(
+        stage3_forth.contains(": MAIN"),
+        "stage3 did not emit a Forth entrypoint\n{}",
+        &stage3_forth[..stage3_forth.len().min(2000)]
+    );
+
+    let (_work_dir, stage3_bin) = build_native_forth_binary("stage3-compiler-bin", &stage3_forth);
+
+    let cases = [
+        ("arith", include_str!("../selfhost/kpsc_arith.pas"), "14\n3\n2"),
+        (
+            "scalar",
+            include_str!("../selfhost/kpsc_scalar.pas"),
+            "7\n25\nTRUE\nQ\n66",
+        ),
+        ("ctrl", include_str!("../selfhost/kpsc_ctrl.pas"), "12"),
+        (
+            "routines",
+            include_str!("../selfhost/kpsc_routines.pas"),
+            "9",
+        ),
+        ("record", include_str!("../selfhost/kpsc_record.pas"), "33"),
+        (
+            "string",
+            include_str!("../selfhost/kpsc_string.pas"),
+            "ABC\n2",
+        ),
+    ];
+
+    for (label, src, expected) in cases {
+        eprintln!("stage3 compiling: {label}");
+        let encoded = encode_ascii_program(src);
+        let emitted_forth = run_native_binary_with_input(&stage3_bin, &encoded);
+        let got = run_native_forth(&format!("stage3-feat-{label}"), &emitted_forth);
+        assert_eq!(got.trim_end(), expected, "stage3 failed case: {label}");
+    }
+}
+
+#[test]
+fn selfhost_stage3_compiles_sample_programs() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping stage3 sample suite: missing native backend");
+        return;
+    }
+
+    let stage3_forth = cached_stage3_forth();
+    let (_work_dir, stage3_bin) = build_native_forth_binary("stage3-samples-bin", &stage3_forth);
+
+    let cases = [
+        ("hello", include_str!("samples/01_hello.pas"), "HELLO"),
+        (
+            "arith",
+            include_str!("samples/02_arithmetic.pas"),
+            "14\n3\n2",
+        ),
+        ("control", include_str!("samples/03_control_flow.pas"), "12"),
+        ("record", include_str!("samples/05_record_with.pas"), "33"),
+        (
+            "routine",
+            include_str!("samples/17_nested_routines.pas"),
+            "9",
+        ),
+        (
+            "scalar",
+            include_str!("samples/20_scalar_builtins.pas"),
+            "7\n25\nTRUE\nQ\n66",
+        ),
+    ];
+
+    for (label, src, expected) in cases {
+        eprintln!("stage3 sample: {label}");
+        let encoded = encode_ascii_program(src);
+        let emitted_forth = run_native_binary_with_input(&stage3_bin, &encoded);
+        let got = run_native_forth(&format!("stage3-sample-{label}"), &emitted_forth);
+        assert_eq!(got.trim_end(), expected, "stage3 sample failed: {label}");
+    }
+}
+
+#[test]
+fn selfhost_stage3_matches_restored_sample_outputs() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping stage3 restored sample regression: missing native backend");
+        return;
+    }
+
+    let stage3_forth = cached_stage3_forth();
+    let (_work_dir, stage3_bin) = build_native_forth_binary("stage3-restored-samples-bin", &stage3_forth);
+
+    let names = sample_names();
+    assert!(names.len() >= 20, "expected at least 20 restored samples");
+
+    for name in names {
+        eprintln!("stage3 restored sample: {name}");
+        let src = fs::read_to_string(samples_dir().join(format!("{name}.pas")))
+            .expect("failed to read sample source");
+        let expected = fs::read_to_string(samples_dir().join(format!("{name}.out")))
+            .expect("failed to read sample output");
+        let encoded = encode_ascii_program(&src);
+        let emitted_forth = run_native_binary_with_input(&stage3_bin, &encoded);
+        let got = run_native_forth(&format!("stage3-restored-{name}"), &emitted_forth);
+        assert_eq!(
+            normalized_output(&got),
+            normalized_output(&expected),
+            "stage3 restored sample mismatch: {name}"
+        );
     }
 }

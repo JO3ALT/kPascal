@@ -42,7 +42,7 @@ Error propagation uses `Result<T, String>` throughout.
 ## Test Layout
 
 - `tests/fixtures/` — Small `.pas` programs with matching `.in`/`.out` for feature-level E2E
-- `tests/samples/` — Standard Pascal sample programs (`01–15`) compiled and executed against expected output
+- `tests/samples/` — Restored Standard Pascal sample programs (`01–33`) compiled and executed against expected output
 - `tests/all_syntax.rs` — Checks that Forth output contains expected primitives
 - `tests/auto_fixture_e2e.rs` — Auto-discovers and runs all fixture tests
 - `tests/e2e_kforth.rs` — Runs generated Forth through `kforthc`, verifies stdout
@@ -60,19 +60,16 @@ The `selfhost/` directory contains a Pascal rewrite of the compiler itself.
 - **`selfhost/kpsc_main.pas`** — Main entry; flattened by `scripts/prekpascal` (sed + m4) into a single source file before compilation (no Pascal file I/O)
 - **`scripts/preprocess_selfhost.sh`** — Compatibility wrapper around `prekpascal`
 - No `forward` declarations — order includes/declarations strictly top-to-bottom
-- String helpers belong in `string_utils.pas`; use `StrCopy` for char-array copying; do not add duplicate wrappers
+- String helpers belong in `selfhost/string_utils.pas`; use `StrCopy` for char-array copying; do not add duplicate wrappers
 
 ## Current Work Policy
 
-- Treat stage1 as **not complete** until the remaining selfhost implementation debts are removed, even if the current stage1 feature-suite tests are green.
-- Do **not** prioritize or debug stage2 while stage1 still contains semantic shortcuts, sample-specific special-cases, incomplete lexer/type handling, or other known bootstrap mismatches.
-- When choosing work, prefer stage1 debt removal in this order:
-  1. generic `real` support with no sample/program-name special-cases,
-  2. correct variant-record overlapping layout semantics,
-  3. generic set literal ranges and broader set semantics,
-  4. generalized subrange capture,
-  5. proper numeric tokenization for `real` literals vs `..`.
-- Only move to stage2 after stage1 is semantically complete enough that bootstrap mismatches are no longer being deferred.
+- The Standard Pascal-oriented selfhost path is currently validated through `stage3`.
+- Current checks cover:
+  1. `stage1 -> stage2 -> stage3` self-recompilation on the preprocessed selfhost source,
+  2. native-backend cleanliness of emitted `stage3` Forth,
+  3. stage2 and stage3 regression suites over feature programs and restored samples.
+- Prefer work that preserves or broadens that bootstrap coverage unless the user asks for a narrower fix.
 
 **Every `if/then` and `else` branch in selfhost Pascal must use `begin ... end`**, even for a single statement:
 ```pascal
@@ -108,7 +105,7 @@ Codegen must target `kforthc`'s bootstrap runtime, not generic Forth:
 ## Include Libraries
 
 - **`math.pas`** — Real-based math: `sqrt`, `pow`, `sin`, `cos`, `floor`, `ceil`, `f_trunc`, `f_round`
-- **`string_utils.pas`** — Fixed-buffer char-array helpers: `StrCopy`, `StrEq`, `StrEqLit`, `StrCmp`, `StartsWith`, `TrimLeft`, `TrimRight`, `AppendChar`, `AppendStr`, `ParseInt`, etc.
+- **`selfhost/string_utils.pas`** — Fixed-buffer char-array helpers: `StrCopy`, `StrEq`, `StrEqLit`, `StrCmp`, `StartsWith`, `TrimLeft`, `TrimRight`, `AppendChar`, `AppendStr`, `ParseInt`, etc.
 
 ## Key Reference Documents
 

@@ -20,7 +20,7 @@ This project started from Pascal/0 and now targets a 32-bit Forth VM with a Stan
 - Include directive: `(* $I filename *)` (Turbo Pascal v3 style)
 - Built-ins: `Read`, `ReadLn`, `Write`, `WriteLn`, `Copy`, `Concat`, `Delete`, `Insert`, `Pos`, `UpCase`, `IntToHex`, `HexToInt`, `Addr`, `SetAddr`, `Ord`, `Chr`, `Length`, `Low`, `High`, `Abs`, `Sqr`, `Round`, `Trunc`, `Succ`, `Pred`, `Odd`
 - `math.pas` include library
-- `string_utils.pas` include library for fixed-size `array[...] of char` text handling
+- `selfhost/string_utils.pas` include library for fixed-size `array[...] of char` text handling
 - Extensions integrated on top of the Standard Pascal core: typed `const`, `imut`, `option of`, `result of`, `record of`, `cond(...)`, named constructors, sum-case destructuring, record updates, array updates, list/functional built-ins
 
 ## Repository Layout
@@ -31,7 +31,7 @@ This project started from Pascal/0 and now targets a 32-bit Forth VM with a Stan
 - `src/sema.rs`: semantic analysis and type checks
 - `src/codegen.rs`: Forth code generator
 - `math.pas`: Pascal math library
-- `string_utils.pas`: Pascal string helper library for fixed-size char arrays
+- `selfhost/string_utils.pas`: Pascal string helper library for fixed-size char arrays
 - `tests/`: compiler and end-to-end tests
 - `AVAILABLE_WORDS.txt`: allowed target Forth words
 
@@ -92,7 +92,7 @@ Run generated Forth with kforth (from this repository root):
 - Current scope rules are strict (no-shadowing policy).
 - `case` over an `enum` must be exhaustive unless it includes `else`.
 - `math.pas` provides `real`-based math helpers (`abs`, `sqrt`, `pow`, `sin`, `cos`, `f_trunc`, `f_round`, `floor`, `ceil`).
-- `string_utils.pas` provides fixed-size char-array helpers aimed at compiler-style text processing: `ClearStr`, `AppendChar`, `AppendStr`, `StrCopy`, `StrEq`, `StrEqLit`, `StrEqIgnoreCase`, `StrEqIgnoreCaseLit`, `HasNameEqIgnoreCase`, `StrCmp`, `StartsWith`, `TrimLeft`, `TrimRight`, and `ParseInt`.
+- `selfhost/string_utils.pas` provides fixed-size char-array helpers aimed at compiler-style text processing: `ClearStr`, `AppendChar`, `AppendStr`, `StrCopy`, `StrEq`, `StrEqLit`, `StrEqIgnoreCase`, `StrEqIgnoreCaseLit`, `HasNameEqIgnoreCase`, `StrCmp`, `StartsWith`, `TrimLeft`, `TrimRight`, and `ParseInt`.
 - Typical comparison usage with fixed buffers is:
   `name := 'Pascal'; lit := 'Pascal';`
   `WriteLn(StrEqLit(name, lit));`
@@ -104,6 +104,7 @@ Run generated Forth with kforth (from this repository root):
 - In selfhost Pascal, every `if ... then` branch and every `else` branch must use `begin ... end`, even for a single statement. The same rule applies to `else if`.
 - The test suite currently covers compiler, kforth end-to-end, and restored Standard Pascal sample regressions on `main`.
 - In this repository, self-hosting should be considered complete for the Standard Pascal-oriented core. Concretely, the completion claim means the selfhost compiler path can compile and run the restored Standard Pascal sample set; the integrated kPascal extensions are outside that completion claim unless a document explicitly says otherwise.
+- Current selfhost validation also checks `stage1 -> stage2 -> stage3` bootstrap progression, verifies that emitted `stage3` Forth stays native-backend clean, and regression-tests the `stage3` compiler against the restored `tests/samples` corpus.
 - Self-hosting work also covers an external preprocessing path: `scripts/prekpascal` uses `sed + m4` to flatten `selfhost/kpsc_main.pas` into a single source file without relying on Pascal file I/O. `scripts/preprocess_selfhost.sh` remains as a compatibility wrapper to `prekpascal`.
 
 ## License

@@ -3,10 +3,13 @@ NEXT TASK (IMMEDIATE):
   - `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_ -- --nocapture`
   - `cargo test selfhost_stage2_compiles_feature_programs -- --nocapture`
   - `cargo test selfhost_stage2_compiles_sample_programs -- --nocapture`
+  - `cargo test selfhost_stage3_compiles_feature_programs -- --nocapture`
+  - `cargo test selfhost_stage3_compiles_sample_programs -- --nocapture`
+  - `cargo test selfhost_stage3_matches_restored_sample_outputs -- --nocapture`
 - Current focused follow-up:
-  1. Stage2 string progression is now part of the normal suite; keep it green.
-  2. Move back to broader stage3/native
-     bootstrap coverage.
+  1. Keep the new stage3 restored-sample regression green.
+  2. If more breadth is needed, add a corresponding stage2 restored-sample
+     regression or move on to stage4/native-bootstrap equivalence checks.
 - Keep future reporting compressed:
   summarize by `changes / verification / next`, avoid repeating old stage1
   background unless it materially changes.
@@ -19,10 +22,17 @@ LATEST STATUS (2026-04-10):
   expression capture in stage2 without regressing signed-precedence bounds.
 - `ParseCapturedOrdinalBoundExpr` is back on the original AST build/eval path;
   the temporary fallback to the const-expression parser is no longer needed.
+- Stage3/native-bootstrap coverage is now broader:
+  - cached `stage3` compiler output is available from the test suite
+  - stage3 compiler now has dedicated feature and sample suites
+  - stage3 compiler now also matches the full restored `tests/samples` output set
 - Passing:
   - `cargo test selfhost_stage2_compiles_feature_programs -- --nocapture`
   - `cargo test selfhost_stage2_compiles_sample_programs -- --nocapture`
   - `cargo test selfhost_stage2_string_feature_progression -- --nocapture`
+  - `cargo test selfhost_stage3_compiles_feature_programs -- --nocapture`
+  - `cargo test selfhost_stage3_compiles_sample_programs -- --nocapture`
+  - `cargo test selfhost_stage3_matches_restored_sample_outputs -- --nocapture`
   - `cargo test selfhost_kpsc_main_compiles_array_const_signed_precedence_bounds_feature -- --nocapture`
   - `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_write_and_expect_helpers -- --nocapture`
   - `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_ -- --nocapture`
@@ -45,7 +55,10 @@ LATEST STATUS (2026-04-10):
   - `selfhost_kpsc_main_preserves_nested_call_argument_order_for_byref_array_params`
   - `selfhost_kpsc_main_emits_quote_containing_string_literals_safely`
   - `selfhost_stage2_string_feature_progression` (now normal-suite)
-- Stage2 sample and feature suites are both green again.
+- `selfhost_stage3_compiles_feature_programs`
+- `selfhost_stage3_compiles_sample_programs`
+- `selfhost_stage3_matches_restored_sample_outputs`
+- Stage2 and stage3 sample/feature suites are green.
 
 NEXT INSTRUCTION (2026-04-08):
 - Keep primary focus on stage1 completion. Do not move main effort to stage2
