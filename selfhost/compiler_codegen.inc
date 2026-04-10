@@ -32,6 +32,131 @@ begin
   WriteLn()
 end;
 
+procedure EmitIndent(depth: integer);
+var i: integer;
+begin
+  i := 0;
+  while i < depth do
+    begin
+      Write('  ');
+      i := i + 1
+    end
+end;
+
+function TextBufCanUseCompactForthString(var text: text_buf): boolean;
+var i: integer;
+begin
+  TextBufCanUseCompactForthString := false;
+  if text[0] <> #0 then
+    begin
+      TextBufCanUseCompactForthString := true;
+      i := 0;
+      while i <= 255 do
+        begin
+          if text[i] = #0 then
+            begin
+              i := 256
+            end
+          else if text[i] = '"' then
+            begin
+              TextBufCanUseCompactForthString := false;
+              i := 256
+            end
+          else if text[i] = #10 then
+            begin
+              TextBufCanUseCompactForthString := false;
+              i := 256
+            end
+          else if text[i] = #13 then
+            begin
+              TextBufCanUseCompactForthString := false;
+              i := 256
+            end
+          else
+            begin
+              i := i + 1
+            end
+        end
+    end
+end;
+
+procedure EmitTextBufAsCharWrites(var text: text_buf; depth: integer);
+var i: integer;
+begin
+  i := 0;
+  while i <= 255 do
+    begin
+      if text[i] = #0 then
+        begin
+          i := 256
+        end
+      else
+        begin
+          EmitIndent(depth);
+          Write(Ord(text[i]));
+          WriteLn(' PWRITE-CHAR');
+          i := i + 1
+        end
+    end
+end;
+
+function LitBufCanUseCompactForthString(var text: lit_buf): boolean;
+var i: integer;
+begin
+  LitBufCanUseCompactForthString := false;
+  if text[0] <> #0 then
+    begin
+      LitBufCanUseCompactForthString := true;
+      i := 0;
+      while i <= LIT_LAST do
+        begin
+          if text[i] = #0 then
+            begin
+              i := LIT_LAST + 1
+            end
+          else if text[i] = '"' then
+            begin
+              LitBufCanUseCompactForthString := false;
+              i := LIT_LAST + 1
+            end
+          else if text[i] = #10 then
+            begin
+              LitBufCanUseCompactForthString := false;
+              i := LIT_LAST + 1
+            end
+          else if text[i] = #13 then
+            begin
+              LitBufCanUseCompactForthString := false;
+              i := LIT_LAST + 1
+            end
+          else
+            begin
+              i := i + 1
+            end
+        end
+    end
+end;
+
+procedure EmitLitBufAsCharWrites(var text: lit_buf; depth: integer);
+var i: integer;
+begin
+  i := 0;
+  while i <= LIT_LAST do
+    begin
+      if text[i] = #0 then
+        begin
+          i := LIT_LAST + 1
+        end
+      else
+        begin
+          EmitIndent(depth);
+          Write(Ord(text[i]));
+          WriteLn(' PWRITE-CHAR');
+          i := i + 1
+        end
+    end
+end;
+
 procedure EmitText_CreateCallRet;
 begin
   EmitChar('C');
@@ -1592,17 +1717,31 @@ end;
 
 procedure EmitStmtWriteLnStringSlotLiteral(var slot_name: text_buf; var text: text_buf);
 begin
-  Write('  S" ');
-  EmitTextBuf(text);
-  WriteLn('" TYPE');
+  if TextBufCanUseCompactForthString(text) then
+    begin
+      Write('  S" ');
+      EmitTextBuf(text);
+      WriteLn('" TYPE')
+    end
+  else
+    begin
+      EmitTextBufAsCharWrites(text, 1)
+    end;
   WriteLn('  PWRITELN')
 end;
 
 procedure EmitDirectStringLine(var text: text_buf);
 begin
-  Write('  S" ');
-  EmitTextBuf(text);
-  WriteLn('" TYPE');
+  if TextBufCanUseCompactForthString(text) then
+    begin
+      Write('  S" ');
+      EmitTextBuf(text);
+      WriteLn('" TYPE')
+    end
+  else
+    begin
+      EmitTextBufAsCharWrites(text, 1)
+    end;
   WriteLn('  PWRITELN')
 end;
 
@@ -5457,10 +5596,17 @@ begin
             end
           else if ast_arg_kind[arg_idx] = AST_ARG_TEXT then
             begin
-              EmitAstIndent(depth);
-              Write('S" ');
-              EmitDirectRawLitText(ast_text_lit[ast_arg_text_ref[arg_idx]]);
-              WriteLn('" TYPE');
+              if LitBufCanUseCompactForthString(ast_text_lit[ast_arg_text_ref[arg_idx]]) then
+                begin
+                  EmitAstIndent(depth);
+                  Write('S" ');
+                  EmitDirectRawLitText(ast_text_lit[ast_arg_text_ref[arg_idx]]);
+                  WriteLn('" TYPE')
+                end
+              else
+                begin
+                  EmitLitBufAsCharWrites(ast_text_lit[ast_arg_text_ref[arg_idx]], depth)
+                end;
               EmitAstIndent(depth);
               WriteLn('PWRITELN')
             end
@@ -5474,23 +5620,24 @@ begin
             end
           else if ast_arg_kind[arg_idx] = AST_ARG_EXPR then
             begin
-              if AstExprIsCharArray(ast_arg_expr[arg_idx]) then
+              arg_expr_idx := ast_arg_expr[arg_idx];
+              if AstExprIsCharArray(arg_expr_idx) then
                 begin
-                  EmitAstWriteLnStrExpr(ast_arg_expr[arg_idx], depth)
+                  EmitAstWriteLnStrExpr(arg_expr_idx, depth)
                 end
               else
                 begin
                   EmitAstIndent(depth);
-                  EmitAstExprInline(ast_arg_expr[arg_idx]);
-                  if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_BOOLEAN then
+                  EmitAstExprInline(arg_expr_idx);
+                  if AstExprType(arg_expr_idx) = AST_TYPE_BOOLEAN then
                     begin
                       WriteLn(' PWRITE-BOOL')
                     end
-                  else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_REAL then
+                  else if AstExprType(arg_expr_idx) = AST_TYPE_REAL then
                     begin
                       WriteLn(' PWRITE-F32')
                     end
-                  else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_CHAR then
+                  else if AstExprType(arg_expr_idx) = AST_TYPE_CHAR then
                     begin
                       WriteLn(' PWRITE-CHAR')
                     end
@@ -5525,10 +5672,17 @@ begin
             end
           else if ast_arg_kind[arg_idx] = AST_ARG_TEXT then
             begin
-              EmitAstIndent(depth);
-              Write('S" ');
-              EmitDirectRawLitText(ast_text_lit[ast_arg_text_ref[arg_idx]]);
-              WriteLn('" TYPE')
+              if LitBufCanUseCompactForthString(ast_text_lit[ast_arg_text_ref[arg_idx]]) then
+                begin
+                  EmitAstIndent(depth);
+                  Write('S" ');
+                  EmitDirectRawLitText(ast_text_lit[ast_arg_text_ref[arg_idx]]);
+                  WriteLn('" TYPE')
+                end
+              else
+                begin
+                  EmitLitBufAsCharWrites(ast_text_lit[ast_arg_text_ref[arg_idx]], depth)
+                end
             end
           else if ast_arg_kind[arg_idx] = AST_ARG_BOOL then
             begin
@@ -5538,17 +5692,18 @@ begin
             end
           else if ast_arg_kind[arg_idx] = AST_ARG_EXPR then
             begin
+              arg_expr_idx := ast_arg_expr[arg_idx];
               EmitAstIndent(depth);
-              EmitAstExprInline(ast_arg_expr[arg_idx]);
-              if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_BOOLEAN then
+              EmitAstExprInline(arg_expr_idx);
+              if AstExprType(arg_expr_idx) = AST_TYPE_BOOLEAN then
                 begin
                   WriteLn(' PWRITE-BOOL')
                 end
-              else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_REAL then
+              else if AstExprType(arg_expr_idx) = AST_TYPE_REAL then
                 begin
                   WriteLn(' PWRITE-F32')
                 end
-              else if AstExprType(ast_arg_expr[arg_idx]) = AST_TYPE_CHAR then
+              else if AstExprType(arg_expr_idx) = AST_TYPE_CHAR then
                 begin
                   WriteLn(' PWRITE-CHAR')
                 end
@@ -5745,7 +5900,7 @@ begin
                 begin
                   EmitAstExprInline(arg_expr_idx)
                 end;
-              WriteLn('');
+              WriteLn();
               if ast_param_conformant_dim_count[param_idx] > 0 then
                 begin
                   arg_type_ref := GetAstExprTypeRef(arg_expr_idx);
@@ -5756,10 +5911,10 @@ begin
                       if arg_type_ref >= 0 then
                         begin
                           Write(ast_type_array_low[arg_type_ref]);
-                          WriteLn('');
+                          WriteLn();
                           EmitAstIndent(depth);
                           Write(ast_type_array_high[arg_type_ref]);
-                          WriteLn('');
+                          WriteLn();
                           arg_type_ref := ast_type_elem_type_ref[arg_type_ref]
                         end
                       else
@@ -5776,7 +5931,7 @@ begin
             end;
           EmitAstIndent(depth);
           EmitAstRoutineWord(routine_idx);
-          WriteLn('')
+          WriteLn()
         end
       else
         begin
@@ -5785,7 +5940,7 @@ begin
             begin
               EmitAstIndent(depth);
               EmitAstExprInline(ast_arg_expr[ast_stmt_arg_start[stmt_idx] + 1]);
-              WriteLn('');
+              WriteLn();
               EmitAstIndent(depth);
               EmitAstLValueAddress(ast_arg_expr[ast_stmt_arg_start[stmt_idx]]);
               WriteLn(' PVAR!')
@@ -6158,7 +6313,8 @@ begin
   WriteLn('      __I2H_FILL PVAR@ IF');
   WriteLn('        __I2H_WIDTH PVAR@ __I2H_I PVAR@ 1 + - __I2H_SRC PVAR!');
   WriteLn('      ELSE');
-  WriteLn('        __I2H_REQ PVAR@ __I2H_WIDTH PVAR@ - __I2H_WIDTH PVAR@ __I2H_I PVAR@ 1 + - + __I2H_SRC PVAR!');
+  Write('        __I2H_REQ PVAR@ __I2H_WIDTH PVAR@ - __I2H_WIDTH PVAR@ __I2H_I PVAR@ 1 + - + ');
+  WriteLn('__I2H_SRC PVAR!');
   WriteLn('      THEN');
   WriteLn('      __I2H_SRC PVAR@ 8 >= IF');
   WriteLn('        48');
@@ -6261,7 +6417,8 @@ begin
   WriteLn('  THEN');
   WriteLn('  __STR_J PVAR@ __STR_K PVAR!');
   WriteLn('  BEGIN');
-  WriteLn('    __STR_DST PVAR@ __STR_K PVAR@ 4 * + PVAR@ __STR_DST PVAR@ __STR_K PVAR@ __STR_LEN PVAR@ + 4 * + PVAR!');
+  Write('    __STR_DST PVAR@ __STR_K PVAR@ 4 * + PVAR@ __STR_DST PVAR@ ');
+  WriteLn('__STR_K PVAR@ __STR_LEN PVAR@ + 4 * + PVAR!');
   WriteLn('    __STR_K PVAR@ __STR_I PVAR@ = IF');
   WriteLn('      1');
   WriteLn('    ELSE');

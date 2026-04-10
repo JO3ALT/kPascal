@@ -424,18 +424,6 @@ fn encode_seed_ascii_program(src: &str) -> String {
     encoded
 }
 
-fn parse_i32_output_lines(output: &str) -> Vec<i32> {
-    output
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            line.trim()
-                .parse::<i32>()
-                .unwrap_or_else(|err| panic!("expected integer output line `{line}`: {err}"))
-        })
-        .collect()
-}
-
 fn run_selfhost_main_for_input(test_name: &str, src: &str) -> String {
     let selfhost_src = include_str!("../selfhost/kpsc_main.pas");
     let selfhost_forth = run_compiler(selfhost_src);
@@ -524,7 +512,9 @@ fn cached_preprocessed_selfhost_main_stage1_output(test_name: &str, src: &str) -
     let bin_path = cached_preprocessed_selfhost_main_native_bin();
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     src.hash(&mut hasher);
-    bin_path.hash(&mut hasher);
+    fs::read(&bin_path)
+        .expect("failed to read cached selfhost native binary")
+        .hash(&mut hasher);
     let key = hasher.finish();
     let cache_dir = std::env::temp_dir().join("kpascal-selfhost-stage1-cache");
     fs::create_dir_all(&cache_dir).expect("failed to create stage1 cache dir");
@@ -921,6 +911,72 @@ end."#;
 }
 
 #[test]
+fn selfhost_kpsc_main_preserves_nested_call_argument_order_for_value_params() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main nested-call value-param smoke: missing native backend");
+        return;
+    }
+
+    let src = r#"program nestedvalueargs;
+function GetBase(i: integer): integer;
+begin
+  GetBase := i + 10
+end;
+
+function Combine(a: integer; b: integer): integer;
+begin
+  Combine := a * 100 + b
+end;
+
+begin
+  WriteLn(Combine(GetBase(2), 7))
+end."#;
+    let emitted_forth = run_selfhost_main_for_input("main-ast-nested-value-args-stage1", src);
+    let got = run_native_forth("main-ast-nested-value-args-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "1207");
+}
+
+#[test]
+fn selfhost_kpsc_main_preserves_nested_call_argument_order_for_byref_array_params() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main nested-call byref-array smoke: missing native backend");
+        return;
+    }
+
+    let src = r#"program nestedbyrefargs;
+type
+  ident_buf = array[0..3] of integer;
+var
+  field_name: ident_buf;
+
+function GetTypeRef(i: integer): integer;
+begin
+  GetTypeRef := i + 10
+end;
+
+function FindFieldByIdent(type_idx: integer; var name: ident_buf): integer;
+begin
+  FindFieldByIdent := type_idx + name[0]
+end;
+
+function Test(expr_idx: integer): boolean;
+begin
+  Test := FindFieldByIdent(GetTypeRef(expr_idx), field_name) >= 0
+end;
+
+begin
+  field_name[0] := 1;
+  WriteLn(Test(2));
+  WriteLn(FindFieldByIdent(GetTypeRef(2), field_name))
+end."#;
+    let emitted_forth = run_selfhost_main_for_input("main-ast-nested-byref-args-stage1", src);
+    let got = run_native_forth("main-ast-nested-byref-args-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "TRUE\n13");
+}
+
+#[test]
 fn selfhost_kpsc_main_emits_simple_global_var_via_ast() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
@@ -942,6 +998,23 @@ end."#;
     );
     let got = run_native_forth("main-ast-global-stage2", &emitted_forth);
     assert_eq!(got.trim_end(), "1");
+}
+
+#[test]
+fn selfhost_kpsc_main_emits_quote_containing_string_literals_safely() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost main quoted-string smoke: missing native backend");
+        return;
+    }
+
+    let src = r#"program quotedtext;
+begin
+  WriteLn('  S" TRUE" TYPE')
+end."#;
+    let emitted_forth = run_selfhost_main_for_input("main-ast-quoted-string-stage1", src);
+    let got = run_native_forth("main-ast-quoted-string-stage2", &emitted_forth);
+    assert_eq!(got.trim_end(), "  S\" TRUE\" TYPE");
 }
 
 #[test]
@@ -1732,7 +1805,6 @@ fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_parser_helpers() {
 }
 
 #[test]
-#[ignore = "focused self-compile progress check"]
 fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_write_and_expect_helpers() {
     let _guard = selfhost_serial_guard();
     if !has_selfhost_native_backend() {
@@ -1741,23 +1813,101 @@ fn selfhost_preprocessed_kpsc_main_selfcompile_reaches_write_and_expect_helpers(
     }
 
     let flat_selfhost = preprocess_pascal_file("selfhost/kpsc_main.pas");
-    let stage1 = cached_preprocessed_selfhost_main_stage1_output(
-        "preprocessed-selfcompile-write-expect-stage1",
-        &flat_selfhost,
+    let stage1_src = run_compiler(&flat_selfhost);
+    let (_stage1_work_dir, stage1_bin_path) =
+        build_native_forth_binary("preprocessed-selfcompile-stage1-bin", &stage1_src);
+
+    let encoded = encode_ascii_program(&flat_selfhost);
+    let stage2 = run_native_binary_with_input(&stage1_bin_path, &encoded);
+    assert!(
+        !stage2.contains("parse error"),
+        "stage2 still failed while recompiling the full preprocessed selfhost source.\n{}",
+        stage2
+    );
+    assert!(
+        stage2.contains(": MAIN"),
+        "stage2 did not emit a complete Forth program for the full preprocessed selfhost source.\n{}",
+        stage2
     );
 
-    let stage1_output = run_native_forth("preprocessed-selfcompile-stage1-output", &stage1);
-    let got = parse_i32_output_lines(&stage1_output);
-    let expected = vec![
-        6587, 7, 15, 2, 0, 27, 0, 26, -1, 4, -1, 16, -1, -1, 0, 116, 0, 27, 1, 256, -1, -1, -1, 2,
-        -1, -1, 0, 116, 0, 0, 0, 0, 0, -1, 6, 1, 105, 0, 0, 3, 0, 0, 0, -1, 8, 0, 16, 0, -1, 8, 0,
-        46, 0, -1, 8, 0, 48, 0, -1, 8, 0, 63, 0, -1, 8, 0, 160, 0, -1, 8, 0, 334, 0, -1,
-    ];
-    assert_eq!(
-        got, expected,
-        "stage1 no longer matches the current self-compile diagnostic snapshot.\n{}",
-        stage1
+    let (_stage2_work_dir, stage2_bin_path) =
+        build_native_forth_binary("preprocessed-selfcompile-stage2-bin", &stage2);
+
+    let stage3 = run_native_binary_with_input(&stage2_bin_path, &encoded);
+    assert!(
+        !stage3.contains("parse error"),
+        "stage3 still failed while recompiling the full preprocessed selfhost source.\n{}",
+        stage3
     );
+    assert!(
+        stage3.contains(": MAIN"),
+        "stage3 did not emit a complete Forth program for the full preprocessed selfhost source.\n{}",
+        stage3
+    );
+}
+
+#[test]
+fn selfhost_preprocessed_kpsc_main_stage3_forth_is_native_backend_clean() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping selfhost stage3 native-cleanliness smoke: missing native backend");
+        return;
+    }
+
+    let flat_selfhost = preprocess_pascal_file("selfhost/kpsc_main.pas");
+    let stage1_src = run_compiler(&flat_selfhost);
+    let (_stage1_work_dir, stage1_bin_path) =
+        build_native_forth_binary("preprocessed-selfcompile-stage1-native-clean-bin", &stage1_src);
+
+    let encoded = encode_ascii_program(&flat_selfhost);
+    let stage2 = run_native_binary_with_input(&stage1_bin_path, &encoded);
+    let (_stage2_work_dir, stage2_bin_path) = build_native_forth_binary(
+        "preprocessed-selfcompile-stage2-native-clean-bin",
+        &stage2,
+    );
+
+    let stage3 = run_native_binary_with_input(&stage2_bin_path, &encoded);
+    assert!(
+        !stage3.as_bytes().contains(&0),
+        "stage3 still contains embedded NUL bytes.\n{}",
+        stage3
+    );
+
+    let (_stage3_work_dir, _stage3_bin_path) =
+        build_native_forth_binary("preprocessed-selfcompile-stage3-native-clean-bin", &stage3);
+}
+
+#[test]
+fn selfhost_preprocessed_kpsc_main_fresh_stage2_compiler_handles_generic_arithmetic_program() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping fresh stage2 generic arithmetic smoke: missing native backend");
+        return;
+    }
+
+    let flat_selfhost = preprocess_pascal_file("selfhost/kpsc_main.pas");
+    let stage1_src = run_compiler(&flat_selfhost);
+    let (_stage1_work_dir, stage1_bin_path) =
+        build_native_forth_binary("preprocessed-selfcompile-stage1-fresh-arith-bin", &stage1_src);
+
+    let encoded_selfhost = encode_ascii_program(&flat_selfhost);
+    let stage2 = run_native_binary_with_input(&stage1_bin_path, &encoded_selfhost);
+    let (_stage2_work_dir, stage2_bin_path) =
+        build_native_forth_binary("preprocessed-selfcompile-stage2-fresh-arith-bin", &stage2);
+
+    let src = r#"program p;
+var
+  i: integer;
+begin
+  i := 2 + 3 * 4;
+  WriteLn(i);
+  WriteLn(17 div 5);
+  WriteLn(17 mod 5)
+end."#;
+    let encoded = encode_ascii_program(src);
+    let emitted_forth = run_native_binary_with_input(&stage2_bin_path, &encoded);
+    let got = run_native_forth("preprocessed-fresh-stage2-generic-arith", &emitted_forth);
+    assert_eq!(got.trim_end(), "14\n3\n2");
 }
 
 #[test]
@@ -3300,13 +3450,13 @@ fn selfhost_stage2_compiles_feature_programs() {
     let (_work_dir, stage2_bin) = build_native_forth_binary("stage2-compiler-bin", &stage2_forth);
 
     let cases = [
-        ("arith", include_str!("../selfhost/kpsc_arith.pas"), "14"),
+        ("arith", include_str!("../selfhost/kpsc_arith.pas"), "14\n3\n2"),
         (
             "scalar",
             include_str!("../selfhost/kpsc_scalar.pas"),
             "7\n25\nTRUE\nQ\n66",
         ),
-        ("ctrl", include_str!("../selfhost/kpsc_ctrl.pas"), "1\n2\n3"),
+        ("ctrl", include_str!("../selfhost/kpsc_ctrl.pas"), "12"),
         (
             "routines",
             include_str!("../selfhost/kpsc_routines.pas"),
@@ -3326,6 +3476,105 @@ fn selfhost_stage2_compiles_feature_programs() {
         let emitted_forth = run_native_binary_with_input(&stage2_bin, &encoded);
         let got = run_native_forth(&format!("stage2-feat-{label}"), &emitted_forth);
         assert_eq!(got.trim_end(), expected, "stage2 failed case: {label}");
+    }
+}
+
+#[test]
+fn selfhost_stage2_string_feature_progression() {
+    let _guard = selfhost_serial_guard();
+    if !has_selfhost_native_backend() {
+        eprintln!("skipping stage2 string progression suite: missing native backend");
+        return;
+    }
+
+    let stage2_forth = cached_stage2_forth();
+    let (_work_dir, stage2_bin) = build_native_forth_binary("stage2-string-progression-bin", &stage2_forth);
+
+    let cases = [
+        (
+            "subrange_type_only",
+            r#"program p;
+type
+  small = 1..16;
+begin
+  WriteLn(1)
+end."#,
+            "1",
+        ),
+        (
+            "int_array_type_only",
+            r#"program p;
+type
+  int16 = array[16] of integer;
+begin
+  WriteLn(1)
+end."#,
+            "1",
+        ),
+        (
+            "array_type_only",
+            r#"program p;
+type
+  str16 = array[16] of char;
+begin
+  WriteLn(1)
+end."#,
+            "1",
+        ),
+        (
+            "array_vars_only",
+            r#"program p;
+type
+  str16 = array[16] of char;
+var
+  s: str16;
+  needle: str16;
+begin
+  WriteLn(1)
+end."#,
+            "1",
+        ),
+        (
+            "first_string_assign",
+            r#"program p;
+type
+  str16 = array[16] of char;
+var
+  s: str16;
+begin
+  s := 'ABC';
+  WriteLn(1)
+end."#,
+            "1",
+        ),
+        (
+            "second_string_assign",
+            r#"program p;
+type
+  str16 = array[16] of char;
+var
+  s: str16;
+  needle: str16;
+begin
+  s := 'ABC';
+  needle := 'BC';
+  WriteLn(1)
+end."#,
+            "1",
+        ),
+        (
+            "full_string_feature",
+            include_str!("../selfhost/kpsc_string.pas"),
+            "ABC\n2",
+        ),
+    ];
+
+    for (label, src, expected) in cases {
+        eprintln!("stage2 string progression: {label}");
+        let encoded = encode_ascii_program(src);
+        let emitted_forth = run_native_binary_with_input(&stage2_bin, &encoded);
+        let got = run_native_forth(&format!("stage2-string-progression-{label}"), &emitted_forth);
+        assert_eq!(got.trim_end(), expected, "stage2 string progression failed: {label}");
     }
 }
 

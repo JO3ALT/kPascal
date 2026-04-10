@@ -2515,10 +2515,8 @@ begin
 end;
 
 procedure AppendAstExprArg(stmt_idx: integer; expr_idx: integer);
-var temp_text: text_buf;
-    idx: integer;
+var idx: integer;
 begin
-  ClearText(temp_text);
   if ast_arg_count >= MAX_AST_ARGS then
     begin
       bootstrap_capture_failed := true;
@@ -2539,10 +2537,8 @@ begin
 end;
 
 procedure AppendAstCallExprArg(call_expr_idx: integer; arg_expr_idx: integer);
-var temp_text: text_buf;
-    idx: integer;
+var idx: integer;
 begin
-  ClearText(temp_text);
   if ast_arg_count >= MAX_AST_ARGS then
     begin
       bootstrap_capture_failed := true;
@@ -2706,8 +2702,18 @@ begin
   ast_root_stmt_start := 0;
   ast_root_stmt_count := 0;
   ast_stmt_count := 0;
-  ast_arg_count := 0;
-  ast_expr_count := 0;
+  ast_arg_count := 1;
+  ast_arg_kind[0] := AST_ARG_NONE;
+  ast_arg_int[0] := 0;
+  ast_arg_text_ref[0] := -1;
+  ast_arg_expr[0] := -1;
+  ast_expr_count := 1;
+  ast_expr_kind[0] := AST_EXPR_NONE;
+  ast_expr_int[0] := 0;
+  ast_expr_text_ref[0] := -1;
+  ast_expr_op[0] := TOK_EOF;
+  ast_expr_left[0] := -1;
+  ast_expr_right[0] := -1;
   ast_routine_count := 0;
   ast_param_count := 0;
   while ast_param_count <= MAX_AST_PARAMS - 1 do

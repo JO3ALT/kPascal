@@ -153,18 +153,27 @@ begin
 end;
 
 procedure BuildAstCallArgs(call_expr_idx: integer);
+var arg_exprs: array[0..255] of integer;
+    arg_count_local: integer;
 begin
   ExpectKind(TOK_LPAREN);
-  ast_expr_left[call_expr_idx] := ast_arg_count;
-  ast_expr_right[call_expr_idx] := 0;
+  arg_count_local := 0;
   if token_kind <> TOK_RPAREN then
     begin
-      AppendAstCallExprArg(call_expr_idx, BuildAstExpr());
+      arg_exprs[arg_count_local] := BuildAstExpr();
+      arg_count_local := arg_count_local + 1;
       while token_kind = TOK_COMMA do
         begin
           NextToken();
-          AppendAstCallExprArg(call_expr_idx, BuildAstExpr())
+          arg_exprs[arg_count_local] := BuildAstExpr();
+          arg_count_local := arg_count_local + 1
         end
+    end;
+  ast_expr_left[call_expr_idx] := ast_arg_count;
+  ast_expr_right[call_expr_idx] := 0;
+  while ast_expr_right[call_expr_idx] < arg_count_local do
+    begin
+      AppendAstCallExprArg(call_expr_idx, arg_exprs[ast_expr_right[call_expr_idx]])
     end;
   ExpectKind(TOK_RPAREN)
 end;

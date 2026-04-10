@@ -156,9 +156,7 @@ begin
 end;
 
 procedure ParseCapturedWriteLnArg(stmt_idx: integer);
-var expected_name: text_buf;
-    expr_idx: integer;
-    temp_text: text_buf;
+var temp_text: text_buf;
 begin
   if token_kind = TOK_STR then
     begin
@@ -167,8 +165,7 @@ begin
           CaptureWriteLnChar(token_text[0]);
           if stmt_idx >= 0 then
             begin
-              expr_idx := BuildAstExpr();
-              AppendAstExprArg(stmt_idx, expr_idx)
+              AppendAstExprArg(stmt_idx, BuildAstExpr())
             end
           else
             begin
@@ -205,8 +202,7 @@ begin
         end;
       if stmt_idx >= 0 then
         begin
-          expr_idx := BuildAstExpr();
-          AppendAstExprArg(stmt_idx, expr_idx)
+          AppendAstExprArg(stmt_idx, BuildAstExpr())
         end
       else
         begin
@@ -470,6 +466,7 @@ begin
       if ast_capture_enabled then
         begin
           stmt_idx := NewAstStmt(AST_STMT_ASSIGN);
+          expr_idx := -1;
           if saw_selector then
             begin
               ast_stmt_expr[stmt_idx] := lhs_expr_idx
@@ -501,8 +498,7 @@ begin
                     begin
                       ast_stmt_value_kind[stmt_idx] := AST_ARG_TEXT;
                       ast_stmt_value_text_ref[stmt_idx] := NewAstTextLit(token_text);
-                      NextToken();
-                      expr_idx := -1
+                      NextToken()
                     end
               else
                 begin

@@ -619,6 +619,9 @@ end;
 
 function ParseCapturedOrdinalConstPrimary(prefer_high: boolean; var value: integer): boolean;
 var type_name: text_buf;
+    ord_name: text_buf;
+    chr_name: text_buf;
+    arg_value: integer;
 begin
   ParseCapturedOrdinalConstPrimary := false;
   if token_kind = TOK_INT then
@@ -648,12 +651,46 @@ begin
       NextToken();
       ParseCapturedOrdinalConstPrimary := true
     end
+  else if token_kind = TOK_LPAREN then
+    begin
+      NextToken();
+      if ParseCapturedOrdinalConstExpr(prefer_high, value) then
+        begin
+          ExpectKind(TOK_RPAREN);
+          ParseCapturedOrdinalConstPrimary := true
+        end
+    end
   else if token_kind = TOK_IDENT then
     begin
       ClearText(type_name);
       StrCopy(token_text, type_name);
+      ClearText(ord_name);
+      ord_name := 'ord';
+      ClearText(chr_name);
+      chr_name := 'chr';
       NextToken();
-      ParseCapturedOrdinalConstPrimary := ResolveCapturedOrdinalConstIdent(type_name, prefer_high, value)
+      if token_kind = TOK_LPAREN then
+        begin
+          NextToken();
+          if ParseCapturedOrdinalConstExpr(prefer_high, arg_value) then
+            begin
+              ExpectKind(TOK_RPAREN);
+              if StrCmpIgnoreCase(type_name, ord_name) = 0 then
+                begin
+                  value := arg_value;
+                  ParseCapturedOrdinalConstPrimary := true
+                end
+              else if StrCmpIgnoreCase(type_name, chr_name) = 0 then
+                begin
+                  value := arg_value;
+                  ParseCapturedOrdinalConstPrimary := true
+                end
+            end
+        end
+      else
+        begin
+          ParseCapturedOrdinalConstPrimary := ResolveCapturedOrdinalConstIdent(type_name, prefer_high, value)
+        end
     end
 end;
 
@@ -744,6 +781,67 @@ begin
           else
             begin
               ParseCapturedOrdinalConstExpr := false
+            end
+        end
+    end
+end;
+
+function ContinueCapturedOrdinalConstMul(prefer_high: boolean; var value: integer): boolean;
+var rhs_value: integer;
+    op_kind: integer;
+begin
+  ContinueCapturedOrdinalConstMul := true;
+  while IsCapturedOrdinalMulOp() do
+    begin
+      op_kind := token_kind;
+      NextToken();
+      if ParseCapturedOrdinalConstUnary(prefer_high, rhs_value) then
+        begin
+          if op_kind = TOK_STAR then
+            begin
+              value := value * rhs_value
+            end
+          else if op_kind = TOK_KW_DIV then
+            begin
+              value := value div rhs_value
+            end
+          else
+            begin
+              value := value mod rhs_value
+            end
+        end
+      else
+        begin
+          ContinueCapturedOrdinalConstMul := false
+        end
+    end
+end;
+
+function ContinueCapturedOrdinalConstExpr(prefer_high: boolean; var value: integer): boolean;
+var rhs_value: integer;
+    op_kind: integer;
+begin
+  ContinueCapturedOrdinalConstExpr := ContinueCapturedOrdinalConstMul(prefer_high, value);
+  if ContinueCapturedOrdinalConstExpr then
+    begin
+      while IsCapturedOrdinalAddOp() do
+        begin
+          op_kind := token_kind;
+          NextToken();
+          if ParseCapturedOrdinalConstMul(prefer_high, rhs_value) then
+            begin
+              if op_kind = TOK_PLUS then
+                begin
+                  value := value + rhs_value
+                end
+              else
+                begin
+                  value := value - rhs_value
+                end
+            end
+          else
+            begin
+              ContinueCapturedOrdinalConstExpr := false
             end
         end
     end
@@ -1182,6 +1280,82 @@ begin
     end
 end;
 
+procedure ParseCapturedParenIdentOrEnumTypeDecl(var type_name: text_buf; var type_idx: integer);
+var first_name: text_buf;
+    low_value: integer;
+    high_value: integer;
+    enum_value: integer;
+begin
+  ExpectKind(TOK_LPAREN);
+  if token_kind <> TOK_IDENT then
+    begin
+      FailParse()
+    end;
+  ClearText(first_name);
+  StrCopy(token_text, first_name);
+  NextToken();
+  if token_kind = TOK_COMMA then
+    begin
+      type_idx := NewAstType(type_name, AST_DECL_ENUM);
+      enum_value := 0;
+      AppendAstEnumConst(type_idx, first_name, enum_value);
+      enum_value := enum_value + 1;
+      while token_kind = TOK_COMMA do
+        begin
+          NextToken();
+          if token_kind <> TOK_IDENT then
+            begin
+              FailParse()
+            end;
+          AppendAstEnumConst(type_idx, token_text, enum_value);
+          enum_value := enum_value + 1;
+          NextToken()
+        end;
+      ast_type_array_low[type_idx] := 0;
+      ast_type_array_high[type_idx] := enum_value - 1;
+      ExpectKind(TOK_RPAREN)
+    end
+  else
+    begin
+      low_value := 0;
+      high_value := 0;
+      if not ResolveCapturedOrdinalConstIdent(first_name, false, low_value) then
+        begin
+          bootstrap_capture_failed := true
+        end;
+      if token_kind = TOK_RPAREN then
+        begin
+          NextToken()
+        end
+      else
+        begin
+          if not ContinueCapturedOrdinalConstExpr(false, low_value) then
+            begin
+              bootstrap_capture_failed := true
+            end;
+          ExpectKind(TOK_RPAREN)
+        end;
+      if token_kind = TOK_DOTDOT then
+        begin
+          type_idx := NewAstType(type_name, AST_DECL_SUBRANGE);
+          NextToken();
+          if not ParseCapturedOrdinalBoundExpr(true, high_value) then
+            begin
+              bootstrap_capture_failed := true
+            end;
+          ast_type_array_low[type_idx] := low_value;
+          ast_type_array_high[type_idx] := high_value
+        end
+      else
+        begin
+          type_idx := NewAstType(type_name, AST_DECL_ENUM);
+          AppendAstEnumConst(type_idx, first_name, 0);
+          ast_type_array_low[type_idx] := 0;
+          ast_type_array_high[type_idx] := 0
+        end
+    end
+end;
+
 procedure ParseTypeDecl;
 var type_name: text_buf;
     type_idx: integer;
@@ -1200,8 +1374,53 @@ begin
     end
   else if token_kind = TOK_LPAREN then
     begin
-      type_idx := NewAstType(type_name, AST_DECL_ENUM);
-      ParseCapturedEnumTypeSpec(type_idx)
+      if IsLetter(stream_current_char) then
+        begin
+          ParseCapturedParenIdentOrEnumTypeDecl(type_name, type_idx)
+        end
+      else if stream_current_char < '0' then
+        begin
+          if stream_current_char = '''' then
+            begin
+              type_idx := NewAstType(type_name, AST_DECL_SUBRANGE);
+              ParseCapturedSubrangeTypeSpec(type_idx)
+            end
+          else if stream_current_char = '#' then
+            begin
+              type_idx := NewAstType(type_name, AST_DECL_SUBRANGE);
+              ParseCapturedSubrangeTypeSpec(type_idx)
+            end
+          else if stream_current_char = '+' then
+            begin
+              type_idx := NewAstType(type_name, AST_DECL_SUBRANGE);
+              ParseCapturedSubrangeTypeSpec(type_idx)
+            end
+          else if stream_current_char = '-' then
+            begin
+              type_idx := NewAstType(type_name, AST_DECL_SUBRANGE);
+              ParseCapturedSubrangeTypeSpec(type_idx)
+            end
+          else if stream_current_char = '(' then
+            begin
+              type_idx := NewAstType(type_name, AST_DECL_SUBRANGE);
+              ParseCapturedSubrangeTypeSpec(type_idx)
+            end
+          else
+            begin
+              type_idx := NewAstType(type_name, AST_DECL_ENUM);
+              ParseCapturedEnumTypeSpec(type_idx)
+            end
+        end
+      else if stream_current_char <= '9' then
+        begin
+          type_idx := NewAstType(type_name, AST_DECL_SUBRANGE);
+          ParseCapturedSubrangeTypeSpec(type_idx)
+        end
+      else
+        begin
+          type_idx := NewAstType(type_name, AST_DECL_ENUM);
+          ParseCapturedEnumTypeSpec(type_idx)
+        end
     end
   else if token_kind = TOK_KW_ARRAY then
     begin

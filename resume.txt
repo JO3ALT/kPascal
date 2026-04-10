@@ -1,16 +1,51 @@
 NEXT TASK (IMMEDIATE):
-- Parenthesized subrange ambiguity work is complete for both numeric-leading
-  and identifier-led low bounds.
-- Next focus is the remaining decl-time const parity audit.
-- After that, continue the real-operation parity audit.
+- Keep the bootstrap suite green after the new AST sentinel fixes:
+  - `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_ -- --nocapture`
+  - `cargo test selfhost_stage2_compiles_feature_programs -- --nocapture`
+  - `cargo test selfhost_stage2_compiles_sample_programs -- --nocapture`
+- Current focused follow-up:
+  1. Stage2 string progression is now part of the normal suite; keep it green.
+  2. Move back to broader stage3/native
+     bootstrap coverage.
 - Keep future reporting compressed:
-  summarize parser experiments by strategy/result rather than logging each
-  failed micro-attempt, and only record meaningful deltas in tests/resume.
-- Additional token-saving rules for future turns:
-  - avoid pasting long diffs or raw test output into the conversation
-  - report only deltas, not repeated background already captured here
-  - keep one turn focused on one technical goal
-  - prefer a fixed close-out format such as `changes / verification / next`
+  summarize by `changes / verification / next`, avoid repeating old stage1
+  background unless it materially changes.
+
+LATEST STATUS (2026-04-10):
+- Root cause for the last stage2 `string` blocker is fixed.
+- The selfcompiled compiler had the same "slot 0 is not a safe real node"
+  problem in `ast_expr` that it previously had in `ast_arg`.
+- Reserving `ast_expr` slot 0 as a sentinel restored decl-time bound
+  expression capture in stage2 without regressing signed-precedence bounds.
+- `ParseCapturedOrdinalBoundExpr` is back on the original AST build/eval path;
+  the temporary fallback to the const-expression parser is no longer needed.
+- Passing:
+  - `cargo test selfhost_stage2_compiles_feature_programs -- --nocapture`
+  - `cargo test selfhost_stage2_compiles_sample_programs -- --nocapture`
+  - `cargo test selfhost_stage2_string_feature_progression -- --nocapture`
+  - `cargo test selfhost_kpsc_main_compiles_array_const_signed_precedence_bounds_feature -- --nocapture`
+  - `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_write_and_expect_helpers -- --nocapture`
+  - `cargo test selfhost_preprocessed_kpsc_main_selfcompile_reaches_ -- --nocapture`
+  - `cargo test selfhost_preprocessed_kpsc_main_stage3_forth_is_native_backend_clean -- --nocapture`
+  - `cargo test selfhost_preprocessed_kpsc_main_fresh_stage2_compiler_handles_generic_arithmetic_program -- --nocapture`
+- Added/fixed in this phase:
+  - reserved `ast_expr` slot 0 as a sentinel to avoid first-real-expr
+    corruption in selfcompiled decl-time bound parsing
+  - nested call arg preservation in `BuildAstCallArgs`
+  - safe string literal emission for `"` / CR / LF containing text
+  - split overlong runtime helper literal lines that exceeded `lit_buf`
+  - removed unused local `text_buf` scratch vars from expr-arg append helpers
+  - localized `ast_arg_expr[arg_idx]` loads in AST `Write` / `WriteLn`
+    expr-emission paths
+-  - reserved `ast_arg` slot 0 as a sentinel to avoid first-real-arg corruption
+-  - replaced `WriteLn('')` with bare newline emission in AST call codegen to
+     stop embedded NUL bytes like `ASRV0\0` / `ASTR0\0`
+- Added regression tests:
+  - `selfhost_kpsc_main_preserves_nested_call_argument_order_for_value_params`
+  - `selfhost_kpsc_main_preserves_nested_call_argument_order_for_byref_array_params`
+  - `selfhost_kpsc_main_emits_quote_containing_string_literals_safely`
+  - `selfhost_stage2_string_feature_progression` (now normal-suite)
+- Stage2 sample and feature suites are both green again.
 
 NEXT INSTRUCTION (2026-04-08):
 - Keep primary focus on stage1 completion. Do not move main effort to stage2
