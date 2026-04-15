@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+
+if [[ $# -ne 1 ]]; then
+  printf 'usage: %s <pascal-file>\n' "$0" >&2
+  exit 1
+fi
+
+src="$1"
+if [[ ! -f "$src" ]]; then
+  src="$repo_root/$src"
+fi
+
+if [[ ! -f "$src" ]]; then
+  printf 'missing source file: %s\n' "$1" >&2
+  exit 1
+fi
+
+tmp_m4="$(mktemp /tmp/kpascal-prekpascal-XXXXXX.m4)"
+trap 'rm -f "$tmp_m4"' EXIT
+
+sed -E "s|^[[:space:]]*\\(\\*[[:space:]]*\\\$I[[:space:]]+([^[:space:]]+)[[:space:]]*\\*\\)[[:space:]]*$|include(\`\1')dnl|" "$src" > "$tmp_m4"
+m4 -I "$repo_root" -I "$repo_root/selfhost" "$tmp_m4"

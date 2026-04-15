@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
 use crate::sema::*;
@@ -16,6 +16,7 @@ struct Ctx {
     vars: HashMap<String, VarAccess>,
     // simple name -> scoped key (program::Outer::Inner)
     routines: HashMap<String, String>,
+    current_frame_slots: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -594,6 +595,7 @@ impl<'a> ForthGen<'a> {
             let mut routine_ctx = Ctx {
                 vars: parent_ctx.vars.clone(),
                 routines: visible.clone(),
+                current_frame_slots: parent_ctx.current_frame_slots.clone(),
             };
             self.extend_vars_for_routine(r, &scoped, &mut routine_ctx)?;
             let body_routines =
@@ -601,6 +603,11 @@ impl<'a> ForthGen<'a> {
             let body_ctx = Ctx {
                 vars: routine_ctx.vars.clone(),
                 routines: body_routines,
+                current_frame_slots: self
+                    .routine_frames
+                    .get(&scoped)
+                    .cloned()
+                    .unwrap_or_default(),
             };
 
             self.emit_routines_recursive(&block.routines, &scoped, &routine_ctx)?;
@@ -630,7 +637,12 @@ impl<'a> ForthGen<'a> {
                             && !prm.by_ref
                             && prm.conformant.is_none()
                         {
-                            self.emit_param_store(slot, &self.ty_of_typeref(&prm.ty)?);
+                            let prm_ty = self.ty_of_typeref(&prm.ty)?;
+                            if self.is_aggregate_type(&prm_ty) {
+                                self.emit_aggregate_param_store(slot, &prm_ty)?;
+                            } else {
+                                self.emit_param_store(slot, &prm_ty);
+                            }
                         } else {
                             self.wln(&format!("{slot} PVAR!"));
                         }
@@ -653,7 +665,12 @@ impl<'a> ForthGen<'a> {
                             && !prm.by_ref
                             && prm.conformant.is_none()
                         {
-                            self.emit_param_store(slot, &self.ty_of_typeref(&prm.ty)?);
+                            let prm_ty = self.ty_of_typeref(&prm.ty)?;
+                            if self.is_aggregate_type(&prm_ty) {
+                                self.emit_aggregate_param_store(slot, &prm_ty)?;
+                            } else {
+                                self.emit_param_store(slot, &prm_ty);
+                            }
                         } else {
                             self.wln(&format!("{slot} PVAR!"));
                         }
@@ -666,6 +683,10 @@ impl<'a> ForthGen<'a> {
             }
         }
         Ok(())
+    }
+
+    fn is_aggregate_type(&self, ty: &TypeInfo) -> bool {
+        matches!(ty, TypeInfo::Record(_) | TypeInfo::Array(_))
     }
 
     fn gen_stmt_with_ctx(&mut self, s: &Stmt, ctx: &Ctx) -> Result<(), String> {
@@ -1417,10 +1438,24 @@ impl<'a> ForthGen<'a> {
             .get(name)
             .ok_or_else(|| format!("unknown routine in scope: {name}"))?;
         let (word, sig) = self.resolve_call_target(ctx, name)?;
+        let mut var_out_slots: HashSet<String> = HashSet::new();
+        for (arg, p) in args.iter().zip(&sig.params) {
+            if p.by_ref {
+                if let Some(lv) = expr_to_lvalue(arg) {
+                    if let Ok(a) = self.resolve_lvalue_addr_ctx(&lv, ctx) {
+                        if a.dynamic_addr_expr.is_none() && a.offset == 0 {
+                            var_out_slots.insert(a.base_expr.clone());
+                        }
+                    }
+                }
+            }
+        }
         let mut parts = vec![];
-        let frame_slots = self.routine_frames.get(key).cloned().unwrap_or_default();
-        for slot in &frame_slots {
-            parts.push(format!("{slot} PVAR@ >R"));
+        let _ = key;
+        for slot in &ctx.current_frame_slots {
+            if !var_out_slots.contains(slot) {
+                parts.push(format!("{slot} PVAR@ >R"));
+            }
         }
         let argc = self.gen_call_args_inline(name, args, ctx)?;
         if !argc.is_empty() {
@@ -1430,8 +1465,10 @@ impl<'a> ForthGen<'a> {
         if sig.ret.is_some() {
             parts.push("__CALL_RET PVAR!".into());
         }
-        for slot in frame_slots.iter().rev() {
-            parts.push(format!("R> {slot} PVAR!"));
+        for slot in ctx.current_frame_slots.iter().rev() {
+            if !var_out_slots.contains(slot) {
+                parts.push(format!("R> {slot} PVAR!"));
+            }
         }
         if sig.ret.is_some() {
             parts.push("__CALL_RET PVAR@".into());
@@ -1523,6 +1560,25 @@ impl<'a> ForthGen<'a> {
             )),
             _ => self.wln(&format!("{slot} PVAR!")),
         }
+    }
+
+    fn emit_aggregate_param_store(&mut self, slot: &str, ty: &TypeInfo) -> Result<(), String> {
+        let size = self.type_size_bytes(ty)?;
+        self.wln("__CP_SRC PVAR!");
+        self.wln(&format!("{slot} __CP_DST PVAR!"));
+        self.wln(&format!("{size} __CP_N PVAR!"));
+        self.wln("0 __CP_I PVAR!");
+        self.wln("BEGIN");
+        self.indent += 1;
+        self.wln("__CP_I PVAR@ __CP_N PVAR@ < WHILE");
+        self.indent += 1;
+        self.wln("__CP_SRC PVAR@ __CP_I PVAR@ + PVAR@");
+        self.wln("__CP_DST PVAR@ __CP_I PVAR@ + PVAR!");
+        self.wln("__CP_I PVAR@ 4 + __CP_I PVAR!");
+        self.indent -= 1;
+        self.indent -= 1;
+        self.wln("REPEAT");
+        Ok(())
     }
 
     fn resolve_lvalue_addr_ctx(&self, lv: &LValue, ctx: &Ctx) -> Result<AddrRef, String> {
@@ -1973,7 +2029,11 @@ impl<'a> ForthGen<'a> {
             );
         }
         let routines = self.extend_routine_visibility(&HashMap::new(), top_routines, scope);
-        Ctx { vars, routines }
+        Ctx {
+            vars,
+            routines,
+            current_frame_slots: Vec::new(),
+        }
     }
 
     fn extend_vars_for_routine(
@@ -2133,7 +2193,13 @@ impl<'a> ForthGen<'a> {
                 slots.extend(self.runtime_param_slots(&scoped, std::slice::from_ref(prm)));
             }
             for lv in &block.vars {
-                slots.push(self.slot_name(&scoped, &lv.name));
+                let is_aggregate = match self.ty_of_typeref(&lv.ty) {
+                    Ok(TypeInfo::Array(_)) | Ok(TypeInfo::Record(_)) => true,
+                    _ => false,
+                };
+                if !is_aggregate {
+                    slots.push(self.slot_name(&scoped, &lv.name));
+                }
             }
             if let Some(ret) = ret_name {
                 slots.push(self.slot_name(&scoped, ret));

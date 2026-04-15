@@ -170,7 +170,12 @@ fn sample_names() -> Vec<String> {
         .filter_map(|entry| {
             let path = entry.ok()?.path();
             let stem = path.file_stem()?.to_str()?;
-            if path.extension()?.to_str()? == "pas" {
+            if path.extension()?.to_str()? == "pas"
+                && stem
+                    .split_once('_')
+                    .and_then(|(num, _)| num.parse::<u32>().ok())
+                    .is_some_and(|n| n <= 23)
+            {
                 Some(stem.to_string())
             } else {
                 None

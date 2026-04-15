@@ -301,6 +301,50 @@ end.
 }
 
 #[test]
+fn e2e_string_copy_builtin_differs_from_fixed_array_assignment() {
+    require_native_backend!();
+    let src = r#"
+program p;
+type
+  s6 = array[6] of char;
+var
+  src: s6;
+  dst_assign: s6;
+  dst_copy: s6;
+begin
+  src[0] := 'A';
+  src[1] := 'B';
+  src[2] := #0;
+  src[3] := 'X';
+  src[4] := 'Y';
+  src[5] := #0;
+
+  dst_assign := src;
+  Copy(src, dst_copy);
+
+  WriteLn(dst_assign[3] = 'X');
+  WriteLn(dst_assign[4] = 'Y');
+  WriteLn(dst_copy[3] = #0);
+  WriteLn(dst_copy[4] = #0);
+  WriteLn(dst_assign);
+  WriteLn(dst_copy)
+end.
+"#;
+    let forth = compile_pascal(src);
+    let out = run_native_with_kforthc("string_copy_vs_fixed_assign", &forth, "");
+    let got = normalize_native_output(&out);
+    let expected = vec![
+        "TRUE".to_string(),
+        "TRUE".to_string(),
+        "TRUE".to_string(),
+        "TRUE".to_string(),
+        "AB".to_string(),
+        "AB".to_string(),
+    ];
+    assert_eq!(got, expected, "unexpected runtime output");
+}
+
+#[test]
 fn e2e_builtins_and_hex_runs_on_kforthc_native() {
     require_native_backend!();
     let src = include_str!("fixtures/builtins_and_hex.pas");
